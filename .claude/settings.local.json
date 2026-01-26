@@ -1,22 +1,20 @@
 {
   "permissions": {
     "allow": [
-      "Bash(ssh:*)",
-      "Bash(scp:*)",
-      "Bash(oci:*)",
-      "Bash(oci compute instance list-vnics:*)",
-      "Bash(oci network vnic update:*)",
-      "Bash(CF_TOKEN=\"HOt3V17Hxz7VOcxXrHYcBIu4cUryff0b0e8uFgVY\")",
       "Bash(curl:*)",
-      "Bash(python3:*)",
       "Bash(dig:*)",
-      "Bash(for domain in healthz.stevegore.au stevegore.au/health auth.stevegore.au argocd.stevegore.au)",
-      "Bash(do echo -n \"$domain: \")",
-      "Bash(done)",
-      "Bash(for domain in stevegore.au hass.stevegore.au auth.stevegore.au plex.stevegore.au photos.stevegore.au port.stevegore.au huggin.stevegore.au vault.stevegore.au pdf.stevegore.au strava.stevegore.au bw.stevegore.au desk.stevegore.au gym.stevegore.au argocd.stevegore.au healthz.stevegore.au)",
       "Bash(gh auth status:*)",
+      "Bash(gh repo create:*)",
+      "Bash(git add:*)",
+      "Bash(git branch:*)",
+      "Bash(git commit:*)",
       "Bash(git init:*)",
-      "Bash(git add:*)"
+      "Bash(oci compute instance list-vnics:*)",
+      "Bash(oci compute instance list:*)",
+      "Bash(oci network nsg list:*)",
+      "Bash(oci:*)",
+      "Bash(scp:*)",
+      "Bash(ssh:*)"
     ]
   }
 }
