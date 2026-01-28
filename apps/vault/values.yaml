@@ -1,0 +1,83 @@
+# Vault Helm chart wrapper - OCI KMS auto-unseal + Object Storage backend
+# Only overrides are specified here; upstream defaults apply otherwise
+
+vault:
+  global:
+    enabled: true
+
+  injector:
+    enabled: false  # Not using sidecar injection
+
+  server:
+    enabled: true
+    
+    # Resource limits for Ampere A1
+    resources:
+      requests:
+        memory: 256Mi
+        cpu: 250m
+      limits:
+        memory: 512Mi
+        cpu: 500m
+
+    # Single-node standalone mode
+    ha:
+      enabled: false
+    
+    standalone:
+      enabled: true
+      config: |
+        ui = true
+        
+        listener "tcp" {
+          address = "[::]:8200"
+          cluster_address = "[::]:8201"
+          tls_disable = 1  # Caddy handles TLS termination
+        }
+        
+        storage "oci" {
+          bucket_name = "vault-storage"
+          namespace = "sdajdczqv0qo"
+          ha_enabled = "false"
+          auth_type_api_key = "false"  # Use instance principal
+        }
+        
+        seal "ocikms" {
+          key_id = "ocid1.key.oc1.ap-sydney-1.fnuxtwyhaahla.abzxsljrgzjola7olf2nj27fljzgkqx5vdwq5f44g7n6wse3awmsoee2imfa"
+          crypto_endpoint = "https://fnuxtwyhaahla-crypto.kms.ap-sydney-1.oraclecloud.com"
+          management_endpoint = "https://fnuxtwyhaahla-management.kms.ap-sydney-1.oraclecloud.com"
+          auth_type_api_key = "false"  # Use instance principal
+        }
+        
+        # Telemetry for observability
+        telemetry {
+          disable_hostname = true
+        }
+
+    # Service configuration - NodePort for Caddy access
+    service:
+      enabled: true
+      type: NodePort
+      nodePort: 30820
+      port: 8200
+      targetPort: 8200
+
+    # Data storage (not used with OCI backend, but required by chart)
+    dataStorage:
+      enabled: false
+
+    # Audit logs storage
+    auditStorage:
+      enabled: false
+
+    # Environment variables for OCI config (set via secret)
+    extraEnvironmentVars: {}
+
+    # Annotations for instance principal
+    annotations:
+      oci.oraclecloud.com/instance-principal: "true"
+
+  ui:
+    enabled: true
+    serviceType: NodePort
+    serviceNodePort: 30821
