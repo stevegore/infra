@@ -40,7 +40,7 @@ key_file=~/oci.pem
 | Private IP | 10.0.0.127 |
 | Public IP | 158.178.136.162 |
 | Instance OCID | `ocid1.instance.oc1.ap-sydney-1.anzxsljrxbp2yoqcuh4ka3eoi4novuompif6tkoiqij57zi7fxmh24b5q53a` |
-| Services | WireGuard VPN hub, Caddy reverse proxy, MicroK8s (ArgoCD) |
+| Services | WireGuard VPN hub, Caddy reverse proxy, MicroK8s (ArgoCD, Vault) |
 
 ## Networking
 
@@ -117,3 +117,68 @@ key_file=~/oci.pem
 | Default_Group | — |
 | hasslogs | — |
 | — | Public_Subnet_nebula_all |
+
+---
+
+## Key Management (KMS)
+
+### Vault: hashicorp-vault-unseal
+
+| Property | Value |
+|----------|-------|
+| Vault OCID | `ocid1.vault.oc1.ap-sydney-1.fnuxtwyhaahla.abzxsljrvudzw4lbnbgggxygz5icznztgl557ezsbgw4qkp7qbm6fdwvq5da` |
+| Vault Type | DEFAULT |
+| Crypto Endpoint | `https://fnuxtwyhaahla-crypto.kms.ap-sydney-1.oraclecloud.com` |
+| Management Endpoint | `https://fnuxtwyhaahla-management.kms.ap-sydney-1.oraclecloud.com` |
+| State | ACTIVE |
+
+### Key: vault-auto-unseal
+
+| Property | Value |
+|----------|-------|
+| Key OCID | `ocid1.key.oc1.ap-sydney-1.fnuxtwyhaahla.abzxsljrgzjola7olf2nj27fljzgkqx5vdwq5f44g7n6wse3awmsoee2imfa` |
+| Algorithm | AES |
+| Length | 256-bit (32 bytes) |
+| Protection Mode | HSM |
+| State | ENABLED |
+| Purpose | HashiCorp Vault auto-unseal |
+
+---
+
+## Object Storage
+
+### Bucket: vault-storage
+
+| Property | Value |
+|----------|-------|
+| Namespace | `sdajdczqv0qo` |
+| Compartment | main |
+| Versioning | Enabled |
+| Public Access | No |
+| Purpose | HashiCorp Vault storage backend |
+
+---
+
+## Identity & Access Management (IAM)
+
+### Dynamic Group: vault-instances
+
+| Property | Value |
+|----------|-------|
+| OCID | `ocid1.dynamicgroup.oc1..aaaaaaaareb5w5qct2kihtaah6nq6tj5uo4fbeg36df6tmfxk3na44oxrvbq` |
+| Matching Rule | `instance.id = 'ocid1.instance.oc1.ap-sydney-1.anzxsljrxbp2yoqcuh4ka3eoi4novuompif6tkoiqij57zi7fxmh24b5q53a'` |
+| Purpose | Instance principal auth for Vault on ampere-ubuntu |
+
+### Policy: vault-kms-objectstorage-policy
+
+| Property | Value |
+|----------|-------|
+| OCID | `ocid1.policy.oc1..aaaaaaaa7wstjq64sc4yh3w5ted4yltlgscezbcakm6x7yxqmmfkjteqjkca` |
+| Compartment | main |
+| Statements | |
+
+```
+Allow dynamic-group vault-instances to use keys in compartment main
+Allow dynamic-group vault-instances to manage objects in compartment main where target.bucket.name='vault-storage'
+Allow dynamic-group vault-instances to read buckets in compartment main
+```
