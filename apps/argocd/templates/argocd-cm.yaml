@@ -18,3 +18,5 @@ data:
         config:
           clientID: {{ .Values.github.clientID | quote }}
           clientSecret: $dex.github.clientSecret
+          # Use GitHub username as the user ID instead of numeric ID
+          useLoginAsID: true
