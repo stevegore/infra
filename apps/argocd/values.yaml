@@ -1,0 +1,11 @@
+# ArgoCD GitHub SSO Configuration
+argocd:
+  url: https://argocd.stevegore.au
+
+github:
+  # Create OAuth App at https://github.com/settings/developers
+  # Callback URL: https://argocd.stevegore.au/api/dex/callback
+  clientID: "Ov23lilY1eXJlOXH0Dej"
+
+# Users with admin access (GitHub usernames)
+adminUser: stevegore
