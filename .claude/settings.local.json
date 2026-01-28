@@ -14,7 +14,8 @@
       "Bash(oci network nsg list:*)",
       "Bash(oci:*)",
       "Bash(scp:*)",
-      "Bash(ssh:*)"
+      "Bash(ssh:*)",
+      "Bash(python3:*)"
     ]
   }
 }
