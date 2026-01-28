@@ -60,7 +60,7 @@
 | photos.stevegore.au | :2342 | PhotoPrism |
 | port.stevegore.au | :9000 | Portainer |
 | huggin.stevegore.au | :3000 | Huginn |
-| vault.stevegore.au | :8202 | Vault |
+| ~~vault.stevegore.au~~ | ~~:8202~~ | ~~Vault~~ (moved to MicroK8s) |
 | pdf.stevegore.au | :8083 | Stirling PDF |
 | strava.stevegore.au | :8180 | Stravakeeper |
 | bw.stevegore.au | :8081/:3012 | Bitwarden/Vaultwarden |
@@ -71,11 +71,13 @@
 |--------|---------|-------------|
 | argocd.stevegore.au | localhost:32392 | ArgoCD UI |
 | grpc.argocd.stevegore.au | localhost:30481 | ArgoCD gRPC |
+| vault.stevegore.au | localhost:30820 | HashiCorp Vault (OCI KMS auto-unseal) |
 | healthz.stevegore.au | - | Health check |
 
 **MicroK8s Namespaces:**
 - kube-system, kube-public, kube-node-lease, default
 - argocd
+- vault
 
 **Useful Commands:**
 ```bash

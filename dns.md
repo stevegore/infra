@@ -134,7 +134,7 @@ All services below are proxied through Caddy on ampere-ubuntu:
 | photos.stevegore.au | 2342 | PhotoPrism |
 | port.stevegore.au | 9000 | Portainer |
 | huggin.stevegore.au | 3000 | Huginn |
-| vault.stevegore.au | 8202 | Vault |
+
 | pdf.stevegore.au | 8083 | Stirling PDF |
 | strava.stevegore.au | 8180 | Stravakeeper |
 | bw.stevegore.au | 8081/3012 | Vaultwarden |
@@ -145,6 +145,7 @@ All services below are proxied through Caddy on ampere-ubuntu:
 |--------|------|---------|
 | argocd.stevegore.au | 32392 | ArgoCD UI |
 | grpc.argocd.stevegore.au | 30481 | ArgoCD gRPC |
+| vault.stevegore.au | 30820 | HashiCorp Vault (OCI KMS) |
 | healthz.stevegore.au | - | Health check |
 
 **Direct access (not via Caddy):**
