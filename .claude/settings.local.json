@@ -15,7 +15,10 @@
       "Bash(oci:*)",
       "Bash(scp:*)",
       "Bash(ssh:*)",
-      "Bash(python3:*)"
+      "Bash(python3:*)",
+      "mcp__ide__getDiagnostics",
+      "Bash(git status:*)",
+      "Bash(tree:*)"
     ]
   }
 }
