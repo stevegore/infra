@@ -8,6 +8,8 @@ metadata:
     app.kubernetes.io/part-of: argocd
 data:
   url: {{ .Values.argocd.url | quote }}
+  # Skip TLS verification for internal Dex communication (Caddy handles external TLS)
+  oidc.tls.insecure.skip.verify: "true"
   dex.config: |
     connectors:
       - type: github
