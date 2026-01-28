@@ -16,6 +16,7 @@
 ## Table of Contents
 
 ### Stacks
+
 1. [transmission](#transmission) - OpenVPN-based torrent downloader  
 2. [sonarrradarrjackett](#sonarrradarrjackett) - Media automation (TV/Movies/Indexers)  
 3. [plex](#plex) - Media server  
@@ -34,19 +35,21 @@
 16. [stravabot-rs](#stravabot-rs) - Strava bot in Rust
 
 ### Standalone Containers
-17. [Portainer](#portainer) - Container management UI  
-18. [Home Assistant](#home-assistant) - Smart home automation  
-19. [Heimdall](#heimdall) - Application dashboard  
-20. [Bitwarden (Vaultwarden)](#bitwarden-vaultwarden) - Password manager  
-21. [Duplicati](#duplicati) - Backup and disaster recovery
+
+1. [Portainer](#portainer) - Container management UI  
+2. [Home Assistant](#home-assistant) - Smart home automation  
+3. [Heimdall](#heimdall) - Application dashboard  
+4. [Bitwarden (Vaultwarden)](#bitwarden-vaultwarden) - Password manager  
+5. [Duplicati](#duplicati) - Backup and disaster recovery
 
 ### Reference
-22. [Networks](#networks) - Docker network topology  
-23. [Named Volumes](#named-volumes) - Persistent storage inventory  
-24. [Ports in Use](#ports-in-use) - Port allocation map  
-25. [Container Health Status](#container-health-status) - Healthcheck summary  
-26. [Bind Mount Paths](#bind-mount-paths) - Host filesystem mappings  
-27. [Custom-Built Images](#custom-built-images) - Locally built containers
+
+1. [Networks](#networks) - Docker network topology  
+2. [Named Volumes](#named-volumes) - Persistent storage inventory  
+3. [Ports in Use](#ports-in-use) - Port allocation map  
+4. [Container Health Status](#container-health-status) - Healthcheck summary  
+5. [Bind Mount Paths](#bind-mount-paths) - Host filesystem mappings  
+6. [Custom-Built Images](#custom-built-images) - Locally built containers
 
 ---
 
@@ -63,12 +66,13 @@
 
 **Containers:**
 
-| Container | Image | Status |
-|-----------|-------|--------|
-| transmission-transmission-1 | haugene/transmission-openvpn:5.3 | Up 10 days (healthy) |
-| transmission-transmission-proxy-1 | haugene/transmission-openvpn-proxy:5.3 | Up 2 weeks |
+| Container                         | Image                                  | Status               |
+| --------------------------------- | -------------------------------------- | -------------------- |
+| transmission-transmission-1       | haugene/transmission-openvpn:5.3       | Up 10 days (healthy) |
+| transmission-transmission-proxy-1 | haugene/transmission-openvpn-proxy:5.3 | Up 2 weeks           |
 
 **Docker Compose:**
+
 ```yaml
 version: "3.3"
 services:
@@ -132,13 +136,14 @@ networks:
 
 **Containers:**
 
-| Container | Image | Status |
-|-----------|-------|--------|
-| radarr | linuxserver/radarr:5.22.4 | Up 2 weeks |
-| sonarr | linuxserver/sonarr:4.0.16 | Up 2 weeks |
-| jackett | linuxserver/jackett:0.24.338 | Up 2 weeks |
+| Container | Image                        | Status     |
+| --------- | ---------------------------- | ---------- |
+| radarr    | linuxserver/radarr:5.22.4    | Up 2 weeks |
+| sonarr    | linuxserver/sonarr:4.0.16    | Up 2 weeks |
+| jackett   | linuxserver/jackett:0.24.338 | Up 2 weeks |
 
 **Docker Compose:**
+
 ```yaml
 version: '3'
 services:
@@ -214,11 +219,12 @@ networks:
 
 **Containers:**
 
-| Container | Image | Status |
-|-----------|-------|--------|
-| plex | plexinc/pms-docker:1.41.6.9685-d301f511a | Up 2 weeks (healthy) |
+| Container | Image                                    | Status               |
+| --------- | ---------------------------------------- | -------------------- |
+| plex      | plexinc/pms-docker:1.41.6.9685-d301f511a | Up 2 weeks (healthy) |
 
 **Docker Compose:**
+
 ```yaml
 version: '2'
 services:
@@ -238,7 +244,7 @@ services:
     environment:
       - TZ=Australia/Sydney
       - PLEX_CLAIM=claim-MuDFFkYK25yaVxvRUtCz
-      - ADVERTISE_IP=http://152.67.110.42:32400
+      - ADVERTISE_IP=<http://152.67.110.42:32400>
       - ALLOWED_NETWORKS=192.168.0.0/16,10.0.0.0/8
       # - NVIDIA_VISIBLE_DEVICES=all
     hostname: PlexOnPico
@@ -275,11 +281,12 @@ volumes:
 
 **Containers:**
 
-| Container | Image | Status |
-|-----------|-------|--------|
-| vault | hashicorp/vault:1.21 | Up 2 weeks |
+| Container | Image                | Status     |
+| --------- | -------------------- | ---------- |
+| vault     | hashicorp/vault:1.21 | Up 2 weeks |
 
 **Docker Compose:**
+
 ```yaml
 version: '3.8'
 services:
@@ -292,7 +299,7 @@ services:
     cap_add:
       - IPC_LOCK
     environment:
-      VAULT_ADDR: http://127.0.0.1:8200
+      VAULT_ADDR: <http://127.0.0.1:8200>
       VAULT_LOCAL_CONFIG: |
         {
           "storage": {"file": {"path": "/vault/file"}},
@@ -328,11 +335,13 @@ volumes:
 **Created:** 2023-01-04
 
 **Services:**  
+
 - `owncloud` - owncloud/server:10.12  
 - `mariadb` - mariadb:10.5  
 - `redis` - redis:6
 
 **Docker Compose:**
+
 ```yaml
 version: "3"
 volumes:
@@ -427,12 +436,13 @@ services:
 
 **Containers:**
 
-| Container | Image | Status |
-|-----------|-------|--------|
-| stevegore-au-ttyd-1 | stevegore/ttyd (custom) | Up ~30 min (auto-restarts) |
-| stevegore-au-restarter-1 | docker:cli | Up 2 weeks |
+| Container                | Image                   | Status                     |
+| ------------------------ | ----------------------- | -------------------------- |
+| stevegore-au-ttyd-1      | stevegore/ttyd (custom) | Up ~30 min (auto-restarts) |
+| stevegore-au-restarter-1 | docker:cli              | Up 2 weeks                 |
 
 **Docker Compose:**
+
 ```yaml
 services:
   ttyd:
@@ -500,13 +510,14 @@ volumes:
 
 **Containers:**
 
-| Container | Image | Status |
-|-----------|-------|--------|
+| Container               | Image                        | Status     |
+| ----------------------- | ---------------------------- | ---------- |
 | photoprism-photoprism-1 | photoprism/photoprism:240915 | Up 2 weeks |
-| photoprism-mariadb-1 | mariadb:10.11 | Up 2 weeks |
-| photoprism-chadburn-1 | premoweb/chadburn:latest | Up 2 weeks |
+| photoprism-mariadb-1    | mariadb:10.11                | Up 2 weeks |
+| photoprism-chadburn-1   | premoweb/chadburn:latest     | Up 2 weeks |
 
 **Docker Compose:**
+
 ```yaml
 version: '3.5'
 services:
@@ -563,7 +574,8 @@ services:
 ```
 
 **stack.env:**
-```
+
+```text
 MARIADB_AUTO_UPGRADE=1
 MARIADB_INITDB_SKIP_TZINFO=1
 MARIADB_DATABASE=photoprism
@@ -578,7 +590,7 @@ PHOTOPRISM_DATABASE_PASSWORD=k3jh45k3hj
 PHOTOPRISM_ADMIN_USER=steve
 PHOTOPRISM_ADMIN_PASSWORD=X4dknm.pp!
 PHOTOPRISM_AUTH_MODE=password
-PHOTOPRISM_SITE_URL=http://localhost:2342/
+PHOTOPRISM_SITE_URL=<http://localhost:2342/>
 PHOTOPRISM_DISABLE_TLS=false
 PHOTOPRISM_DEFAULT_TLS=true
 PHOTOPRISM_ORIGINALS_LIMIT=5000
@@ -623,9 +635,11 @@ PHOTOPRISM_INIT=ffmpeg
 **Created:** 2023-08-21
 
 **Services:**  
+
 - `server` - gitea/gitea:1.20.2
 
 **Docker Compose:**
+
 ```yaml
 version: "3"
 networks:
@@ -670,14 +684,15 @@ volumes:
 
 **Containers:**
 
-| Container | Image | Status |
-|-----------|-------|--------|
-| huggin-web-1 | ghcr.io/huginn/huginn-single-process | Up 2 weeks |
-| huggin-threaded-1 | ghcr.io/huginn/huginn-single-process | Up 2 weeks |
-| huggin-mysql-1 | mysql:5.7 | Up 2 weeks |
-| huggin-mysqladmin-1 | phpmyadmin | Up 2 weeks |
+| Container           | Image                                | Status     |
+| ------------------- | ------------------------------------ | ---------- |
+| huggin-web-1        | ghcr.io/huginn/huginn-single-process | Up 2 weeks |
+| huggin-threaded-1   | ghcr.io/huginn/huginn-single-process | Up 2 weeks |
+| huggin-mysql-1      | mysql:5.7                            | Up 2 weeks |
+| huggin-mysqladmin-1 | phpmyadmin                           | Up 2 weeks |
 
 **Docker Compose:**
+
 ```yaml
 version: '3'
 services:
@@ -744,6 +759,7 @@ volumes:
 **Purpose:** Huginn - workflow automation and task scheduling platform  
 **Ports:** 3000 (Huginn web UI), 3011 (phpMyAdmin for database management)  
 **Services:**  
+
 - `web` - Main Huginn web process (handles UI and web requests)  
 - `threaded` - Background worker process (`bin/threaded.rb`) for running scheduled agents  
 - `mysql` - MySQL 5.7 database backend  
@@ -764,11 +780,12 @@ volumes:
 
 **Containers:**
 
-| Container | Image | Status |
-|-----------|-------|--------|
+| Container              | Image              | Status     |
+| ---------------------- | ------------------ | ---------- |
 | nuraspace2-nuraspace-1 | nuraspace (custom) | Up 2 weeks |
 
 **Docker Compose:**
+
 ```yaml
 version: '3.5'
 services:
@@ -802,11 +819,12 @@ services:
 
 **Containers:**
 
-| Container | Image | Status |
-|-----------|-------|--------|
+| Container          | Image                 | Status      |
+| ------------------ | --------------------- | ----------- |
 | pdf-stirling-pdf-1 | frooodle/s-pdf:latest | Up 45 hours |
 
 **Docker Compose:**
+
 ```yaml
 version: '3.3'
 services:
@@ -842,11 +860,12 @@ volumes:
 
 **Containers:**
 
-| Container | Image | Status |
-|-----------|-------|--------|
+| Container                   | Image                | Status               |
+| --------------------------- | -------------------- | -------------------- |
 | gymmaster-rest-gymbooking-1 | gymbooking2 (custom) | Up 2 weeks (healthy) |
 
 **Docker Compose:**
+
 ```yaml
 version: '3.5'
 services:
@@ -879,11 +898,12 @@ services:
 
 **Containers:**
 
-| Container | Image | Status |
-|-----------|-------|--------|
+| Container                   | Image                 | Status     |
+| --------------------------- | --------------------- | ---------- |
 | goldenboards-goldenboards-1 | goldenboards (custom) | Up 2 weeks |
 
 **Docker Compose:**
+
 ```yaml
 version: '3.5'
 services:
@@ -914,11 +934,12 @@ services:
 
 **Containers:**
 
-| Container | Image | Status |
-|-----------|-------|--------|
+| Container                   | Image                 | Status     |
+| --------------------------- | --------------------- | ---------- |
 | stravakeeper-stravakeeper-1 | stravakeeper (custom) | Up 2 weeks |
 
 **Docker Compose:**
+
 ```yaml
 services:
   stravakeeper:
@@ -950,10 +971,12 @@ services:
 **Created:** 2025-05-05
 
 **Services:**  
+
 - `gluetun` - qmcgaw/gluetun (WireGuard VPN)  
 - `transmission` - linuxserver/transmission
 
 **Docker Compose:**
+
 ```yaml
 version: "3.7"
 services:
@@ -1017,11 +1040,12 @@ volumes:
 
 **Containers:**
 
-| Container | Image | Status |
-|-----------|-------|--------|
+| Container    | Image                        | Status    |
+| ------------ | ---------------------------- | --------- |
 | stravabot-rs | stravabot-rs:latest (custom) | Up 2 days |
 
 **Docker Compose:**
+
 ```yaml
 services:
   stravabot-rs:
@@ -1062,6 +1086,7 @@ volumes:
 **Compose Config:** `/opt/portainer/docker-compose.yml`  
 **Command:** `/portainer`  
 **Mounts:**  
+
 - `portainer_data` volume -> `/data`  
 - `/etc/localtime` bind -> `/etc/localtime`  
 - `/etc/timezone` bind -> `/etc/timezone`  
@@ -1079,6 +1104,7 @@ volumes:
 **Network:** host (all ports exposed directly)  
 **Command:** `/init`  
 **Mounts:**  
+
 - `/usr/share/hassio/homeassistant` -> `/config`  
 - `/usr/share/hassio/media` -> `/media`  
 - `/usr/share/hassio/share` -> `/share`  
@@ -1090,28 +1116,28 @@ volumes:
 
 **Supervisor:**
 
-| Container | Image | Status | Network |
-|-----------|-------|--------|---------|
+| Container         | Image                                             | Status     | Network        |
+| ----------------- | ------------------------------------------------- | ---------- | -------------- |
 | hassio_supervisor | homeassistant/amd64-hassio-supervisor (2026.01.1) | Up 12 days | bridge, hassio |
 
 **Core Components:**
 
-| Container | Image | Status | Network |
-|-----------|-------|--------|---------|
-| hassio_multicast | ghcr.io/home-assistant/amd64-hassio-multicast:2025.08.0 | Up 2 weeks | host |
-| hassio_audio | ghcr.io/home-assistant/amd64-hassio-audio:2025.08.0 | Up 2 weeks | hassio |
-| hassio_dns | ghcr.io/home-assistant/amd64-hassio-dns:2025.08.0 | Up 2 weeks | hassio |
-| hassio_cli | ghcr.io/home-assistant/amd64-hassio-cli:2026.01.0 | Up 2 weeks | hassio |
-| hassio_observer | ghcr.io/home-assistant/amd64-hassio-observer:2025.02.0 | Up 2 weeks | hassio |
+| Container        | Image                                                   | Status     | Network |
+| ---------------- | ------------------------------------------------------- | ---------- | ------- |
+| hassio_multicast | ghcr.io/home-assistant/amd64-hassio-multicast:2025.08.0 | Up 2 weeks | host    |
+| hassio_audio     | ghcr.io/home-assistant/amd64-hassio-audio:2025.08.0     | Up 2 weeks | hassio  |
+| hassio_dns       | ghcr.io/home-assistant/amd64-hassio-dns:2025.08.0       | Up 2 weeks | hassio  |
+| hassio_cli       | ghcr.io/home-assistant/amd64-hassio-cli:2026.01.0       | Up 2 weeks | hassio  |
+| hassio_observer  | ghcr.io/home-assistant/amd64-hassio-observer:2025.02.0  | Up 2 weeks | hassio  |
 
 **Addons:**
 
-| Container | Image | Purpose | Status | Network |
-|-----------|-------|---------|--------|---------|
-| addon_a0d7b954_vscode | ghcr.io/hassio-addons/vscode/amd64:6.0.1 | VS Code editor | Up 2 weeks (healthy) | hassio |
-| addon_a0d7b954_phpmyadmin | ghcr.io/hassio-addons/phpmyadmin/amd64:0.13.0 | Database management | Up 2 weeks | hassio |
-| addon_core_matter_server | homeassistant/amd64-addon-matter-server:8.1.1 | Matter protocol bridge | Up 2 weeks | host |
-| addon_core_mariadb | homeassistant/amd64-addon-mariadb:2.7.2 | Database backend | Up 2 weeks | hassio |
+| Container                 | Image                                         | Purpose                | Status               | Network |
+| ------------------------- | --------------------------------------------- | ---------------------- | -------------------- | ------- |
+| addon_a0d7b954_vscode     | ghcr.io/hassio-addons/vscode/amd64:6.0.1      | VS Code editor         | Up 2 weeks (healthy) | hassio  |
+| addon_a0d7b954_phpmyadmin | ghcr.io/hassio-addons/phpmyadmin/amd64:0.13.0 | Database management    | Up 2 weeks           | hassio  |
+| addon_core_matter_server  | homeassistant/amd64-addon-matter-server:8.1.1 | Matter protocol bridge | Up 2 weeks           | host    |
+| addon_core_mariadb        | homeassistant/amd64-addon-mariadb:2.7.2       | Database backend       | Up 2 weeks           | hassio  |
 
 **HA Storage:** All HA data under `/usr/share/hassio/` with subdirectories for homeassistant, media, share, ssl, addons, backup, dns, audio  
 **HA Network:** Uses dedicated `hassio` bridge network (172.30.32.0/23) plus host network for core and Matter  
@@ -1142,11 +1168,12 @@ volumes:
 **Restart Policy:** always  
 **Healthcheck:** `/healthcheck.sh` (interval 60s, timeout 10s)  
 **Mounts:** `/usr/share/bitwarden` bind -> `/data`  
-**Domain:** https://bw.stevegore.io  
+**Domain:** <https://bw.stevegore.io>  
 **Environment:**
-```
+
+```text
 ADMIN_TOKEN=x3lS42JV7pymWtPk14z+plBbbsIH74PL8GVYDT7s7Uxg1hOJU8aFAgki1R9SpzFJ
-DOMAIN=https://bw.stevegore.io
+DOMAIN=<https://bw.stevegore.io>
 ROCKET_ADDRESS=0.0.0.0
 ROCKET_ENV=staging
 ROCKET_PORT=80
@@ -1155,6 +1182,7 @@ ROCKET_WORKERS=10
 SIGNUPS_ALLOWED=false
 WEBSOCKET_ENABLED=true
 ```
+
 **Purpose:** Password manager (Vaultwarden - lightweight Bitwarden-compatible server). Signups are disabled; WebSocket notifications enabled for live sync.
 
 ---
@@ -1168,6 +1196,7 @@ WEBSOCKET_ENABLED=true
 **Port:** 8200  
 **Command:** `duplicati-server --webservice-port=8200 --webservice-interface=any`  
 **Mounts:**  
+
 - `/usr/share/duplicati` bind -> `/data` (Duplicati config/database)  
 - `/var/lib/docker/volumes` bind -> `/docker_vols` (read-only, backs up Docker volumes)  
 - `/media` bind -> `/media` (access to M.2 SSD media)  
@@ -1179,26 +1208,26 @@ WEBSOCKET_ENABLED=true
 
 ## Networks
 
-| Network | Driver | Subnet | Project | Purpose |
-|---------|--------|--------|---------|---------|
-| bridge | bridge | 172.17.0.0/16 | (system) | Default Docker bridge |
-| host | host | - | (system) | Host network (Portainer, HA, Matter) |
-| none | null | - | (system) | No networking |
-| hassio | bridge | 172.30.32.0/23 | Home Assistant | HA supervisor and addon communication |
-| transmission_net | bridge | 172.29.0.0/16 | (standalone) | Shared by transmission + sonarrradarrjackett |
-| transmission_transmission | bridge | 172.23.0.0/16 | transmission | Internal transmission stack network |
-| sonarrradarrjackett_default | bridge | 172.18.0.0/16 | sonarrradarrjackett | Default network for arr stack |
-| photoprism_default | bridge | 172.19.0.0/16 | photoprism | PhotoPrism + MariaDB |
-| huggin_default | bridge | 172.21.0.0/16 | huggin | Huginn services |
-| nuraspace2_default | bridge | 172.22.0.0/16 | nuraspace2 | NuraSpace |
-| plex_default | bridge | 172.24.0.0/16 | plex | Plex |
-| stevegore-au_default | bridge | 172.25.0.0/16 | stevegore-au | ttyd terminal |
-| gymmaster-rest_default | bridge | 172.26.0.0/16 | gymmaster-rest | Gym booking |
-| goldenboards_default | bridge | 172.27.0.0/16 | goldenboards | Golden Boards |
-| stravakeeper_default | bridge | 172.28.0.0/16 | stravakeeper | StravaKeeper |
-| stravabot-rs_default | bridge | 192.168.16.0/20 | stravabot-rs | Strava bot |
-| vault_default | bridge | 172.31.0.0/16 | vault | Vault |
-| pdf_default | bridge | 192.168.32.0/20 | pdf | Stirling PDF |
+| Network                     | Driver | Subnet          | Project             | Purpose                                      |
+| --------------------------- | ------ | --------------- | ------------------- | -------------------------------------------- |
+| bridge                      | bridge | 172.17.0.0/16   | (system)            | Default Docker bridge                        |
+| host                        | host   | -               | (system)            | Host network (Portainer, HA, Matter)         |
+| none                        | null   | -               | (system)            | No networking                                |
+| hassio                      | bridge | 172.30.32.0/23  | Home Assistant      | HA supervisor and addon communication        |
+| transmission_net            | bridge | 172.29.0.0/16   | (standalone)        | Shared by transmission + sonarrradarrjackett |
+| transmission_transmission   | bridge | 172.23.0.0/16   | transmission        | Internal transmission stack network          |
+| sonarrradarrjackett_default | bridge | 172.18.0.0/16   | sonarrradarrjackett | Default network for arr stack                |
+| photoprism_default          | bridge | 172.19.0.0/16   | photoprism          | PhotoPrism + MariaDB                         |
+| huggin_default              | bridge | 172.21.0.0/16   | huggin              | Huginn services                              |
+| nuraspace2_default          | bridge | 172.22.0.0/16   | nuraspace2          | NuraSpace                                    |
+| plex_default                | bridge | 172.24.0.0/16   | plex                | Plex                                         |
+| stevegore-au_default        | bridge | 172.25.0.0/16   | stevegore-au        | ttyd terminal                                |
+| gymmaster-rest_default      | bridge | 172.26.0.0/16   | gymmaster-rest      | Gym booking                                  |
+| goldenboards_default        | bridge | 172.27.0.0/16   | goldenboards        | Golden Boards                                |
+| stravakeeper_default        | bridge | 172.28.0.0/16   | stravakeeper        | StravaKeeper                                 |
+| stravabot-rs_default        | bridge | 192.168.16.0/20 | stravabot-rs        | Strava bot                                   |
+| vault_default               | bridge | 172.31.0.0/16   | vault               | Vault                                        |
+| pdf_default                 | bridge | 192.168.32.0/20 | pdf                 | Stirling PDF                                 |
 
 **Key:** The `transmission_net` network is shared across the `transmission` and `sonarrradarrjackett` stacks, allowing Sonarr/Radarr/Jackett to route traffic through the VPN-protected Transmission container.
 
@@ -1208,38 +1237,38 @@ WEBSOCKET_ENABLED=true
 
 ### Stack Volumes
 
-| Volume | Stack | Created | Notes |
-|--------|-------|---------|-------|
-| plex_plex-config | plex | 2021-11-27 | Plex server configuration |
-| plex_plex-temp | plex | 2021-11-27 | Plex transcoding temp |
-| sonarrradarrjackett_radarr-config | sonarrradarrjackett | 2021-10-04 | Radarr configuration |
-| sonarrradarrjackett_sonarr-config | sonarrradarrjackett | 2021-10-04 | Sonarr configuration |
-| sonarrradarrjackett_jackett-config | sonarrradarrjackett | 2021-10-04 | Jackett configuration |
-| owncloud_files | owncloud | 2021-05-22 | OwnCloud file storage (orphaned) |
-| owncloud_mysql | owncloud | 2021-05-22 | OwnCloud MariaDB data (orphaned) |
-| owncloud_redis | owncloud | 2021-05-22 | OwnCloud Redis data (orphaned) |
-| vault_vault-data | vault | 2023-01-04 | Vault secrets storage |
-| vault_vault-config | vault | 2023-01-05 | Vault configuration |
-| huggin_mysqldata | huggin | 2023-12-16 | Huginn MySQL data |
-| stevegore-au_homedir | stevegore-au | 2023-07-06 | tmpfs, 500M, uid/gid 222 |
-| stevegore-au_tmpdir | stevegore-au | 2023-07-06 | tmpfs, 500M |
-| pdf_stirling-pdf-config | pdf | 2024-05-06 | Stirling PDF configuration |
-| transmission-wg_transmission_config | transmission-wg | 2025-05-05 | WG Transmission config (orphaned) |
-| stravabot-rs_stravabot-rs-data | stravabot-rs | 2026-01-26 | Strava bot progress data |
+| Volume                              | Stack               | Created    | Notes                             |
+| ----------------------------------- | ------------------- | ---------- | --------------------------------- |
+| plex_plex-config                    | plex                | 2021-11-27 | Plex server configuration         |
+| plex_plex-temp                      | plex                | 2021-11-27 | Plex transcoding temp             |
+| sonarrradarrjackett_radarr-config   | sonarrradarrjackett | 2021-10-04 | Radarr configuration              |
+| sonarrradarrjackett_sonarr-config   | sonarrradarrjackett | 2021-10-04 | Sonarr configuration              |
+| sonarrradarrjackett_jackett-config  | sonarrradarrjackett | 2021-10-04 | Jackett configuration             |
+| owncloud_files                      | owncloud            | 2021-05-22 | OwnCloud file storage (orphaned)  |
+| owncloud_mysql                      | owncloud            | 2021-05-22 | OwnCloud MariaDB data (orphaned)  |
+| owncloud_redis                      | owncloud            | 2021-05-22 | OwnCloud Redis data (orphaned)    |
+| vault_vault-data                    | vault               | 2023-01-04 | Vault secrets storage             |
+| vault_vault-config                  | vault               | 2023-01-05 | Vault configuration               |
+| huggin_mysqldata                    | huggin              | 2023-12-16 | Huginn MySQL data                 |
+| stevegore-au_homedir                | stevegore-au        | 2023-07-06 | tmpfs, 500M, uid/gid 222          |
+| stevegore-au_tmpdir                 | stevegore-au        | 2023-07-06 | tmpfs, 500M                       |
+| pdf_stirling-pdf-config             | pdf                 | 2024-05-06 | Stirling PDF configuration        |
+| transmission-wg_transmission_config | transmission-wg     | 2025-05-05 | WG Transmission config (orphaned) |
+| stravabot-rs_stravabot-rs-data      | stravabot-rs        | 2026-01-26 | Strava bot progress data          |
 
 ### Standalone Volumes
 
-| Volume | Created | Notes |
-|--------|---------|-------|
-| portainer_data | 2021-05-29 | Portainer data/config |
-| heimdall | 2021-06-30 | Heimdall dashboard config |
+| Volume         | Created    | Notes                     |
+| -------------- | ---------- | ------------------------- |
+| portainer_data | 2021-05-29 | Portainer data/config     |
+| heimdall       | 2021-06-30 | Heimdall dashboard config |
 
 ### Legacy Volumes
 
-| Volume | Created | Notes |
-|--------|---------|-------|
-| stirling-pdf_pdf-logs | 2024-05-06 | From older PDF deployment |
-| stirling-pdf_pdf-config | 2024-05-06 | From older PDF deployment |
+| Volume                        | Created    | Notes                           |
+| ----------------------------- | ---------- | ------------------------------- |
+| stirling-pdf_pdf-logs         | 2024-05-06 | From older PDF deployment       |
+| stirling-pdf_pdf-config       | 2024-05-06 | From older PDF deployment       |
 | stravabot-rs_stravakudos-data | 2026-01-26 | From previous stravabot version |
 
 **Note:** There are also 24 anonymous volumes (SHA256 hash names) that are likely orphaned from container recreations and could be cleaned up with `docker volume prune`.
@@ -1248,39 +1277,39 @@ WEBSOCKET_ENABLED=true
 
 ## Ports in Use
 
-| Port | Service | Container | Protocol |
-|------|---------|-----------|----------|
-| 2342 | PhotoPrism | photoprism-photoprism-1 | TCP |
-| 3000 | Huginn | huggin-web-1 | TCP |
-| 3005 | Plex Companion | plex | TCP |
-| 3011 | phpMyAdmin (Huginn) | huggin-mysqladmin-1 | TCP |
-| 3012 | Vaultwarden WebSocket | bitwarden | TCP |
-| 3030 | Gitea (stopped) | gitea | TCP |
-| 4357 | HA Observer | hassio_observer | TCP |
-| 7878 | Radarr | radarr | TCP |
-| 8080 | Heimdall HTTP | heimdall | TCP |
-| 8081 | Vaultwarden HTTP | bitwarden | TCP |
-| 8082 | Strava Bot | stravabot-rs | TCP |
-| 8083 | Stirling PDF | pdf-stirling-pdf-1 | TCP |
-| 8111 | NuraSpace | nuraspace2-nuraspace-1 | TCP |
-| 8112 | GymBooking | gymmaster-rest-gymbooking-1 | TCP |
-| 8180 | StravaKeeper | stravakeeper-stravakeeper-1 | TCP |
-| 8200 | Duplicati | duplicati | TCP |
-| 8202 | Vault | vault | TCP |
-| 8324 | Plex Roku | plex | TCP |
-| 8443 | Heimdall HTTPS | heimdall | TCP |
-| 8788 | ttyd Terminal | stevegore-au-ttyd-1 | TCP |
-| 8844 | OwnCloud (stopped) | owncloud_server | TCP |
-| 8989 | Sonarr | sonarr | TCP |
-| 9092 | Transmission Proxy | transmission-transmission-proxy-1 | TCP |
-| 9093 | Transmission WebUI | transmission-transmission-1 | TCP |
-| 9117 | Jackett | jackett | TCP |
-| 32400 | Plex Primary | plex | TCP |
-| 32410 | Plex GDM | plex | UDP |
-| 32412 | Plex GDM | plex | UDP |
-| 32413 | Plex GDM | plex | UDP |
-| 32414 | Plex GDM | plex | UDP |
-| 32469 | Plex DLNA | plex | TCP |
+| Port  | Service               | Container                         | Protocol |
+| ----- | --------------------- | --------------------------------- | -------- |
+| 2342  | PhotoPrism            | photoprism-photoprism-1           | TCP      |
+| 3000  | Huginn                | huggin-web-1                      | TCP      |
+| 3005  | Plex Companion        | plex                              | TCP      |
+| 3011  | phpMyAdmin (Huginn)   | huggin-mysqladmin-1               | TCP      |
+| 3012  | Vaultwarden WebSocket | bitwarden                         | TCP      |
+| 3030  | Gitea (stopped)       | gitea                             | TCP      |
+| 4357  | HA Observer           | hassio_observer                   | TCP      |
+| 7878  | Radarr                | radarr                            | TCP      |
+| 8080  | Heimdall HTTP         | heimdall                          | TCP      |
+| 8081  | Vaultwarden HTTP      | bitwarden                         | TCP      |
+| 8082  | Strava Bot            | stravabot-rs                      | TCP      |
+| 8083  | Stirling PDF          | pdf-stirling-pdf-1                | TCP      |
+| 8111  | NuraSpace             | nuraspace2-nuraspace-1            | TCP      |
+| 8112  | GymBooking            | gymmaster-rest-gymbooking-1       | TCP      |
+| 8180  | StravaKeeper          | stravakeeper-stravakeeper-1       | TCP      |
+| 8200  | Duplicati             | duplicati                         | TCP      |
+| 8202  | Vault                 | vault                             | TCP      |
+| 8324  | Plex Roku             | plex                              | TCP      |
+| 8443  | Heimdall HTTPS        | heimdall                          | TCP      |
+| 8788  | ttyd Terminal         | stevegore-au-ttyd-1               | TCP      |
+| 8844  | OwnCloud (stopped)    | owncloud_server                   | TCP      |
+| 8989  | Sonarr                | sonarr                            | TCP      |
+| 9092  | Transmission Proxy    | transmission-transmission-proxy-1 | TCP      |
+| 9093  | Transmission WebUI    | transmission-transmission-1       | TCP      |
+| 9117  | Jackett               | jackett                           | TCP      |
+| 32400 | Plex Primary          | plex                              | TCP      |
+| 32410 | Plex GDM              | plex                              | UDP      |
+| 32412 | Plex GDM              | plex                              | UDP      |
+| 32413 | Plex GDM              | plex                              | UDP      |
+| 32414 | Plex GDM              | plex                              | UDP      |
+| 32469 | Plex DLNA             | plex                              | TCP      |
 
 **Host network mode** (all ports on host): Portainer, Home Assistant, hassio_multicast, addon_core_matter_server
 
@@ -1288,14 +1317,14 @@ WEBSOCKET_ENABLED=true
 
 ## Container Health Status
 
-| Container | Health | Method |
-|-----------|--------|--------|
-| bitwarden | healthy | Built-in healthcheck |
-| plex | healthy | Built-in healthcheck |
-| gymmaster-rest-gymbooking-1 | healthy | Built-in healthcheck |
+| Container                   | Health  | Method                          |
+| --------------------------- | ------- | ------------------------------- |
+| bitwarden                   | healthy | Built-in healthcheck            |
+| plex                        | healthy | Built-in healthcheck            |
+| gymmaster-rest-gymbooking-1 | healthy | Built-in healthcheck            |
 | transmission-transmission-1 | healthy | Built-in healthcheck (autoheal) |
-| addon_a0d7b954_vscode | healthy | Built-in healthcheck |
-| All others | none | No healthcheck configured |
+| addon_a0d7b954_vscode       | healthy | Built-in healthcheck            |
+| All others                  | none    | No healthcheck configured       |
 
 ---
 
@@ -1303,25 +1332,25 @@ WEBSOCKET_ENABLED=true
 
 Summary of all host filesystem paths used by containers:
 
-| Host Path | Container(s) | Purpose |
-|-----------|-------------|---------|
-| `/srv/movies` | radarr, plex | Movie library |
-| `/srv/tv` | sonarr, plex | TV show library |
-| `/var/lib/transmission` | transmission, radarr, sonarr | Torrent download directory |
-| `/media/m2/photos` | photoprism | Photo originals (M.2 SSD) |
-| `/media/m2/photoprism/storage` | photoprism | PhotoPrism cache/sidecar (M.2 SSD) |
-| `/media/m2/photoprism/database` | photoprism-mariadb | PhotoPrism MariaDB data (M.2 SSD) |
-| `/var/nura` | nuraspace | NuraSpace app data |
-| `/var/elixr` | gymbooking | Gym booking data |
-| `/var/goldenboards` | goldenboards | Golden Boards data |
-| `/var/stravakeeper` | stravakeeper | StravaKeeper data |
-| `/var/stravabot-rs/.strava-auth-token` | stravabot-rs | Strava OAuth token (read-only) |
-| `/usr/share/bitwarden` | bitwarden | Vaultwarden data |
-| `/usr/share/duplicati` | duplicati | Duplicati config/database |
-| `/usr/share/hassio` | Home Assistant (all) | HA Supervised root |
-| `/var/lib/docker/volumes` | duplicati | Docker volume backup source (read-only) |
-| `/dev/bus/usb` | plex | USB device passthrough |
-| `/dev/net/tun` | gluetun | TUN device for VPN |
+| Host Path                              | Container(s)                 | Purpose                                 |
+| -------------------------------------- | ---------------------------- | --------------------------------------- |
+| `/srv/movies`                          | radarr, plex                 | Movie library                           |
+| `/srv/tv`                              | sonarr, plex                 | TV show library                         |
+| `/var/lib/transmission`                | transmission, radarr, sonarr | Torrent download directory              |
+| `/media/m2/photos`                     | photoprism                   | Photo originals (M.2 SSD)               |
+| `/media/m2/photoprism/storage`         | photoprism                   | PhotoPrism cache/sidecar (M.2 SSD)      |
+| `/media/m2/photoprism/database`        | photoprism-mariadb           | PhotoPrism MariaDB data (M.2 SSD)       |
+| `/var/nura`                            | nuraspace                    | NuraSpace app data                      |
+| `/var/elixr`                           | gymbooking                   | Gym booking data                        |
+| `/var/goldenboards`                    | goldenboards                 | Golden Boards data                      |
+| `/var/stravakeeper`                    | stravakeeper                 | StravaKeeper data                       |
+| `/var/stravabot-rs/.strava-auth-token` | stravabot-rs                 | Strava OAuth token (read-only)          |
+| `/usr/share/bitwarden`                 | bitwarden                    | Vaultwarden data                        |
+| `/usr/share/duplicati`                 | duplicati                    | Duplicati config/database               |
+| `/usr/share/hassio`                    | Home Assistant (all)         | HA Supervised root                      |
+| `/var/lib/docker/volumes`              | duplicati                    | Docker volume backup source (read-only) |
+| `/dev/bus/usb`                         | plex                         | USB device passthrough                  |
+| `/dev/net/tun`                         | gluetun                      | TUN device for VPN                      |
 
 ---
 
@@ -1329,14 +1358,14 @@ Summary of all host filesystem paths used by containers:
 
 These images are built locally on pico and are not available from any registry:
 
-| Image | Stack | Language/Runtime | Command |
-|-------|-------|-----------------|---------|
-| stravabot-rs:latest | stravabot-rs | Rust | `/app/stravabot` |
-| gymbooking2 | gymmaster-rest | Python (Poetry) | `poetry run python main.py` |
-| stravakeeper | stravakeeper | Go | `./main` |
-| nuraspace | nuraspace2 | Python (Poetry) | `poetry run python app.py` |
-| goldenboards | goldenboards | Go | `/app/goldenboards` |
-| stevegore/ttyd | stevegore-au | Custom (ttyd + zsh) | `ttyd ... zsh` |
+| Image               | Stack          | Language/Runtime    | Command                     |
+| ------------------- | -------------- | ------------------- | --------------------------- |
+| stravabot-rs:latest | stravabot-rs   | Rust                | `/app/stravabot`            |
+| gymbooking2         | gymmaster-rest | Python (Poetry)     | `poetry run python main.py` |
+| stravakeeper        | stravakeeper   | Go                  | `./main`                    |
+| nuraspace           | nuraspace2     | Python (Poetry)     | `poetry run python app.py`  |
+| goldenboards        | goldenboards   | Go                  | `/app/goldenboards`         |
+| stevegore/ttyd      | stevegore-au   | Custom (ttyd + zsh) | `ttyd ... zsh`              |
 
 ---
 
@@ -1345,29 +1374,35 @@ These images are built locally on pico and are not available from any registry:
 This Portainer instance manages a comprehensive home infrastructure on pico:
 
 ### Media & Entertainment
+
 - **Plex** - Media streaming server (healthy, M.2 storage)  
 - **Transmission** (OpenVPN) - Torrent downloading with Windscribe VPN (healthy)  
 - **Sonarr/Radarr** - TV and movie automation via transmission_net  
 - **Jackett** - Torrent indexer aggregation
 
 ### Smart Home
+
 - **Home Assistant** - Supervised installation with Matter, MariaDB, VS Code, phpMyAdmin addons
 
 ### Cloud & Storage
+
 - **OwnCloud** - Cloud storage (stopped, volumes retained)  
 - **PhotoPrism** - Photo library with AI features, nightly auto-indexing via Chadburn  
 - **Duplicati** - Backup utility with access to all Docker volumes and media
 
 ### Security & Access
+
 - **Vaultwarden** - Password manager (healthy)  
 - **Vault** - HashiCorp secrets management  
 - **Heimdall** - Application dashboard
 
 ### Automation & Utilities
+
 - **Huginn** - Workflow automation with threaded worker and phpMyAdmin  
 - **Stirling PDF** - PDF manipulation and conversion
 
 ### Custom Applications
+
 - **GymBooking** - Gym reservation system (Python, healthy)  
 - **StravaKeeper** - Strava data archiver (Go)  
 - **StravaBot-rs** - Strava automation (Rust)  
