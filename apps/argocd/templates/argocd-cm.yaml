@@ -12,12 +12,6 @@ data:
   admin.enabled: "false"
   # Skip TLS verification for internal Dex communication (Caddy handles external TLS)
   oidc.tls.insecure.skip.verify: "true"
-  # OIDC configuration - enables auto-redirect to SSO
-  oidc.config: |
-    name: GitHub
-    issuer: {{ .Values.argocd.url }}/api/dex
-    clientID: argo-cd
-    requestedScopes: ["openid", "profile", "email"]
   dex.config: |
     connectors:
       - type: github
