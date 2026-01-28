@@ -36,8 +36,8 @@ vault:
         }
         
         storage "oci" {
+          namespace_name = "sdajdczqv0qo"
           bucket_name = "vault-storage"
-          namespace = "sdajdczqv0qo"
           ha_enabled = "false"
           auth_type_api_key = "false"  # Use instance principal
         }
