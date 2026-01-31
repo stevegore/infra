@@ -37,7 +37,9 @@ spec:
               node /app/openclaw.mjs config set gateway.port 18789
               node /app/openclaw.mjs config set gateway.auth.token "$OPENCLAW_GATEWAY_TOKEN"
               node /app/openclaw.mjs config set gateway.controlUi.enabled true
-              node /app/openclaw.mjs config set gateway.trustedProxies 10.0.0.0/8
+              # Trust the proxy address sending X-Forwarded-* headers so OpenClaw
+              # treats connections as local when forwarded by that proxy.
+              node /app/openclaw.mjs config set gateway.trustedProxies '["10.0.0.127"]'
 
               # Agent settings
               node /app/openclaw.mjs config set agents.defaults.userTimezone Australia/Sydney
