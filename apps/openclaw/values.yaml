@@ -1,13 +1,13 @@
 replicaCount: 1
 
 image:
-  repository: node
-  tag: "22-bookworm-slim"
-  pullPolicy: IfNotPresent
+  repository: ghcr.io/phioranex/openclaw-docker
+  tag: "latest"
+  pullPolicy: Always
 
 service:
   type: NodePort
-  port: 3000
+  port: 18789
   nodePort: 30830
 
 resources:
@@ -30,7 +30,7 @@ securityContext:
 
 containerSecurityContext:
   allowPrivilegeEscalation: false
-  readOnlyRootFilesystem: true
+  readOnlyRootFilesystem: false
   capabilities:
     drop: [ALL]
 
