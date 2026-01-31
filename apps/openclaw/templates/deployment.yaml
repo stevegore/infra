@@ -28,9 +28,22 @@ spec:
           command: ["sh", "-c"]
           args:
             - |
+              # Gateway settings
               node /app/openclaw.mjs config set gateway.mode local
               node /app/openclaw.mjs config set gateway.bind lan
+              node /app/openclaw.mjs config set gateway.port 18789
               node /app/openclaw.mjs config set gateway.auth.token "${OPENCLAW_GATEWAY_TOKEN:-openclaw-k8s-token}"
+              node /app/openclaw.mjs config set gateway.controlUi.enabled true
+
+              # Agent settings
+              node /app/openclaw.mjs config set agents.defaults.userTimezone Australia/Sydney
+
+              # Telegram channel settings (pairing required, allowlist for groups)
+              node /app/openclaw.mjs config set channels.telegram.enabled true
+              node /app/openclaw.mjs config set channels.telegram.dmPolicy pairing
+              node /app/openclaw.mjs config set channels.telegram.groupPolicy allowlist
+              node /app/openclaw.mjs config set channels.telegram.streamMode partial
+
               node /app/openclaw.mjs doctor --fix || true
           envFrom:
             - secretRef:
