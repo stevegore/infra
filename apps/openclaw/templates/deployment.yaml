@@ -28,11 +28,14 @@ spec:
           command: ["sh", "-c"]
           args:
             - |
-              # Gateway settings
+              # Fix state directory permissions (security audit: fs.state_dir.perms_world_writable)
+              chmod 700 /home/node/.openclaw
+
+              # Gateway settings (token comes from Vault via OPENCLAW_GATEWAY_TOKEN env var)
               node /app/openclaw.mjs config set gateway.mode local
               node /app/openclaw.mjs config set gateway.bind lan
               node /app/openclaw.mjs config set gateway.port 18789
-              node /app/openclaw.mjs config set gateway.auth.token "${OPENCLAW_GATEWAY_TOKEN:-openclaw-k8s-token}"
+              node /app/openclaw.mjs config set gateway.auth.token "$OPENCLAW_GATEWAY_TOKEN"
               node /app/openclaw.mjs config set gateway.controlUi.enabled true
 
               # Agent settings
