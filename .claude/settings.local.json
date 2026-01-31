@@ -18,7 +18,12 @@
       "Bash(python3:*)",
       "mcp__ide__getDiagnostics",
       "Bash(git status:*)",
-      "Bash(tree:*)"
+      "Bash(tree:*)",
+      "WebSearch",
+      "WebFetch(domain:docs.molt.bot)",
+      "WebFetch(domain:docs.openclaw.ai)",
+      "Bash(xargs:*)",
+      "WebFetch(domain:github.com)"
     ]
   }
 }
