@@ -1,0 +1,6 @@
+apiVersion: v2
+name: openclaw
+description: OpenClaw personal AI assistant for messaging platforms
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
