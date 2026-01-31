@@ -1,0 +1,56 @@
+replicaCount: 1
+
+image:
+  repository: node
+  tag: "22-bookworm-slim"
+  pullPolicy: IfNotPresent
+
+service:
+  type: NodePort
+  port: 3000
+  nodePort: 30830
+
+resources:
+  requests:
+    memory: 256Mi
+    cpu: 100m
+  limits:
+    memory: 512Mi
+    cpu: 500m
+
+persistence:
+  enabled: true
+  size: 1Gi
+
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop: [ALL]
+
+openclaw:
+  sandboxed: true
+  logLevel: info
+  platforms:
+    telegram: true
+    discord: false
+    whatsapp: false
+
+# Secret created by Vault Secrets Operator (synced from Vault)
+existingSecret: "openclaw-credentials"
+
+# VSO configuration
+vault:
+  enabled: true
+  mount: kv
+  path: openclaw
+  refreshAfter: 1h
+
+networkPolicy:
+  enabled: false
