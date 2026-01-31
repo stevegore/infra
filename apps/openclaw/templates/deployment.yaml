@@ -21,6 +21,22 @@ spec:
         runAsUser: {{ .Values.securityContext.runAsUser }}
         runAsGroup: {{ .Values.securityContext.runAsGroup }}
         fsGroup: {{ .Values.securityContext.fsGroup }}
+      initContainers:
+        - name: init-config
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["sh", "-c"]
+          args:
+            - |
+              node /app/openclaw.mjs config set gateway.mode local
+              node /app/openclaw.mjs config set gateway.auth.token "${OPENCLAW_GATEWAY_TOKEN:-openclaw-k8s-token}"
+              node /app/openclaw.mjs doctor --fix || true
+          envFrom:
+            - secretRef:
+                name: {{ .Values.existingSecret }}
+          volumeMounts:
+            - name: data
+              mountPath: /home/node/.openclaw
       containers:
         - name: {{ .Chart.Name }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
@@ -32,7 +48,7 @@ spec:
               drop:
                 {{- toYaml .Values.containerSecurityContext.capabilities.drop | nindent 16 }}
           command: ["node"]
-          args: ["/app/openclaw.mjs", "gateway", "start"]
+          args: ["/app/openclaw.mjs", "gateway", "run", "--bind", "lan", "--verbose"]
           ports:
             - name: http
               containerPort: {{ .Values.service.port }}
