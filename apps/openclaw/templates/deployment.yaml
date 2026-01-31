@@ -31,6 +31,7 @@ spec:
             capabilities:
               drop:
                 {{- toYaml .Values.containerSecurityContext.capabilities.drop | nindent 16 }}
+          command: ["node"]
           args: ["/app/openclaw.mjs", "gateway", "start"]
           ports:
             - name: http
