@@ -29,6 +29,7 @@ spec:
           args:
             - |
               node /app/openclaw.mjs config set gateway.mode local
+              node /app/openclaw.mjs config set gateway.bind lan
               node /app/openclaw.mjs config set gateway.auth.token "${OPENCLAW_GATEWAY_TOKEN:-openclaw-k8s-token}"
               node /app/openclaw.mjs doctor --fix || true
           envFrom:
