@@ -66,15 +66,24 @@ Used by Vault Secrets Operator and application pods to authenticate.
 
 Used by administrators via GitHub OAuth through Caddy Security.
 
-**Configuration:**
-- Issuer: `https://auth.stevegore.au`
-- Audience: `vault.stevegore.au`
+**How it works:**
+1. Access https://vault.stevegore.au
+2. Caddy redirects you to GitHub OAuth
+3. After login, you can access the Vault UI
+4. In the Vault UI, select "JWT" method and use your cookie token
+
+**JWT Key:** RSA keypair stored at `/etc/caddy/keys/jwt-*.pem`
 
 **Roles:**
 | Role | Bound Claims | Policies |
 |------|--------------|----------|
 | caddy-user | (any authenticated) | default |
-| caddy-admin | sub=stevegore | admin |
+| caddy-admin | sub=github.com/stevegore | admin |
+
+**To get your JWT token** (for CLI use):
+1. Login at https://auth.stevegore.au
+2. Open browser dev tools → Application → Cookies
+3. Copy the `access_token` cookie value
 
 ---
 
