@@ -50,11 +50,6 @@
 | enp3s0    | 192.168.4.120   | 192.168.4.1 (router)         |
 | wg0       | 10.20.30.1/32   | 10.20.30.2 (~10.20.30.0/24)  |
 
-**Resolved issues (for reference):**
-- `openvpn@yourvpn.service` — disabled (config file never existed; was restart-looping)
-- Firefox snap AppArmor denials for `/proc/pressure/memory` — fixed
-- `/etc/netplan/00-installer-config.yaml` and `/etc/NetworkManager/system-connections/default` — permissions set to 600
-
 ---
 
 ### ampere-ubuntu (158.178.136.162)
