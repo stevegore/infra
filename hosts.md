@@ -25,6 +25,38 @@
 
 ## Server Details
 
+### pico (192.168.4.120 / 10.20.30.1)
+
+**Purpose:** Home server running Home Assistant (supervised) and Docker services
+
+**Key Services:**
+
+- **Home Assistant** — supervised install via Hassio
+  - Config: `/usr/share/hassio/homeassistant/`
+  - DB: MariaDB addon (`core-mariadb`)
+  - External access: `hass2.stevegore.au` (Cloudflare Tunnel, direct) and `hass.stevegore.au` (via WireGuard → Caddy)
+  - Custom components: `tuya_local`, `eero` (new), `eero_tracker` (legacy — kept for now, `interval_seconds: 30` set to avoid scan overrun)
+- **WireGuard** — 10.20.30.1/32, managed by `wg-quick@wg0.service`
+  - Config: `/etc/wireguard/wg0.conf`
+  - PersistentKeepalive = 25 (to ampere-ubuntu peer)
+  - No ListenPort set — uses ephemeral port (seen by ampere as 159.196.97.38:PORT)
+- **Cloudflare Tunnel** — `cloudflared.service`, exposes HA at `hass2.stevegore.au`
+- **Docker services** — managed via Portainer (`port.stevegore.au`)
+
+**Network:**
+
+| Interface | Address         | DNS                          |
+| --------- | --------------- | ---------------------------- |
+| enp3s0    | 192.168.4.120   | 192.168.4.1 (router)         |
+| wg0       | 10.20.30.1/32   | 10.20.30.2 (~10.20.30.0/24)  |
+
+**Resolved issues (for reference):**
+- `openvpn@yourvpn.service` — disabled (config file never existed; was restart-looping)
+- Firefox snap AppArmor denials for `/proc/pressure/memory` — fixed
+- `/etc/netplan/00-installer-config.yaml` and `/etc/NetworkManager/system-connections/default` — permissions set to 600
+
+---
+
 ### ampere-ubuntu (158.178.136.162)
 
 **Purpose:** ARM-based server running WireGuard VPN hub, Caddy reverse proxy, and MicroK8s (ArgoCD)

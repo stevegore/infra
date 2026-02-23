@@ -98,6 +98,34 @@ Internet
 
 ## Local DNS Configuration
 
+### ampere-ubuntu (10.20.30.2) — DNS Server
+
+systemd-resolved stub listener bound to the WireGuard IP via drop-in config.
+
+**Config:** `/etc/systemd/resolved.conf.d/wireguard-dns.conf`
+```ini
+[Resolve]
+DNSStubListenerExtra=10.20.30.2
+```
+
+**`/etc/hosts` WireGuard entries** (served to peers via `ReadEtcHosts=yes`):
+```
+10.20.30.1 pico
+10.20.30.2 ampere-ubuntu
+10.20.30.3 laptop
+```
+
+**iptables rules** (persisted in `/etc/iptables/rules.v4`):
+```
+-A INPUT -i wg0 -s 10.20.30.0/24 -p udp --dport 53 -j ACCEPT
+-A INPUT -i wg0 -s 10.20.30.0/24 -p tcp --dport 53 -j ACCEPT
+```
+These rules must sit before the blanket `REJECT` rule. The OCI Security List does **not** need port 53 open — DNS queries travel inside the WireGuard tunnel (encrypted UDP to port 51820).
+
+**Upstream DNS:** 169.254.169.254 (Oracle Cloud metadata DNS)
+
+---
+
 ### Laptop (macOS)
 
 **WireGuard Address:** 10.20.30.3/24
@@ -115,7 +143,17 @@ Internet
 **Interface DNS:**
 
 - enp3s0/wlp4s0: 192.168.4.1 (router)
-- wg0: 10.20.30.2 (ampere-ubuntu) with domain `~10.20.30.0/24`
+- wg0: 10.20.30.2 (ampere-ubuntu) with domain `~10.20.30.0/24` (reverse DNS for WireGuard subnet only — not a default route)
+
+**`/etc/wireguard/wg0.conf` DNS line:** `DNS = 10.20.30.2` (only the WireGuard DNS — 192.168.4.1 is already on enp3s0, adding it here is redundant)
+
+**`/etc/hosts` WireGuard entries** (for fast forward lookups without DNS round-trip):
+```
+10.20.30.2 ampere-ubuntu ampere
+10.20.30.3 laptop
+```
+
+> **Known boot behaviour:** systemd-resolved logs `Using degraded feature set TCP instead of UDP` for `10.20.30.2` for ~25 seconds after wg0 comes up, while WireGuard completes its first PersistentKeepalive handshake. This is transient and harmless.
 
 ---
 
