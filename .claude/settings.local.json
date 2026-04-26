@@ -23,7 +23,13 @@
       "WebFetch(domain:docs.molt.bot)",
       "WebFetch(domain:docs.openclaw.ai)",
       "Bash(xargs:*)",
-      "WebFetch(domain:github.com)"
+      "WebFetch(domain:github.com)",
+      "Bash(systemctl:*)",
+      "Bash(journalctl:*)",
+      "Bash(ping:*)",
+      "Bash(docker ps:*)",
+      "Bash(sudo wg:*)",
+      "Bash(wg show:*)"
     ]
   }
 }
