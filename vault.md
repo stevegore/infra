@@ -62,7 +62,35 @@ Used by Vault Secrets Operator and application pods to authenticate.
 |------|-----------------|-----------|----------|
 | vault-secrets-operator | vault-secrets-operator-controller-manager | vault-secrets-operator | openclaw |
 
-### 2. JWT Auth (for human users via Caddy Security)
+### 2. AppRole (for pico → kv/homelab/* token sync)
+
+Used by pico to push `*.token` files in `~/code/infra/` into Vault. Bound to pico's WireGuard IP so leaked credentials are useless from anywhere else.
+
+| Role | CIDR (secret_id + token) | Policies | Token TTL |
+|------|---------------------------|----------|-----------|
+| pico-token-sync | 10.20.30.1/32 | pico-token-sync | 10m / 30m max |
+
+**Path:** Pico hits Vault directly over WireGuard at `http://10.20.30.2:30820` (NodePort, plaintext over the encrypted WG tunnel). The Service runs `externalTrafficPolicy: Local` so kube-proxy doesn't SNAT — Vault sees the real source IP. The listener also trusts `X-Forwarded-For` from Caddy (`127.0.0.0/8`, `10.0.0.0/8`) so the public path through `vault.stevegore.au` produces accurate source IPs too.
+
+**Bootstrap (run once with the root token on pico):**
+```bash
+~/code/infra/scripts/vault-token-sync-setup.sh
+```
+Drops `role_id` + `secret_id` into `~/.config/vault-token-sync/`. Re-run to rotate the secret_id.
+
+**Sync (one-shot):**
+```bash
+~/code/infra/scripts/vault-token-sync.sh
+```
+Walks `~/code/infra/*.token` and writes each to `kv/homelab/<basename>` with a `token` field. Skips `vault-root.token`.
+
+**Recurring:** systemd timer `vault-token-sync.timer` runs every 15 minutes. Install via:
+```bash
+sudo ~/code/infra/scripts/install-vault-token-sync-timer.sh
+```
+Tail with `journalctl -u vault-token-sync.service -f`.
+
+### 3. JWT Auth (for human users via Caddy Security)
 
 Used by administrators via GitHub OAuth through Caddy Security.
 
@@ -97,6 +125,7 @@ Key-value secrets engine for application credentials.
 | Path | Description | Access Policies |
 |------|-------------|-----------------|
 | kv/openclaw | OpenClaw AI assistant credentials | openclaw |
+| kv/homelab/* | Tokens synced from pico (`*.token` files) | pico-token-sync (write) |
 
 **Secrets Structure:**
 ```
