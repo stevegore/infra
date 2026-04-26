@@ -76,6 +76,10 @@
   - gRPC: grpc.argocd.stevegore.au (proxied by Caddy → NodePort 30481)
   - CLI: `/usr/local/bin/argo`
 - **Calico** - Container networking
+- **fail2ban** - SSH brute-force protection
+  - Config: `/etc/fail2ban/jail.local`
+  - SSH jail enabled with escalating bans (1h → up to 1w for repeat offenders)
+  - `sudo fail2ban-client status sshd` to check banned IPs
 
 **Domains proxied (via Caddy → 10.20.30.1 pico):**
 
