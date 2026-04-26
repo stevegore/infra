@@ -1,0 +1,19 @@
+[Unit]
+Description=Sync homelab *.token files into Vault (kv/homelab/*)
+Wants=network-online.target wg-quick@wg0.service
+After=network-online.target wg-quick@wg0.service
+
+[Service]
+Type=oneshot
+User=steve
+Group=steve
+ExecStart=/home/steve/code/infra/scripts/vault-token-sync.sh
+# Hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/steve/.config/vault-token-sync
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
