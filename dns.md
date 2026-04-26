@@ -172,6 +172,7 @@ All services below are proxied through Caddy on ampere-ubuntu:
 | gym.stevegore.au    | 8112  | GymMaster (protected) |
 | plex.stevegore.au   | 32400 | Plex Media Server     |
 | photos.stevegore.au | 2342  | PhotoPrism            |
+| immich.stevegore.au | 2283  | Immich                |
 | port.stevegore.au   | 9000  | Portainer             |
 | huggin.stevegore.au | 3000  | Huginn                |
 
