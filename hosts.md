@@ -4,7 +4,7 @@
 
 | Host                   | Description                                                 |
 | ---------------------- | ----------------------------------------------------------- |
-| pico.local             | Raspberry Pi Pico (192.168.4.120)                           |
+| pico.local             | Pico (192.168.4.120)                           |
 | pico-wg                | Pico via WireGuard (10.20.30.1 via ProxyJump ampere-ubuntu) |
 | `pi@raspberrypi.local` | Raspberry Pi (192.168.4.61)                                 |
 
