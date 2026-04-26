@@ -33,6 +33,15 @@ vault:
           address = "[::]:8200"
           cluster_address = "[::]:8201"
           tls_disable = 1  # Caddy handles TLS termination
+
+          # Trust X-Forwarded-For from Caddy (host loopback) and the cluster
+          # network. Combined with externalTrafficPolicy=Local on the Service,
+          # Vault always sees the real client IP — required for AppRole
+          # token_bound_cidrs / secret_id_bound_cidrs to work.
+          x_forwarded_for_authorized_addrs       = "127.0.0.0/8,10.0.0.0/8"
+          x_forwarded_for_reject_not_authorized  = false
+          x_forwarded_for_reject_not_present     = false
+          x_forwarded_for_hop_skips              = 0
         }
         
         storage "oci" {
@@ -58,6 +67,10 @@ vault:
     service:
       enabled: true
       type: NodePort
+      # Local preserves the real client source IP through the NodePort
+      # (no kube-proxy SNAT), so Vault sees pico's WireGuard IP for
+      # AppRole CIDR binding when accessed at http://10.20.30.2:30820.
+      externalTrafficPolicy: Local
       nodePort: 30820
       port: 8200
       targetPort: 8200
