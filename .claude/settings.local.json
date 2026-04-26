@@ -29,7 +29,17 @@
       "Bash(ping:*)",
       "Bash(docker ps:*)",
       "Bash(sudo wg:*)",
-      "Bash(wg show:*)"
+      "Bash(wg show:*)",
+      "WebFetch(domain:homeassistant-ai.github.io)",
+      "mcp__home-assistant__GetLiveContext",
+      "mcp__home-assistant__HassTurnOff",
+      "mcp__home-assistant__HassTurnOn",
+      "mcp__ha-mcp__ha_get_integration",
+      "mcp__ha-mcp__ha_get_logs",
+      "mcp__ha-mcp__ha_restart",
+      "mcp__ha-mcp__ha_call_service",
+      "mcp__ha-mcp__ha_search_entities",
+      "mcp__ha-mcp__ha_list_services"
     ]
   }
 }

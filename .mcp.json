@@ -1,0 +1,20 @@
+{
+  "mcpServers": {
+    "home-assistant": {
+      "type": "sse",
+      "url": "http://pico.local:8123/mcp_server/sse",
+      "headers": {
+        "Authorization": "Bearer ${HA_TOKEN}"
+      }
+    },
+    "ha-mcp": {
+      "type": "stdio",
+      "command": "uvx",
+      "args": ["ha-mcp@latest"],
+      "env": {
+        "HOMEASSISTANT_URL": "http://pico.local:8123",
+        "HOMEASSISTANT_TOKEN": "${HA_TOKEN}"
+      }
+    }
+  }
+}
