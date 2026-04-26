@@ -1075,6 +1075,82 @@ volumes:
 
 ---
 
+## Stack 57 — Immich
+
+**Stack ID:** 57  
+**Project Path:** `/home/steve/immich`  
+**Compose Version:** v3.5  
+**Created:** 2026-04-26
+
+**Containers:**
+
+| Container                        | Image                                                          | Status  |
+| -------------------------------- | -------------------------------------------------------------- | ------- |
+| immich-immich-server-1           | ghcr.io/immich-app/immich-server:release                       | Running |
+| immich-immich-machine-learning-1 | ghcr.io/immich-app/immich-machine-learning:release             | Running |
+| immich-immich-database-1         | ghcr.io/immich-app/postgres:14-vectorchord0.3.0-pgvectors0.2.0 | Running |
+| immich-immich-redis-1            | redis:7.2-alpine                                               | Running |
+
+**Docker Compose:** `/home/steve/immich/docker-compose.yml`  
+**Env:** `/home/steve/immich/stack.env` (credentials not committed)
+
+```yaml
+version: '3.5'
+
+services:
+  immich-server:
+    image: ghcr.io/immich-app/immich-server:release
+    restart: unless-stopped
+    ports:
+      - "2283:2283"
+    env_file:
+      - stack.env
+    volumes:
+      - "/media/m2/immich/uploads:/usr/src/app/upload"
+      - "/media/m2/photos:/mnt/media/photos:ro"
+    depends_on:
+      - immich-redis
+      - immich-database
+    healthcheck:
+      disable: false
+
+  immich-machine-learning:
+    image: ghcr.io/immich-app/immich-machine-learning:release
+    restart: unless-stopped
+    env_file:
+      - stack.env
+    volumes:
+      - "/media/m2/immich/ml-cache:/cache"
+
+  immich-redis:
+    image: redis:7.2-alpine
+    restart: unless-stopped
+
+  immich-database:
+    image: ghcr.io/immich-app/postgres:14-vectorchord0.3.0-pgvectors0.2.0
+    restart: unless-stopped
+    env_file:
+      - stack.env
+    volumes:
+      - "/media/m2/immich/database:/var/lib/postgresql/data"
+```
+
+**Purpose:** Photo management app (Immich) serving the same originals as PhotoPrism  
+**Ports:** 2283 (HTTP)  
+**Domain:** `immich.stevegore.au` (via Caddy → 10.20.30.1:2283)  
+**Storage:**
+
+| Host Path                   | Container Path          | Notes                         |
+| --------------------------- | ----------------------- | ----------------------------- |
+| `/media/m2/immich/uploads`  | `/usr/src/app/upload`   | Immich-generated data/thumbs  |
+| `/media/m2/immich/database` | `/var/lib/postgresql/data` | PostgreSQL data             |
+| `/media/m2/immich/ml-cache` | `/cache`                | ML model cache (CLIP, faces)  |
+| `/media/m2/photos`          | `/mnt/media/photos`     | PhotoPrism originals, **read-only** |
+
+**Note:** `/media/m2/photos` is configured as an External Library in Immich (path: `/mnt/media/photos`). PhotoPrism and Immich coexist with zero interference — all Immich data stays under `/media/m2/immich/`.
+
+---
+
 ## Standalone Containers (Not in Stacks)
 
 ### Portainer
