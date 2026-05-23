@@ -1,0 +1,175 @@
+{
+	email steve.j.gore@gmail.com
+
+	servers :443 {
+		name stevegore
+		protocols h1 h2 h2c h3
+		strict_sni_host on
+	}
+
+	log default {
+		output file /var/lib/caddy/caddy.log
+		format json
+		exclude http.log.access
+		level INFO
+	}
+
+	order authenticate before respond
+	order authorize before basicauth
+
+	# github.com/greenpau/caddy-security
+	security {
+		oauth identity provider github {env.GITHUB_CLIENT_ID} {env.GITHUB_CLIENT_SECRET}
+
+		authentication portal stevegoreauthportal {
+			crypto default token lifetime 3600
+			crypto key sign-verify from file /etc/caddy/keys/jwt-private.pem
+			cookie domain stevegore.au
+			enable identity provider github
+			ui {
+				links {
+					"My Identity" "/whoami" icon "las la-user"
+				}
+			}
+
+			transform user {
+				match realm github
+				match sub github.com/stevegore
+				action add role authp/admin
+			}
+		}
+
+		authorization policy adminonly {
+			set auth url https://auth.stevegore.au/oauth2/github
+			crypto key verify from file /etc/caddy/keys/jwt-public.pem
+			allow roles authp/admin authp/user
+			validate bearer header
+			inject headers with claims
+		}
+
+		authorization policy vaultaccess {
+			set auth url https://auth.stevegore.au/oauth2/github
+			crypto key verify from file /etc/caddy/keys/jwt-public.pem
+			allow roles authp/admin authp/user
+			validate bearer header
+			inject headers with claims
+		}
+	}
+}
+
+(defaults) {
+	encode gzip
+}
+
+auth.stevegore.au {
+	authenticate with stevegoreauthportal
+}
+
+hass.stevegore.au {
+	reverse_proxy 10.20.30.1:8123
+	import defaults
+}
+
+desk.stevegore.au {
+	authorize with adminonly
+	reverse_proxy 10.20.30.1:8111
+	import defaults
+}
+
+gym.stevegore.au {
+	authorize with adminonly
+	reverse_proxy 10.20.30.1:8112
+	import defaults
+}
+
+plex.stevegore.au {
+	reverse_proxy 10.20.30.1:32400
+	import defaults
+}
+
+immich.stevegore.au {
+	reverse_proxy 10.20.30.1:2283
+	import defaults
+}
+
+photos.stevegore.au {
+	reverse_proxy 10.20.30.1:2342
+	import defaults
+}
+
+port.stevegore.au {
+	reverse_proxy 10.20.30.1:9000
+	import defaults
+}
+
+huggin.stevegore.au {
+	reverse_proxy 10.20.30.1:3000
+	import defaults
+}
+
+vault.stevegore.au {
+	# authorize with vaultaccess  # Disabled - Vault handles its own GitHub auth
+	reverse_proxy localhost:30820
+	import defaults
+}
+
+pdf.stevegore.au {
+	reverse_proxy 10.20.30.1:8083
+}
+
+bw.stevegore.au {
+	header / {
+		Strict-Transport-Security "max-age=31536000;"
+		X-XSS-Protection "1; mode=block"
+		X-Frame-Options "DENY"
+		X-Robots-Tag "none"
+		-Server
+	}
+	reverse_proxy /notifications/hub/negotiate 10.20.30.1:8081
+	reverse_proxy /notifications/hub 10.20.30.1:3012
+	reverse_proxy 10.20.30.1:8081 {
+		header_up X-Real-IP {remote_host}
+	}
+	import defaults
+}
+
+strava.stevegore.au {
+	reverse_proxy 10.20.30.1:8180
+}
+
+healthz.stevegore.au {
+	respond "OK"
+}
+
+argocd.stevegore.au {
+	reverse_proxy https://127.0.0.1:32392 {
+		transport http {
+			tls_insecure_skip_verify
+		}
+	}
+}
+
+grpc.argocd.stevegore.au {
+	reverse_proxy h2c://127.0.0.1:30481
+}
+
+stevegore.au {
+	respond /health "I'm doing ok, thanks for asking :)"
+	respond /healthz "I'm doing ok, thanks for asking :)"
+	reverse_proxy 10.20.30.1:8788
+}
+
+localhost {
+	respond "Yep, it's working"
+}
+
+openclaw.stevegore.au {
+	reverse_proxy 10.0.0.127:30830
+	import defaults
+}
+
+homepage.stevegore.au {
+	authorize with adminonly
+	reverse_proxy 10.20.30.1:8080
+	import defaults
+}

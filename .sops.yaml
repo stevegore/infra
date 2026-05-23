@@ -1,0 +1,13 @@
+# SOPS encryption rules.
+#
+# Any file matching `secrets.sops.*` is encrypted with the age recipient(s)
+# below. The age private key needed to decrypt is itself wrapped two ways:
+#   - config/age-identity.txt.age   (passphrase, works anywhere)
+#   - config/age-identity.txt.kms   (OCI KMS, works on instance principal)
+# bootstrap/restore-config.sh tries KMS first, falls back to passphrase.
+#
+# To rotate: edit values with `sops config/secrets.sops.yaml` (in-place re-encrypt).
+
+creation_rules:
+  - path_regex: secrets\.sops\.ya?ml$
+    age: age15khjrefc67g9cgt6klxdntclmzztvphep2au0tk3vqw7q4kcv3fq05a7w3
