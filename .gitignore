@@ -1,1 +1,5 @@
 *.token
+
+# Decrypted age private key — must never be committed. The wrapped versions
+# (age-identity.txt.age and age-identity.txt.kms) are safe to commit.
+config/age-identity.txt
