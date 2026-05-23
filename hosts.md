@@ -27,6 +27,12 @@
 
 ### pico (192.168.4.120 / 10.20.30.1)
 
+**Hardware:** ASRock B550M-ITX/ac (Mini-ITX desktop), AMD Ryzen 5 5600G (6c/12t, integrated Radeon), 30 GB RAM
+**OS:** Ubuntu 24.04.4 LTS (kernel 6.8.0-107-generic), x86-64
+**Storage:**
+- `/` — 456 GB LVM (`/dev/mapper/ubuntu--vg-ubuntu--lv`), ~82% full
+- `/media/m2` — 3.6 TB NVMe, ~47% used
+
 **Purpose:** Home server running Home Assistant (supervised) and Docker services
 
 **Key Services:**
@@ -91,6 +97,8 @@
 | gym.stevegore.au       | :8112       | (protected)                   |
 | plex.stevegore.au      | :32400      | Plex Media Server             |
 | photos.stevegore.au    | :2342       | PhotoPrism                    |
+| immich.stevegore.au    | :2283       | Immich                        |
+| homepage.stevegore.au  | :8080       | Homepage (protected)          |
 | port.stevegore.au      | :9000       | Portainer                     |
 | huggin.stevegore.au    | :3000       | Huginn                        |
 | ~~vault.stevegore.au~~ | ~~:8202~~   | ~~Vault~~ (moved to MicroK8s) |

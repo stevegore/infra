@@ -37,7 +37,20 @@
       "mcp__ha-mcp__ha_call_service",
       "mcp__ha-mcp__ha_search_entities",
       "mcp__ha-mcp__ha_list_services",
-      "Skill(update-config)"
+      "Skill(update-config)",
+      "Bash(lsb_release -a)",
+      "Read(//usr/lib/**)",
+      "Skill(schedule)",
+      "Read(//home/steve/**)",
+      "Bash(ip route *)",
+      "Bash(vault --version)",
+      "Bash(command -v jq)",
+      "Bash(jq --version)",
+      "Bash(/home/steve/code/infra/scripts/vault-token-sync-setup.sh *)",
+      "Bash(/home/steve/code/infra/scripts/vault-token-sync.sh)",
+      "Bash(jq)",
+      "Bash(git log *)",
+      "Bash(git -C /home/steve/code/infra log --all --oneline)"
     ]
   }
 }

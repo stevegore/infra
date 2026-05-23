@@ -4,12 +4,40 @@
 **Docker Version:** 29.0.1  
 **Portainer Version:** portainer-ee 2.33.6  
 **Portainer Compose:** `/opt/portainer/docker-compose.yml` (host network mode)  
-**Total Containers:** 36 running  
-**Total Volumes:** 44  
-**Total Images:** 149  
-**Total Stacks:** 16 (14 active, 2 stopped)  
+**Total Containers:** 41 running  
+**Total Volumes:** 48  
+**Total Images:** 114  
+**Total Stacks:** 20 (18 active, 2 stopped)  
 **System CPU:** 12 cores  
 **System Memory:** ~31 GB
+
+---
+
+## API Access
+
+**Token file:** `~/code/infra/portainer.token`  
+**Endpoint ID:** `1` (pico-docker)  
+**Base URL:** `http://pico.local:9000/api`
+
+```bash
+# Authenticate all requests with:
+-H "X-API-Key: $(cat ~/code/infra/portainer.token)"
+
+# Example — list containers:
+curl -s http://pico.local:9000/api/endpoints/1/docker/containers/json \
+  -H "X-API-Key: $(cat ~/code/infra/portainer.token)"
+
+# Example — exec a command in a container:
+EXEC_ID=$(curl -s -X POST http://pico.local:9000/api/endpoints/1/docker/containers/<name>/exec \
+  -H "X-API-Key: $(cat ~/code/infra/portainer.token)" \
+  -H "Content-Type: application/json" \
+  -d '{"AttachStdout":true,"AttachStderr":true,"Cmd":["sh","-c","<command>"]}' \
+  | python3 -c "import sys,json; print(json.load(sys.stdin)['Id'])")
+curl -s -X POST http://pico.local:9000/api/endpoints/1/docker/exec/$EXEC_ID/start \
+  -H "X-API-Key: $(cat ~/code/infra/portainer.token)" \
+  -H "Content-Type: application/json" \
+  -d '{"Detach":false}' | cat
+```
 
 ---
 
@@ -32,15 +60,18 @@
 13. [goldenboards](#goldenboards) - Golden Boards application  
 14. [stravakeeper](#stravakeeper) - Strava data keeper  
 15. [transmission-wg](#transmission-wg) - WireGuard-based torrent (stopped)  
-16. [stravabot-rs](#stravabot-rs) - Strava bot in Rust
+16. [stravabot-rs](#stravabot-rs) - Strava bot in Rust  
+17. [immich](#immich) - Photo management (Portainer-managed)  
+18. [icloudpd](#icloudpd) - iCloud photo downloader  
+19. [homepage](#homepage) - Application dashboard (Portainer-managed)  
+20. [uptime-kuma](#uptime-kuma) - Uptime/status monitoring
 
 ### Standalone Containers
 
 1. [Portainer](#portainer) - Container management UI  
 2. [Home Assistant](#home-assistant) - Smart home automation  
-3. [Heimdall](#heimdall) - Application dashboard  
-4. [Bitwarden (Vaultwarden)](#bitwarden-vaultwarden) - Password manager  
-5. [Duplicati](#duplicati) - Backup and disaster recovery
+3. [Bitwarden (Vaultwarden)](#bitwarden-vaultwarden) - Password manager  
+4. [Duplicati](#duplicati) - Backup and disaster recovery
 
 ### Reference
 
@@ -131,16 +162,17 @@ networks:
 **Stack ID:** 7  
 **Project Path:** `/data/compose/7`  
 **Compose Version:** v4  
-**Last Updated:** 2025-11-21  
+**Last Updated:** 2026-05-10  
 **Created:** 2021-10-04
 
 **Containers:**
 
-| Container | Image                        | Status     |
-| --------- | ---------------------------- | ---------- |
-| radarr    | linuxserver/radarr:5.22.4    | Up 2 weeks |
-| sonarr    | linuxserver/sonarr:4.0.16    | Up 2 weeks |
-| jackett   | linuxserver/jackett:0.24.338 | Up 2 weeks |
+| Container    | Image                                      | Status     |
+| ------------ | ------------------------------------------ | ---------- |
+| radarr       | linuxserver/radarr:5.22.4                  | Up 2 weeks |
+| sonarr       | linuxserver/sonarr:4.0.16                  | Up 2 weeks |
+| jackett      | linuxserver/jackett:0.24.338               | Up 4 min   |
+| flaresolverr | ghcr.io/flaresolverr/flaresolverr:latest   | Up 20 min  |
 
 **Docker Compose:**
 
@@ -190,6 +222,20 @@ services:
       - TZ=Australia/Sydney
     image: linuxserver/jackett:0.24.338
 
+  flaresolverr:
+    container_name: flaresolverr
+    restart: unless-stopped
+    networks:
+      - transmission_net
+    ports:
+      - 8191:8191
+    environment:
+      - LOG_LEVEL=info
+      - LOG_HTML=false
+      - CAPTCHA_SOLVER=none
+      - TZ=Australia/Sydney
+    image: ghcr.io/flaresolverr/flaresolverr:latest
+
 volumes:
   radarr-config:
   sonarr-config:
@@ -200,11 +246,19 @@ networks:
     external: true
 ```
 
-**Purpose:** Media automation - Sonarr for TV shows, Radarr for movies, Jackett for torrent indexing  
-**Ports:** 7878 (Radarr), 8989 (Sonarr), 9117 (Jackett)  
+**Purpose:** Media automation - Sonarr for TV shows, Radarr for movies, Jackett for torrent indexing, FlareSolverr for Cloudflare bypass  
+**Ports:** 7878 (Radarr), 8989 (Sonarr), 9117 (Jackett), 8191 (FlareSolverr)  
 **Network:** Uses external `transmission_net` to communicate with Transmission VPN container  
 **Storage:** Radarr accesses `/srv/movies`, Sonarr accesses `/srv/tv`, both share `/var/lib/transmission` for download access  
 **Volumes:** `sonarrradarrjackett_radarr-config`, `sonarrradarrjackett_sonarr-config`, `sonarrradarrjackett_jackett-config`
+
+**Download client categories:** Radarr uses category `radarr`, Sonarr uses category `sonarr` — completed downloads land in `/var/lib/transmission/completed/<category>/`
+
+**Jackett indexers:** 1337x, EZTV, TPB, kickasstorrents-to, kickasstorrents-ws, YTS, TorrentGalaxy, Nyaa.si, LimeTorrents, BitSearch  
+**FlareSolverr URL:** `http://flaresolverr:8191` (configured in Jackett ServerConfig.json)
+
+**Radarr indexers (8):** 1337x, ETTV, TPB, kickasstorrents.to, kickasstorrents.ws, YTS, TorrentGalaxy, Nyaa.si  
+**Sonarr indexers (10):** 1337x, EZTV, Isohunt2 (dead), TPB, kickasstorrents.to, kickasstorrents.ws, TorrentGalaxy, Nyaa.si, LimeTorrents, BitSearch
 
 ---
 
@@ -505,14 +559,14 @@ volumes:
 **Stack ID:** 30  
 **Project Path:** `/data/compose/30`  
 **Compose Version:** v4  
-**Last Updated:** 2024-09-22  
+**Last Updated:** 2026-04-27  
 **Created:** 2023-08-06
 
 **Containers:**
 
 | Container               | Image                        | Status     |
 | ----------------------- | ---------------------------- | ---------- |
-| photoprism-photoprism-1 | photoprism/photoprism:240915 | Up 2 weeks |
+| photoprism-photoprism-1 | photoprism/photoprism:260305 | Up 2 weeks |
 | photoprism-mariadb-1    | mariadb:10.11                | Up 2 weeks |
 | photoprism-chadburn-1   | premoweb/chadburn:latest     | Up 2 weeks |
 
@@ -523,6 +577,7 @@ version: '3.5'
 services:
   chadburn:
     image: premoweb/chadburn:latest
+    restart: unless-stopped
     depends_on:
       - photoprism
     command: daemon
@@ -530,7 +585,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
 
   photoprism:
-    image: photoprism/photoprism:240915
+    image: photoprism/photoprism:260305
     restart: unless-stopped
     stop_grace_period: 10s
     depends_on:
@@ -813,40 +868,40 @@ services:
 **Status:** Running  
 **Stack ID:** 41  
 **Project Path:** `/data/compose/41`  
-**Compose Version:** v2  
-**Last Updated:** 2026-01-26  
+**Last Updated:** 2026-05-17 (added `restart: unless-stopped` + `container_name`)  
 **Created:** 2024-05-06
 
 **Containers:**
 
-| Container          | Image                 | Status      |
-| ------------------ | --------------------- | ----------- |
-| pdf-stirling-pdf-1 | frooodle/s-pdf:latest | Up 45 hours |
+| Container          | Image                 | Status  |
+| ------------------ | --------------------- | ------- |
+| pdf-stirling-pdf-1 | frooodle/s-pdf:latest | Running |
 
 **Docker Compose:**
 
 ```yaml
-version: '3.3'
 services:
   stirling-pdf:
     image: frooodle/s-pdf:latest
+    container_name: pdf-stirling-pdf-1
+    restart: unless-stopped
     ports:
-      - '8083:8080'
+      - "8083:8080"
+    environment:
+      DOCKER_ENABLE_SECURITY: "false"
+      INSTALL_BOOK_AND_ADVANCED_HTML_OPS: "false"
+      LANGS: en_GB
     volumes:
       - stirling-pdf-config:/configs
-    environment:
-      - DOCKER_ENABLE_SECURITY=false
-      - INSTALL_BOOK_AND_ADVANCED_HTML_OPS=false
-      - LANGS=en_GB
 
 volumes:
   stirling-pdf-config:
 ```
 
-**Purpose:** Stirling PDF - PDF manipulation and conversion tool  
-**Ports:** 8083 -> 8080  
-**Command:** `tini -- /scripts/init.sh`  
-**Volumes:** `pdf_stirling-pdf-config`
+**Purpose:** Stirling PDF — PDF manipulation and conversion tool  
+**Ports:** 8083 → 8080  
+**Volumes:** `pdf_stirling-pdf-config`  
+**Note:** Original compose had no `restart` policy, which caused the container to stay dead for ~2 months after a host restart on 2026-03-07. Same root cause as `photoprism-chadburn-1`. Audit confirmed no other stacks have this issue (HA Supervisor's `restart: no` is intentional and managed externally).
 
 ---
 
@@ -1075,12 +1130,11 @@ volumes:
 
 ---
 
-## Stack 57 — Immich
+### immich
 
-**Stack ID:** 57  
-**Project Path:** `/home/steve/immich`  
-**Compose Version:** v3.5  
-**Created:** 2026-04-26
+**Status:** Running  
+**Stack ID:** 59  
+**Created:** 2026-05-17 (migrated from manual compose at `/home/steve/immich` to Portainer-managed)
 
 **Containers:**
 
@@ -1091,23 +1145,26 @@ volumes:
 | immich-immich-database-1         | ghcr.io/immich-app/postgres:14-vectorchord0.3.0-pgvectors0.2.0 | Running |
 | immich-immich-redis-1            | redis:7.2-alpine                                               | Running |
 
-**Docker Compose:** `/home/steve/immich/docker-compose.yml`  
-**Env:** `/home/steve/immich/stack.env` (credentials not committed)
+**Docker Compose:** managed by Portainer (env inlined; no separate stack.env)
 
 ```yaml
-version: '3.5'
-
 services:
   immich-server:
     image: ghcr.io/immich-app/immich-server:release
+    container_name: immich-immich-server-1
     restart: unless-stopped
     ports:
       - "2283:2283"
-    env_file:
-      - stack.env
+    environment:
+      DB_HOSTNAME: immich-database
+      DB_DATABASE_NAME: immich
+      DB_USERNAME: immich
+      DB_PASSWORD: <redacted>
+      REDIS_HOSTNAME: immich-redis
+      TZ: Australia/Sydney
     volumes:
-      - "/media/m2/immich/uploads:/usr/src/app/upload"
-      - "/media/m2/photos:/mnt/media/photos:ro"
+      - /media/m2/immich/uploads:/usr/src/app/upload
+      - /media/m2/photos:/mnt/media/photos:ro
     depends_on:
       - immich-redis
       - immich-database
@@ -1116,23 +1173,39 @@ services:
 
   immich-machine-learning:
     image: ghcr.io/immich-app/immich-machine-learning:release
+    container_name: immich-immich-machine-learning-1
     restart: unless-stopped
-    env_file:
-      - stack.env
+    environment:
+      TZ: Australia/Sydney
     volumes:
-      - "/media/m2/immich/ml-cache:/cache"
+      - /media/m2/immich/ml-cache:/cache
 
   immich-redis:
     image: redis:7.2-alpine
+    container_name: immich-immich-redis-1
     restart: unless-stopped
+    environment:
+      TZ: Australia/Sydney
+    healthcheck:
+      test: redis-cli ping || exit 1
 
   immich-database:
     image: ghcr.io/immich-app/postgres:14-vectorchord0.3.0-pgvectors0.2.0
+    container_name: immich-immich-database-1
     restart: unless-stopped
-    env_file:
-      - stack.env
+    environment:
+      POSTGRES_DB: immich
+      POSTGRES_USER: immich
+      POSTGRES_PASSWORD: <redacted>
+      POSTGRES_INITDB_ARGS: --data-checksums
+      TZ: Australia/Sydney
     volumes:
-      - "/media/m2/immich/database:/var/lib/postgresql/data"
+      - /media/m2/immich/database:/var/lib/postgresql/data
+    healthcheck:
+      test: pg_isready --dbname=$${POSTGRES_DB} --username=$${POSTGRES_USER} || exit 1
+      interval: 15s
+      timeout: 5s
+      retries: 5
 ```
 
 **Purpose:** Photo management app (Immich) serving the same originals as PhotoPrism  
@@ -1140,14 +1213,159 @@ services:
 **Domain:** `immich.stevegore.au` (via Caddy → 10.20.30.1:2283)  
 **Storage:**
 
-| Host Path                   | Container Path          | Notes                         |
-| --------------------------- | ----------------------- | ----------------------------- |
-| `/media/m2/immich/uploads`  | `/usr/src/app/upload`   | Immich-generated data/thumbs  |
-| `/media/m2/immich/database` | `/var/lib/postgresql/data` | PostgreSQL data             |
-| `/media/m2/immich/ml-cache` | `/cache`                | ML model cache (CLIP, faces)  |
-| `/media/m2/photos`          | `/mnt/media/photos`     | PhotoPrism originals, **read-only** |
+| Host Path                   | Container Path             | Notes                               |
+| --------------------------- | -------------------------- | ----------------------------------- |
+| `/media/m2/immich/uploads`  | `/usr/src/app/upload`      | Immich-generated data/thumbs        |
+| `/media/m2/immich/database` | `/var/lib/postgresql/data` | PostgreSQL data                     |
+| `/media/m2/immich/ml-cache` | `/cache`                   | ML model cache (CLIP, faces)        |
+| `/media/m2/photos`          | `/mnt/media/photos`        | PhotoPrism originals, **read-only** |
 
-**Note:** `/media/m2/photos` is configured as an External Library in Immich (path: `/mnt/media/photos`). PhotoPrism and Immich coexist with zero interference — all Immich data stays under `/media/m2/immich/`.
+**Note:** `/media/m2/photos` is configured as an External Library in Immich (path: `/mnt/media/photos`). PhotoPrism and Immich coexist with zero interference — all Immich data stays under `/media/m2/immich/`. Credentials (`DB_PASSWORD`/`POSTGRES_PASSWORD`) are stored in the Portainer stack config; the legacy `/home/steve/immich/stack.env` is no longer used.
+
+---
+
+### icloudpd
+
+**Status:** Running  
+**Stack ID:** 58  
+**Created:** 2026-05-17
+
+**Containers:**
+
+| Container | Image                     | Status  |
+| --------- | ------------------------- | ------- |
+| icloudpd  | icloudpd/icloudpd:latest  | Running |
+
+**Docker Compose:**
+
+```yaml
+services:
+  icloudpd:
+    image: icloudpd/icloudpd:latest
+    container_name: icloudpd
+    restart: unless-stopped
+    stdin_open: true
+    tty: true
+    environment:
+      TZ: Australia/Sydney
+    volumes:
+      - /media/m2/photos/iphone/steve:/data
+      - icloudpd_cookies:/cookies
+    command: icloudpd --directory /data --username steve.gore@me.com --watch-with-interval 3600 --cookie-directory /cookies
+
+volumes:
+  icloudpd_cookies:
+```
+
+**Purpose:** Downloads new photos/videos from iCloud Photos for `steve.gore@me.com` into `/media/m2/photos/iphone/steve/YYYY/MM/DD/`. Runs continuously (`--watch-with-interval 3600`, polling hourly).  
+**Storage:**
+
+| Host Path                          | Container Path | Notes                                              |
+| ---------------------------------- | -------------- | -------------------------------------------------- |
+| `/media/m2/photos/iphone/steve`    | `/data`        | iCloud photo destination, organized by date        |
+| `icloudpd_cookies` (named volume)  | `/cookies`     | Apple auth session (survives container recreate)   |
+
+**Auth:** First run (or after Apple session expires, ~monthly) requires interactive 2FA. Attach via `docker attach icloudpd` on pico, enter password + code, then detach with `Ctrl+P` `Ctrl+Q`.
+
+---
+
+### homepage
+
+**Status:** Running  
+**Stack ID:** 60  
+**Created:** 2026-05-17 (migrated from manual compose at `/home/steve/dashboards` to Portainer-managed)
+
+**Containers:**
+
+| Container | Image                                  | Status  |
+| --------- | -------------------------------------- | ------- |
+| homepage  | ghcr.io/gethomepage/homepage:latest    | Running |
+
+**Docker Compose:**
+
+```yaml
+services:
+  homepage:
+    image: ghcr.io/gethomepage/homepage:latest
+    container_name: homepage
+    restart: unless-stopped
+    ports:
+      - "8080:3000"
+    environment:
+      HOMEPAGE_ALLOWED_HOSTS: "*"
+      HOMEPAGE_VAR_PORTAINER_TOKEN: ${HOMEPAGE_VAR_PORTAINER_TOKEN}
+    extra_hosts:
+      - "pico.local:192.168.4.120"
+    volumes:
+      - /home/steve/dashboards/homepage/config:/app/config
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /media/m2:/media/m2:ro
+```
+
+**Purpose:** Application dashboard with Docker widget integration.  
+**Ports:** 8080 → 3000  
+**Domain:** `homepage.stevegore.au` (via Caddy → 10.20.30.1:8080, behind GitHub OAuth `adminonly`)  
+**Storage:**
+
+| Host Path                                | Container Path         | Notes                                       |
+| ---------------------------------------- | ---------------------- | ------------------------------------------- |
+| `/home/steve/dashboards/homepage/config` | `/app/config`          | Dashboard config (services/widgets/etc)     |
+| `/var/run/docker.sock`                   | `/var/run/docker.sock` | Docker widget (read-only)                   |
+| `/media/m2`                              | `/media/m2`            | Disk space widget targets (read-only)       |
+
+**Config files:** `services.yaml`, `settings.yaml`, `widgets.yaml`, `bookmarks.yaml`, `docker.yaml`, `kubernetes.yaml`, `proxmox.yaml` under `/home/steve/dashboards/homepage/config/`. The legacy `/home/steve/dashboards/docker-compose.yml` is no longer used for homepage (it still defines a `homarr` service that is not running).  
+**Env:** `HOMEPAGE_VAR_PORTAINER_TOKEN` is injected via the Portainer stack env so the Portainer widget can show container counts.
+
+---
+
+### uptime-kuma
+
+**Status:** Running  
+**Stack ID:** 61  
+**Created:** 2026-05-17
+
+**Containers:**
+
+| Container   | Image                       | Status  |
+| ----------- | --------------------------- | ------- |
+| uptime-kuma | louislam/uptime-kuma:1      | Running |
+
+**Docker Compose:**
+
+```yaml
+services:
+  uptime-kuma:
+    image: louislam/uptime-kuma:1
+    container_name: uptime-kuma
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    environment:
+      TZ: Australia/Sydney
+    volumes:
+      - uptime-kuma_data:/app/data
+
+volumes:
+  uptime-kuma_data:
+```
+
+**Purpose:** Uptime/status monitoring (pings + heartbeat checks), accessed at `http://pico.local:3001`. Persistent data in named volume `uptime-kuma_uptime-kuma_data`.  
+**Status page:** `http://pico.local:3001/status/homelab` — three groups (Public Services, Internal, Infrastructure). Wired into Homepage as the `uptimekuma` widget on the `Uptime Kuma` tile (slug = `homelab`).  
+**Monitor set:** 35 monitors covering pings (pico, ampere-ubuntu), TCP ports (SSH, Jackett, StravaBot), Caddy-fronted public URLs (all `*.stevegore.au`), and direct pico.local backend ports. GitHub-OAuth-protected URLs use `maxredirects=0` and `accepted=["302"]` so a 302 from Caddy's auth portal counts as UP. The container has `extra_hosts: pico.local:192.168.4.120` so internal monitors can resolve.  
+**Notifications:** Pushover, configured via UI (Settings → Notifications). Default-on for all monitors.  
+**Config provisioning:** Schema-direct SQL into `/app/data/kuma.db` (Uptime Kuma 1.x has no full REST API for monitor management). Re-runnable scripts (idempotent skip-if-name-exists):
+
+```sh
+# from pico — mount the named volume into a python container
+docker stop uptime-kuma
+docker run --rm -v uptime-kuma_uptime-kuma_data:/app/data \
+  -v ~/code/infra/scripts/setup_uptime_kuma.py:/setup.py \
+  python:3.12-alpine python /setup.py
+docker run --rm -v uptime-kuma_uptime-kuma_data:/app/data \
+  -v ~/code/infra/scripts/setup_status_page.py:/setup.py \
+  python:3.12-alpine python /setup.py
+docker start uptime-kuma
+```
 
 ---
 
@@ -1175,7 +1393,7 @@ services:
 ### Home Assistant
 
 **Container:** homeassistant  
-**Image:** ghcr.io/home-assistant/qemux86-64-homeassistant:2025.12.2  
+**Image:** ghcr.io/home-assistant/qemux86-64-homeassistant:2026.4.4  
 **Status:** Running (Up 2 weeks)  
 **Network:** host (all ports exposed directly)  
 **Command:** `/init`  
@@ -1192,19 +1410,19 @@ services:
 
 **Supervisor:**
 
-| Container         | Image                                             | Status     | Network        |
-| ----------------- | ------------------------------------------------- | ---------- | -------------- |
-| hassio_supervisor | homeassistant/amd64-hassio-supervisor (2026.01.1) | Up 12 days | bridge, hassio |
+| Container         | Image                                        | Status    | Network        |
+| ----------------- | -------------------------------------------- | --------- | -------------- |
+| hassio_supervisor | homeassistant/amd64-hassio-supervisor        | Up 7 days | bridge, hassio |
 
 **Core Components:**
 
-| Container        | Image                                                   | Status     | Network |
-| ---------------- | ------------------------------------------------------- | ---------- | ------- |
-| hassio_multicast | ghcr.io/home-assistant/amd64-hassio-multicast:2025.08.0 | Up 2 weeks | host    |
-| hassio_audio     | ghcr.io/home-assistant/amd64-hassio-audio:2025.08.0     | Up 2 weeks | hassio  |
-| hassio_dns       | ghcr.io/home-assistant/amd64-hassio-dns:2025.08.0       | Up 2 weeks | hassio  |
-| hassio_cli       | ghcr.io/home-assistant/amd64-hassio-cli:2026.01.0       | Up 2 weeks | hassio  |
-| hassio_observer  | ghcr.io/home-assistant/amd64-hassio-observer:2025.02.0  | Up 2 weeks | hassio  |
+| Container        | Image                                                   | Status    | Network |
+| ---------------- | ------------------------------------------------------- | --------- | ------- |
+| hassio_multicast | ghcr.io/home-assistant/amd64-hassio-multicast:2026.02.0 | Up 12 days | host   |
+| hassio_audio     | ghcr.io/home-assistant/amd64-hassio-audio:2026.02.0     | Up 12 days | hassio |
+| hassio_dns       | ghcr.io/home-assistant/amd64-hassio-dns:2026.02.0       | Up 12 days | hassio |
+| hassio_cli       | ghcr.io/home-assistant/amd64-hassio-cli:2026.05.0       | Up 3 days | hassio  |
+| hassio_observer  | ghcr.io/home-assistant/amd64-hassio-observer:2026.02.0  | Up 12 days | hassio |
 
 **Addons:**
 
@@ -1212,8 +1430,8 @@ services:
 | ------------------------- | --------------------------------------------- | ---------------------- | -------------------- | ------- |
 | addon_a0d7b954_vscode     | ghcr.io/hassio-addons/vscode/amd64:6.0.1      | VS Code editor         | Up 2 weeks (healthy) | hassio  |
 | addon_a0d7b954_phpmyadmin | ghcr.io/hassio-addons/phpmyadmin/amd64:0.13.0 | Database management    | Up 2 weeks           | hassio  |
-| addon_core_matter_server  | homeassistant/amd64-addon-matter-server:8.1.1 | Matter protocol bridge | Up 2 weeks           | host    |
-| addon_core_mariadb        | homeassistant/amd64-addon-mariadb:2.7.2       | Database backend       | Up 2 weeks           | hassio  |
+| addon_core_matter_server  | homeassistant/amd64-addon-matter-server:8.4.0 | Matter protocol bridge | Up 2 weeks           | host    |
+| addon_core_mariadb        | homeassistant/amd64-addon-mariadb:3.0.1       | Database backend       | Up 2 weeks           | hassio  |
 
 **HA Storage:** All HA data under `/usr/share/hassio/` with subdirectories for homeassistant, media, share, ssl, addons, backup, dns, audio  
 **HA Network:** Uses dedicated `hassio` bridge network (172.30.32.0/23) plus host network for core and Matter  
@@ -1221,22 +1439,10 @@ services:
 
 ---
 
-### Heimdall
-
-**Container:** heimdall  
-**Image:** linuxserver/heimdall:latest (v2.2.2-ls130)  
-**Status:** Running (Up 2 weeks)  
-**Network:** bridge  
-**Ports:** 8080 -> 80 (HTTP), 8443 -> 443 (HTTPS)  
-**Mounts:** `heimdall` volume -> `/config`  
-**Purpose:** Application dashboard - unified interface for all services
-
----
-
 ### Bitwarden (Vaultwarden)
 
 **Container:** bitwarden  
-**Image:** vaultwarden/server:1.34.3-alpine  
+**Image:** vaultwarden/server:1.35.7-alpine  
 **Status:** Running (Up 2 weeks, healthy)  
 **Network:** bridge  
 **Ports:** 8081 -> 80 (web UI), 3012 -> 3012 (WebSocket notifications)  
@@ -1304,6 +1510,10 @@ WEBSOCKET_ENABLED=true
 | stravabot-rs_default        | bridge | 192.168.16.0/20 | stravabot-rs        | Strava bot                                   |
 | vault_default               | bridge | 172.31.0.0/16   | vault               | Vault                                        |
 | pdf_default                 | bridge | 192.168.32.0/20 | pdf                 | Stirling PDF                                 |
+| immich_default              | bridge | -               | immich              | Immich server/redis/db/ML                    |
+| icloudpd_default            | bridge | -               | icloudpd            | iCloud downloader (single container)         |
+| homepage_default            | bridge | -               | homepage            | Homepage dashboard                           |
+| uptime-kuma_default         | bridge | -               | uptime-kuma         | Uptime Kuma monitoring                       |
 
 **Key:** The `transmission_net` network is shared across the `transmission` and `sonarrradarrjackett` stacks, allowing Sonarr/Radarr/Jackett to route traffic through the VPN-protected Transmission container.
 
@@ -1331,13 +1541,14 @@ WEBSOCKET_ENABLED=true
 | pdf_stirling-pdf-config             | pdf                 | 2024-05-06 | Stirling PDF configuration        |
 | transmission-wg_transmission_config | transmission-wg     | 2025-05-05 | WG Transmission config (orphaned) |
 | stravabot-rs_stravabot-rs-data      | stravabot-rs        | 2026-01-26 | Strava bot progress data          |
+| icloudpd_icloudpd_cookies           | icloudpd            | 2026-05-17 | iCloud auth session cookies       |
+| uptime-kuma_uptime-kuma_data        | uptime-kuma         | 2026-05-17 | Uptime Kuma monitor data + config |
 
 ### Standalone Volumes
 
 | Volume         | Created    | Notes                     |
 | -------------- | ---------- | ------------------------- |
 | portainer_data | 2021-05-29 | Portainer data/config     |
-| heimdall       | 2021-06-30 | Heimdall dashboard config |
 
 ### Legacy Volumes
 
@@ -1355,6 +1566,7 @@ WEBSOCKET_ENABLED=true
 
 | Port  | Service               | Container                         | Protocol |
 | ----- | --------------------- | --------------------------------- | -------- |
+| 2283  | Immich                | immich-immich-server-1            | TCP      |
 | 2342  | PhotoPrism            | photoprism-photoprism-1           | TCP      |
 | 3000  | Huginn                | huggin-web-1                      | TCP      |
 | 3005  | Plex Companion        | plex                              | TCP      |
@@ -1363,17 +1575,18 @@ WEBSOCKET_ENABLED=true
 | 3030  | Gitea (stopped)       | gitea                             | TCP      |
 | 4357  | HA Observer           | hassio_observer                   | TCP      |
 | 7878  | Radarr                | radarr                            | TCP      |
-| 8080  | Heimdall HTTP         | heimdall                          | TCP      |
+| 3001  | Uptime Kuma           | uptime-kuma                       | TCP      |
+| 8080  | Homepage              | homepage                          | TCP      |
 | 8081  | Vaultwarden HTTP      | bitwarden                         | TCP      |
 | 8082  | Strava Bot            | stravabot-rs                      | TCP      |
 | 8083  | Stirling PDF          | pdf-stirling-pdf-1                | TCP      |
+| 8191  | FlareSolverr          | flaresolverr                      | TCP      |
 | 8111  | NuraSpace             | nuraspace2-nuraspace-1            | TCP      |
 | 8112  | GymBooking            | gymmaster-rest-gymbooking-1       | TCP      |
 | 8180  | StravaKeeper          | stravakeeper-stravakeeper-1       | TCP      |
 | 8200  | Duplicati             | duplicati                         | TCP      |
 | 8202  | Vault                 | vault                             | TCP      |
 | 8324  | Plex Roku             | plex                              | TCP      |
-| 8443  | Heimdall HTTPS        | heimdall                          | TCP      |
 | 8788  | ttyd Terminal         | stevegore-au-ttyd-1               | TCP      |
 | 8844  | OwnCloud (stopped)    | owncloud_server                   | TCP      |
 | 8989  | Sonarr                | sonarr                            | TCP      |
@@ -1400,6 +1613,10 @@ WEBSOCKET_ENABLED=true
 | gymmaster-rest-gymbooking-1 | healthy | Built-in healthcheck            |
 | transmission-transmission-1 | healthy | Built-in healthcheck (autoheal) |
 | addon_a0d7b954_vscode       | healthy | Built-in healthcheck            |
+| homepage                    | healthy | Built-in healthcheck            |
+| immich-immich-server-1      | healthy | Built-in healthcheck            |
+| immich-immich-redis-1       | healthy | Built-in healthcheck            |
+| immich-immich-database-1    | healthy | Built-in healthcheck            |
 | All others                  | none    | No healthcheck configured       |
 
 ---
@@ -1413,9 +1630,13 @@ Summary of all host filesystem paths used by containers:
 | `/srv/movies`                          | radarr, plex                 | Movie library                           |
 | `/srv/tv`                              | sonarr, plex                 | TV show library                         |
 | `/var/lib/transmission`                | transmission, radarr, sonarr | Torrent download directory              |
-| `/media/m2/photos`                     | photoprism                   | Photo originals (M.2 SSD)               |
+| `/media/m2/photos`                     | photoprism, immich-server    | Photo originals (M.2 SSD); read-only into immich |
 | `/media/m2/photoprism/storage`         | photoprism                   | PhotoPrism cache/sidecar (M.2 SSD)      |
 | `/media/m2/photoprism/database`        | photoprism-mariadb           | PhotoPrism MariaDB data (M.2 SSD)       |
+| `/media/m2/immich/uploads`             | immich-server                | Immich-generated data/thumbnails        |
+| `/media/m2/immich/database`            | immich-database              | Immich Postgres data (M.2 SSD)          |
+| `/media/m2/immich/ml-cache`            | immich-machine-learning      | Immich ML model cache (CLIP, faces)     |
+| `/media/m2/photos/iphone/steve`        | icloudpd                     | iCloud photo download destination       |
 | `/var/nura`                            | nuraspace                    | NuraSpace app data                      |
 | `/var/elixr`                           | gymbooking                   | Gym booking data                        |
 | `/var/goldenboards`                    | goldenboards                 | Golden Boards data                      |
@@ -1425,8 +1646,9 @@ Summary of all host filesystem paths used by containers:
 | `/usr/share/duplicati`                 | duplicati                    | Duplicati config/database               |
 | `/usr/share/hassio`                    | Home Assistant (all)         | HA Supervised root                      |
 | `/var/lib/docker/volumes`              | duplicati                    | Docker volume backup source (read-only) |
-| `/dev/bus/usb`                         | plex                         | USB device passthrough                  |
-| `/dev/net/tun`                         | gluetun                      | TUN device for VPN                      |
+| `/dev/bus/usb`                                  | plex                         | USB device passthrough                  |
+| `/dev/net/tun`                                  | gluetun                      | TUN device for VPN                      |
+| `/home/steve/dashboards/homepage/config`         | homepage                     | Homepage dashboard config               |
 
 ---
 
@@ -1453,8 +1675,9 @@ This Portainer instance manages a comprehensive home infrastructure on pico:
 
 - **Plex** - Media streaming server (healthy, M.2 storage)  
 - **Transmission** (OpenVPN) - Torrent downloading with Windscribe VPN (healthy)  
-- **Sonarr/Radarr** - TV and movie automation via transmission_net  
-- **Jackett** - Torrent indexer aggregation
+- **Sonarr/Radarr** - TV and movie automation via transmission_net (10 and 8 indexers respectively)  
+- **Jackett** - Torrent indexer aggregation with FlareSolverr for Cloudflare bypass  
+- **FlareSolverr** - Cloudflare challenge solver for Jackett indexers
 
 ### Smart Home
 
@@ -1464,13 +1687,16 @@ This Portainer instance manages a comprehensive home infrastructure on pico:
 
 - **OwnCloud** - Cloud storage (stopped, volumes retained)  
 - **PhotoPrism** - Photo library with AI features, nightly auto-indexing via Chadburn  
+- **Immich** - Photo library (alternative to PhotoPrism), shares `/media/m2/photos` read-only as external library  
+- **icloudpd** - Continuous iCloud Photos sync to `/media/m2/photos/iphone/steve` (hourly poll)  
+- **Uptime Kuma** - Uptime/heartbeat monitoring on port 3001  
 - **Duplicati** - Backup utility with access to all Docker volumes and media
 
 ### Security & Access
 
 - **Vaultwarden** - Password manager (healthy)  
-- **Vault** - HashiCorp secrets management  
-- **Heimdall** - Application dashboard
+- **Vault** - HashiCorp secrets management (moved to MicroK8s on ampere-ubuntu)  
+- **Homepage** - Application dashboard at `homepage.stevegore.au` (port 8080, GitHub OAuth)
 
 ### Automation & Utilities
 
@@ -1486,4 +1712,4 @@ This Portainer instance manages a comprehensive home infrastructure on pico:
 - **GoldenBoards** - Custom application (Go, no ports)  
 - **ttyd** - Web terminal access (auto-restarts every 30 min, tmpfs storage)
 
-**Last Updated:** 2026-01-28
+**Last Updated:** 2026-05-17
