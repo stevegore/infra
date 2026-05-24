@@ -81,7 +81,7 @@ Failure modes today:
   ┌───────────────────────────┐   ┌────────────────────────────────────────┐
   │ MySQL HeatWave Free       │   │ pico (home, 192.168.4.120, tailscaled) │
   │ (Always Free, Sydney AD-1)│   │ Ryzen 5 5600G / 30 GB / 3.6 TB NVMe    │
-  │ 1 vCPU / 8 GB / 50 GB     │   │ Advertises 10.20.30.0/24 + 192.168.4/24│
+  │ 1 vCPU / 8 GB / 50 GB     │   │ Native tailnet node; no legacy WG CIDR │
   │ Managed + auto-backup     │   │ Primary: HA, Plex, Immich,             │
   │ Backend for Vaultwarden   │   │          Huginn, Stirling, Strava,     │
   └───────────────────────────┘   │          Portainer                     │
@@ -122,7 +122,6 @@ Reuse the existing `nebula` VCN (10.0.0.0/16), but put the OKE workers in the ex
 | `10.0.1.0/24` | Private subnet (OKE workers, MySQL private endpoint, future internal services) |
 | `10.244.0.0/16` | OKE pod CIDR (default) |
 | `10.96.0.0/16` | OKE service CIDR (default) |
-| `10.20.30.0/24` | Legacy WG subnet, kept and re-advertised by pico via Tailscale (backward compat for existing Caddyfile/app references) |
 | `100.64.0.0/10` | Tailnet (Tailscale CGNAT, auto-assigned per device) |
 
 This means the node pool is created as **private nodes only** with outbound access via the existing NAT Gateway and service-to-OCI access via the existing Service Gateway. The only public data-plane entrypoint is the NLB.
@@ -155,12 +154,11 @@ The NLB's public IP replaces the current reserved IP on the ampere VNIC. We can 
 
 WireGuard is replaced by Tailscale, eliminating all public UDP exposure and the "which worker hosts the hub" problem entirely.
 
-- **pico:** runs `tailscaled` as a host service. Joins our tailnet using an auth key delivered via the existing `vault-token-sync` flow. Advertises `10.20.30.0/24` (for backward compat with anything still hard-coding old WG addresses) and `192.168.4.0/24` (so we can also reach pico's other LAN devices if needed).
-- **OKE:** runs the [Tailscale Kubernetes Operator](https://tailscale.com/kb/1236/kubernetes-operator). A single `Connector` CRD declares the OKE side of the tailnet — the operator runs the connector pod, manages its key rotation, and configures `--accept-routes` to consume pico's advertised subnets.
-- **Caddy → pico:** upstream addresses unchanged (`10.20.30.1:8123` etc.), traffic now routed via the tailscale connector pod instead of a host WG interface.
-- **Caddy → pico (alternative):** swap to pico's native tailnet IP (`100.x.x.x`) or MagicDNS name (`pico.<tailnet>.ts.net`). Cleaner long-term, but not required at cutover.
+- **pico:** runs `tailscaled` as a host service and joins as a normal tailnet node using an auth key delivered via the existing `vault-token-sync` flow. No re-advertised `10.20.30.0/24` compatibility subnet. If we later need non-pico home LAN devices from OKE, we can separately advertise `192.168.4.0/24`; the base design does not depend on any subnet route.
+- **OKE:** runs the [Tailscale Kubernetes Operator](https://tailscale.com/kb/1236/kubernetes-operator). The operator provides the OKE side of the tailnet and manages its own credentials; we use it for cluster-to-tailnet connectivity rather than maintaining a WireGuard hub.
+- **Caddy → pico:** upstream addresses move to pico's native Tailscale identity, preferably MagicDNS (`pico.<tailnet>.ts.net`) rather than a synthetic legacy subnet address. That keeps the target design aligned with Tailscale and avoids carrying the old WireGuard CIDR forward.
 - **NAT traversal:** Tailscale negotiates direct connections wherever possible; falls back to DERP relays (~50–100 ms penalty) when both ends are behind symmetric NAT. From OKE (private workers egressing through OCI NAT) to pico (residential NAT), direct should usually still succeed, but this needs an explicit proof check during rollout rather than assumption.
-- **What goes away:** WG hub pod, `hostNetwork: true`, UDP 51820 security-list rule, the `wg.stevegore.au` DNS record, and the failover-operator subsection that previously stood here.
+- **What goes away:** WG hub pod, `hostNetwork: true`, UDP 51820 security-list rule, the `wg.stevegore.au` DNS record, and the legacy `10.20.30.0/24` compatibility address space in the target architecture.
 
 **Tradeoffs accepted:** dependency on Tailscale's coordination server (free SaaS, but adds an external party to the trust path). Self-hosted alternative (`headscale`) is available if this is ever unacceptable — same shape, just a small Go server in OKE replaces tailscale.com.
 
@@ -260,7 +258,13 @@ Kept as-is from the current setup, just moved to OKE. No raft, no PVCs, no migra
 - **Single replica Deployment.** State lives in the existing `vault-storage` OCI Object Storage bucket — same backend already serving production today.
 - **Auto-unseal via OCI KMS** (same key OCID, instance principal of OKE worker nodes via extended `vault-instances` dynamic group).
 - **No data migration**: the new Vault pod points at the existing bucket and instantly sees all existing secrets.
-- **VSO unchanged.**
+
+**Auth model after the WireGuard removal:**
+
+- **VSO stays on Kubernetes auth.** The auth method is still `auth/kubernetes`; only the cluster-specific wiring changes during migration. We reconfigure Vault with the new OKE cluster CA / token reviewer details, then recreate the existing role bindings for `vault-secrets-operator` and any other in-cluster consumers. This keeps the steady-state model the same: in-cluster workloads authenticate as service accounts, not with static credentials.
+- **pico `vault-token-sync` stays on a dedicated AppRole.** It keeps the narrow `pico-token-sync` policy and short TTLs, but it no longer relies on the old `10.20.30.1/32` WireGuard identity. Instead, the role is rebound to pico's Tailscale node IP at cutover time and pico reaches Vault over the tailnet-backed path. The important design point is that the AppRole restriction now follows pico's native Tailscale identity, not a compatibility subnet we are otherwise deleting.
+- **Operational consequence:** if pico is ever re-registered in Tailscale and gets a different node IP, re-issue the AppRole's CIDR binding as part of that maintenance. That is a smaller and more honest dependency than preserving the whole `10.20.30.0/24` address plan just to satisfy one auth check.
+- **Deliberately rejected:** keeping the old WireGuard CIDR alive purely for Vault auth. That would preserve a fake dependency in the target architecture and defeat the point of simplifying the network model.
 
 **Node-failure handling.** Standalone means a node loss takes Vault down briefly. Tuned tolerations in the pod spec compress this to ~90 sec:
 
@@ -395,11 +399,11 @@ You said you don't mind exceeding Always Free during the migration. The plan run
 
 ### Phase 4 — Tailscale rollout (½ day)
 
-- [ ] On pico: `sudo apt install tailscale && sudo tailscale up --authkey=<from Vault> --advertise-routes=10.20.30.0/24,192.168.4.0/24 --accept-routes`. Confirm pico is visible in the Tailscale admin console.
-- [ ] In the Tailscale admin: approve the advertised subnet routes from pico.
-- [ ] `apps/tailscale-operator/` already commits the Tailscale K8s Operator (Helm dependency) plus a `Connector` CRD instance — ArgoCD syncs it on its next reconcile. The operator pod joins the tailnet using the OAuth secret from Vault (via VSO), the connector accepts pico's advertised routes.
-- [ ] Caddy upstreams stay at `10.20.30.1:<port>` — packets now route via the connector pod. No Caddyfile changes; ArgoCD doesn't re-sync Caddy.
-- [ ] Verify end-to-end: `kubectl exec -n caddy <pod> -- curl -sI http://10.20.30.1:8123` returns 200.
+- [ ] On pico: `sudo apt install tailscale && sudo tailscale up --authkey=<from Vault>`. Confirm pico is visible in the Tailscale admin console with a stable node identity.
+- [ ] `apps/tailscale-operator/` already commits the Tailscale K8s Operator (Helm dependency) plus the OKE-side tailnet connectivity resources — ArgoCD syncs it on its next reconcile. The operator pod joins the tailnet using the OAuth secret from Vault (via VSO).
+- [ ] Update Caddy upstreams from `10.20.30.1:<port>` to pico's native Tailscale name (`pico.<tailnet>.ts.net:<port>`, or the stable `100.x` node IP if MagicDNS proves awkward). ArgoCD syncs the Caddy chart with those upstream changes.
+- [ ] Verify end-to-end: `kubectl exec -n caddy <pod> -- curl -sI http://pico.<tailnet>.ts.net:8123` returns 200.
+- [ ] Optional only if later needed: advertise `192.168.4.0/24` from pico and approve that route in the Tailscale admin so OKE can reach other home LAN devices behind pico.
 - [ ] Old WG hub on ampere-ubuntu stays up during the transition — pico still has the WG peer; can flap back to it if Tailscale misbehaves.
 - [ ] After 1 week of clean operation, remove the WG peer from pico's `wg0.conf` (and the now-orphaned hub on ampere) at decommission time (Phase 7).
 
@@ -423,7 +427,7 @@ No data migration — the new Vault pod uses the same `vault-storage` bucket and
 - [ ] Shut down the old Vault on ampere-ubuntu (stop the StatefulSet pod, leave manifests for now).
 - [ ] Confirm the new OKE Vault pod is healthy and unsealed (`vault status` via port-forward).
 - [ ] Re-create the Kubernetes auth role in Vault (new cluster CA, so the old role's CA cert is invalid): `vault write auth/kubernetes/config kubernetes_host=...` then re-create each role binding.
-- [ ] Re-issue AppRole credentials for pico's `vault-token-sync` (CIDR bindings still valid, role ID / secret ID need re-issue against the new cluster).
+- [ ] Re-issue AppRole credentials for pico's `vault-token-sync` with a new source restriction that matches the post-WireGuard path (for example pico's stable Tailscale IP), because the old `10.20.30.1/32` CIDR no longer exists in the target design.
 - [ ] Restart VSO so it re-authenticates with the new auth/kubernetes config.
 
 ### Phase 6.5 — Vaultwarden migration
@@ -499,6 +503,7 @@ These started as open questions and were resolved during proposal review (Steve,
 | Reserved IP — reuse or fresh? | **Reuse** — detach from ampere VNIC, attach to NLB; DNS records unchanged. |
 | OKE workers public or private? | **Private** — worker nodes sit in `Private Subnet-nebula` with no public IPs; only the NLB is internet-facing. |
 | OKE API endpoint public or private? | **Public, but home-IP-whitelisted** — keeps `kubectl` from pico simple and independent of Tailscale while leaving the worker nodes private. |
+| Keep legacy `10.20.30.0/24` compatibility subnet? | **No** — drop it from the target design and use pico's native Tailscale identity (MagicDNS or stable tailnet IP) instead. |
 | WireGuard failover — manual or operator? | **Replaced entirely by Tailscale (managed)**. No central listener, no DNS gymnastics, no failover operator. SaaS dep on Tailscale's coordination server (acceptable; headscale fallback available). |
 | cert-manager? | **No** — Caddy's built-in ACME is sufficient; nothing else in cluster needs certs. |
 | Vaultwarden `/data` PVC? | **No — treat `/data` as ephemeral (`emptyDir`).** Every file in `/data` is either superseded by MySQL (`db.sqlite3`), unused (`sends/`, `config.json`), regenerable (`icon_cache/`), or only triggers a one-time client re-auth on loss (`rsa_key.*`). The lone historical attachment was deleted 2026-05-24 to make this hold cleanly. Saves 50 GB of block-volume budget and removes the RWO single-writer constraint from the failover story. |
