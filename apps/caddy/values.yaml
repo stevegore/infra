@@ -1,0 +1,90 @@
+replicaCount: 2
+
+image:
+  # Built from apps/caddy/Dockerfile, pushed to OCI Container Registry (Always Free, 5 GB).
+  # Bump the tag suffix when xcaddy plugins or upstream Caddy change.
+  repository: syd.ocir.io/sdajdczqv0qo/caddy
+  tag: "2.11.2-stevegore.1"
+  pullPolicy: IfNotPresent
+
+# OCI Container Registry requires auth — create the secret out of band:
+#   kubectl -n caddy create secret docker-registry ocir-creds \
+#     --docker-server=syd.ocir.io \
+#     --docker-username='sdajdczqv0qo/<oci-user>' \
+#     --docker-password='<auth-token>' \
+#     --docker-email=steve.j.gore@gmail.com
+imagePullSecrets:
+  - name: ocir-creds
+
+resources:
+  requests:
+    memory: 128Mi
+    cpu: 100m
+  limits:
+    memory: 512Mi
+    cpu: 500m
+
+service:
+  # type LoadBalancer triggers the OCI CCM to provision an NLB.
+  # The reserved-ip annotation reuses publicip20230914115348 (the same address
+  # currently on the ampere VNIC) so Cloudflare DNS records don't have to change.
+  type: LoadBalancer
+  annotations:
+    oci.oraclecloud.com/load-balancer-type: "nlb"
+    # Detach this reserved IP from the ampere VNIC out-of-band before the NLB
+    # provisions, then the CCM picks it up via this annotation.
+    service.beta.kubernetes.io/oci-load-balancer-reserved-ip: "publicip20230914115348"
+    # Preserve client source IPs at L4 (NLB pass-through) and stop kube-proxy
+    # SNAT so caddy-security's IP-based rules see the real client.
+    oci.oraclecloud.com/oci-network-load-balancer-external-traffic-policy: "Local"
+  # externalTrafficPolicy=Local pairs with the NLB pass-through above.
+  externalTrafficPolicy: Local
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80
+      protocol: TCP
+    - name: https
+      port: 443
+      targetPort: 443
+      protocol: TCP
+    - name: https-quic
+      port: 443
+      targetPort: 443
+      protocol: UDP
+
+# OCI Object Storage S3-compat endpoint for certmagic-s3.
+# Bucket created out-of-band; vault-instances dynamic group has manage objects
+# on it (extend the existing policy when provisioning).
+s3:
+  host: sdajdczqv0qo.compat.objectstorage.ap-sydney-1.oraclecloud.com
+  bucket: caddy-acme
+  prefix: certmagic
+
+# Email used for Let's Encrypt registration.
+acmeEmail: steve.j.gore@gmail.com
+
+# VSO config — pulls a single secret with all sensitive values.
+# Expected fields at kv/caddy/config:
+#   github_client_id        — caddy-security OAuth app client ID
+#   github_client_secret    — caddy-security OAuth app secret
+#   jwt_private_key         — RSA private key PEM (signs JWTs at auth.stevegore.au)
+#   jwt_public_key          — RSA public key PEM (verifies JWTs across services)
+#   s3_access_key           — OCI Customer Secret Key access ID for caddy-acme bucket
+#   s3_secret_key           — OCI Customer Secret Key secret for caddy-acme bucket
+vault:
+  enabled: true
+  mount: kv
+  path: caddy/config
+  refreshAfter: 1h
+  # Existing VSO ClusterRoleBinding role from bootstrap.
+  authRole: vault-secrets-operator
+  # Name of the Kubernetes Secret VSO produces.
+  secretName: caddy-config
+
+# Pod-level placement.
+podAntiAffinity:
+  # Spread the 2 replicas across the 2 fault domains so a single-node loss
+  # doesn't take Caddy down. Required (not preferred) — we explicitly want
+  # to fail to schedule rather than silently land both on the same node.
+  enabled: true

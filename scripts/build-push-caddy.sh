@@ -2,7 +2,10 @@
 # Build the custom Caddy image (caddy-security + certmagic-s3) and push it to
 # OCI Container Registry, tagged for arm64 (OKE A1.Flex workers).
 #
-# Run from pico:
+# Runs on either:
+#   - pico (x86_64 Ubuntu) — qemu binfmt handlers are installed automatically
+#   - Mac (Apple Silicon)  — native arm64, no emulation needed
+#
 #   bash scripts/build-push-caddy.sh
 #
 # Behavior:
@@ -12,9 +15,10 @@
 #       1. $OCIR_USER + $OCIR_TOKEN env vars (skip Vault entirely)
 #       2. Vault at kv/ocir/credentials with fields `username` + `auth_token`
 #          (requires VAULT_TOKEN to be set — `source scripts/vault-env.sh &&
-#          vlogin` works on pico)
+#          vlogin` works on both pico and Mac)
 #       3. interactive prompt
-#   - Installs qemu binfmt handlers if missing (pico is x86_64; OKE wants arm64).
+#   - On non-arm64 hosts: installs qemu binfmt handlers to emulate arm64.
+#     On arm64 hosts (Apple Silicon): native build, no emulation.
 #   - Reuses the `multiarch` buildx builder if it exists; creates it otherwise.
 #
 # To populate the Vault secret (path 2), run once from the Mac:
@@ -83,10 +87,19 @@ fi
 echo "==> docker login ${REGISTRY}"
 echo "$OCIR_TOKEN" | docker login "$REGISTRY" --username "$OCIR_USER" --password-stdin
 
-# --- buildx + binfmt ---
+# --- buildx + (optional) binfmt ---
+HOST_ARCH=$(uname -m)
+case "$HOST_ARCH" in
+  arm64|aarch64) NEED_QEMU=0; BUILD_MODE="native" ;;
+  *)             NEED_QEMU=1; BUILD_MODE="emulated" ;;
+esac
+echo "==> host: $HOST_ARCH → target: $PLATFORM ($BUILD_MODE)"
+
 if ! docker buildx inspect "$BUILDER_NAME" >/dev/null 2>&1; then
-  echo "==> bootstrap qemu binfmt handlers (arm64 emulation on x86_64)"
-  docker run --privileged --rm tonistiigi/binfmt --install arm64 >/dev/null
+  if (( NEED_QEMU )); then
+    echo "==> bootstrap qemu binfmt handlers (arm64 emulation)"
+    docker run --privileged --rm tonistiigi/binfmt --install arm64 >/dev/null
+  fi
   echo "==> create buildx builder: $BUILDER_NAME"
   docker buildx create --name "$BUILDER_NAME" --driver docker-container --bootstrap >/dev/null
 fi
