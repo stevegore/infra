@@ -42,6 +42,20 @@ key_file=~/oci.pem
 | Instance OCID       | `ocid1.instance.oc1.ap-sydney-1.anzxsljrxbp2yoqcuh4ka3eoi4novuompif6tkoiqij57zi7fxmh24b5q53a` |
 | Services            | WireGuard VPN hub, Caddy reverse proxy, MicroK8s (ArgoCD, Vault)                              |
 
+#### Gotcha: Oracle's Ubuntu image has no logrotate
+
+Oracle Cloud's Ubuntu 22.04 aarch64 cloud image ships **without** the `logrotate`
+package and without `/etc/logrotate.conf`. Anything not self-rotated (notably
+`/var/log/btmp` and `/var/log/wtmp`) grows unbounded. On 2026-05-23 this filled
+`/var/sda1` enough that MicroK8s' kubelet hit its `nodefs.available<1Gi`
+eviction threshold and started evicting pods — including `argocd-dex-server`,
+which broke GitHub SSO login to ArgoCD.
+
+`bootstrap/install.sh` (step 1b) now installs `logrotate`, writes
+`/etc/logrotate.d/{btmp,wtmp}`, enables `logrotate.timer`, and caps journald at
+500 MiB via `/etc/systemd/journald.conf.d/00-size.conf`. If you bootstrap a
+fresh ampere host, those will be set automatically.
+
 ## Networking
 
 ### VCN: nebula

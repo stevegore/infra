@@ -23,12 +23,13 @@
 
 ### CNAME Records
 
-| Name                        | Target                                                | Proxied | Notes                    |
-| --------------------------- | ----------------------------------------------------- | ------- | ------------------------ |
-| `www.stevegore.au`          | stevegore.au                                          | No      | WWW redirect             |
-| hass2.stevegore.au          | c7f990bb-9fba-4fc9-af4a-0eb509e99798.cfargotunnel.com | **Yes** | Cloudflare Tunnel → pico |
-| autodiscover.stevegore.au   | autodiscover.outlook.com                              | No      | Outlook autodiscover     |
-| _domainconnect.stevegore.au | _domainconnect.gd.domaincontrol.com                   | No      | GoDaddy domain connect   |
+| Name                        | Target                                                | Proxied | Notes                                        |
+| --------------------------- | ----------------------------------------------------- | ------- | -------------------------------------------- |
+| `www.stevegore.au`          | stevegore.au                                          | No      | WWW redirect                                 |
+| hass2.stevegore.au          | c7f990bb-9fba-4fc9-af4a-0eb509e99798.cfargotunnel.com | **Yes** | Cloudflare Tunnel → pico                     |
+| bw2.stevegore.au            | c7f990bb-9fba-4fc9-af4a-0eb509e99798.cfargotunnel.com | **Yes** | Cloudflare Tunnel → pico Vaultwarden standby |
+| autodiscover.stevegore.au   | autodiscover.outlook.com                              | No      | Outlook autodiscover                         |
+| _domainconnect.stevegore.au | _domainconnect.gd.domaincontrol.com                   | No      | GoDaddy domain connect                       |
 
 ### Mail Records
 
@@ -58,9 +59,9 @@ Internet
     │                                    │
     │                                    └─► MicroK8s (ArgoCD pods)
     │
-    └─── hass2.stevegore.au ──────► Cloudflare Tunnel
-                                         │
-                                         └─► pico (direct, bypasses WireGuard)
+    └─── hass2.stevegore.au / bw2.stevegore.au ─► Cloudflare Tunnel
+                                                   │
+                                                   └─► pico (direct, bypasses WireGuard)
 ```
 
 ---
@@ -74,7 +75,7 @@ Internet
 **Client Version:** 2023.8.2  
 **Connections:** 4 active (syd06 x2, bne01 x2)
 
-**Usage:** Direct access to Home Assistant via `hass2.stevegore.au` without going through WireGuard/Caddy
+**Usage:** Direct access to Home Assistant via `hass2.stevegore.au` and Vaultwarden standby via `bw2.stevegore.au` without going through WireGuard/Caddy
 
 ---
 
@@ -192,6 +193,7 @@ All services below are proxied through Caddy on ampere-ubuntu:
 
 **Direct access (not via Caddy):**
 
-| Domain             | Target            | Service                 |
-| ------------------ | ----------------- | ----------------------- |
-| hass2.stevegore.au | Cloudflare Tunnel | Home Assistant (backup) |
+| Domain             | Target            | Service                      |
+| ------------------ | ----------------- | ---------------------------- |
+| hass2.stevegore.au | Cloudflare Tunnel | Home Assistant (backup)      |
+| bw2.stevegore.au   | Cloudflare Tunnel | Vaultwarden (warm standby)   |
