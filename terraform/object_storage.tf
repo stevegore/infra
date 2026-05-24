@@ -3,6 +3,20 @@
 data oci_objectstorage_namespace export_namespace {
   compartment_id = var.compartment_ocid
 }
+# Caddy ACME state (cert + account keys) for OKE. The two Caddy replicas share
+# this bucket via certmagic-s3 so they don't race on Let's Encrypt issuance.
+# Credentials are an OCI Customer Secret Key minted out-of-band by
+# scripts/provision-caddy-acme-creds.sh (TF would persist the secret_key in
+# state, which we want to avoid).
+resource "oci_objectstorage_bucket" "caddy_acme" {
+  compartment_id = var.compartment_ocid
+  name           = "caddy-acme"
+  namespace      = data.oci_objectstorage_namespace.export_namespace.namespace
+  access_type    = "NoPublicAccess"
+  versioning     = "Disabled"
+  storage_tier   = "Standard"
+}
+
 resource oci_objectstorage_bucket export_vault-storage {
   access_type    = "NoPublicAccess"
   auto_tiering   = "Disabled"

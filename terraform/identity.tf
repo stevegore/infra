@@ -32,9 +32,9 @@ resource oci_identity_policy export_vault-kms-objectstorage-policy {
   statements = [
     "Allow dynamic-group vault-instances to use keys in compartment main",
     "Allow dynamic-group vault-instances to manage objects in compartment main where target.bucket.name='vault-storage'",
+    "Allow dynamic-group vault-instances to manage objects in compartment main where target.bucket.name='caddy-acme'",
     "Allow dynamic-group vault-instances to read buckets in compartment main",
   ]
-  #version_date = <<Optional value not found in discovery>>
 }
 
 
@@ -46,17 +46,11 @@ resource oci_identity_dynamic_group export_vault-instances {
     "Oracle-Tags.CreatedBy" = "oracleidentitycloudservice/steve.j.gore@gmail.com"
     "Oracle-Tags.CreatedOn" = "2026-01-28T09:51:51.727Z"
   }
-  description = "Instances running HashiCorp Vault"
+  description = "Instances allowed to use KMS + Object Storage for the Vault unseal flow. Was scoped to the ampere instance OCID until 2026-05-25; broadened to compartment-match so future OKE worker instances pick up the same auth."
   freeform_tags = {
   }
-  matching_rule = "<placeholder for missing required attribute>" #Required attribute not found in discovery, placeholder value set to avoid plan failure
   name          = "vault-instances"
-
-  # Required attributes that were not found in discovery have been added to lifecycle ignore_changes
-  # This is done to avoid terraform plan failure for the existing infrastructure
-  lifecycle {
-    ignore_changes = [matching_rule]
-  }
+  matching_rule = "instance.compartment.id = '${var.compartment_ocid}'"
 }
 
 

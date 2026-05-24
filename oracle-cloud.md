@@ -116,11 +116,19 @@ fresh ampere host, those will be set automatically.
 
 ## Other Resources
 
-### Reserved Public IPs
+### Public IPs
 
-| Name                   | State    |
-| ---------------------- | -------- |
-| publicip20230914115348 | ASSIGNED |
+| Name                   | IP              | Lifetime  | Attached to                          | State    |
+| ---------------------- | --------------- | --------- | ------------------------------------ | -------- |
+| publicip20230914115348 | 158.178.136.162 | EPHEMERAL | ampere private IP 10.0.0.127         | ASSIGNED |
+| (NAT gateway IP)       | 168.138.106.64  | EPHEMERAL | NAT-Gateway-nebula                   | ASSIGNED |
+
+`publicip20230914115348` is misleadingly named — the digits look like a date but
+it's actually an ephemeral IP that's auto-named by OCI when a VNIC's first
+public address is assigned. The architecture migration (Phase 0) promotes it to
+RESERVED via Terraform so it can be detached from ampere and re-attached to the
+NLB in Phase 3 without changing the IP value (which would break Cloudflare DNS
+records).
 
 ### Boot Volumes
 
