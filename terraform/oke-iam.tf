@@ -20,3 +20,17 @@ resource "oci_identity_policy" "oke_service" {
     "Allow service OKE to manage cluster-node-pools in compartment main",
   ]
 }
+
+# MySQL service needs permission to create VNICs in our subnet for the
+# DB system endpoint. Without this, DB creation fails immediately with
+# "AuthorizationFailed" (which surfaces in TF as the vague "expected ACTIVE,
+# got FAILED"). See https://docs.oracle.com/en-us/iaas/mysql-database/doc/iam-policies.html
+resource "oci_identity_policy" "mysql_service" {
+  compartment_id = oci_identity_compartment.export_main.id
+  name           = "mysql-service-policy"
+  description    = "Allow the MySQL service to provision DB system VNICs in main."
+
+  statements = [
+    "Allow service MySQL to use virtual-network-family in compartment main",
+  ]
+}
