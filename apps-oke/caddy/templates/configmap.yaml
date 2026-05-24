@@ -138,57 +138,60 @@ data:
       import defaults
     }
 
-    # ----- Pico-hosted services (via Tailscale subnet routing) -----
-    # Pico advertises 10.20.30.0/24 + 192.168.4.0/24; OKE Connector pod accepts
-    # the routes, so these upstream IPs resolve unchanged from the old WG setup.
+    # ----- Pico-hosted services (via Tailscale Egress Service) -----
+    # `pico` resolves to the in-namespace ExternalName Service created by the
+    # Tailscale operator (see templates/pico-egress.yaml). The operator runs a
+    # proxy pod that forwards each port over the tailnet to pico's MagicDNS
+    # name. No 10.20.30.0/24 dependency; no need to know the tailnet name
+    # here — it lives only in values.yaml.
 
     hass.stevegore.au {
-      reverse_proxy 10.20.30.1:8123
+      reverse_proxy pico:8123
       import defaults
     }
 
     desk.stevegore.au {
       authorize with adminonly
-      reverse_proxy 10.20.30.1:8111
+      reverse_proxy pico:8111
       import defaults
     }
 
     gym.stevegore.au {
       authorize with adminonly
-      reverse_proxy 10.20.30.1:8112
+      reverse_proxy pico:8112
       import defaults
     }
 
     plex.stevegore.au {
-      reverse_proxy 10.20.30.1:32400
+      reverse_proxy pico:32400
       import defaults
     }
 
     immich.stevegore.au {
-      reverse_proxy 10.20.30.1:2283
+      reverse_proxy pico:2283
       import defaults
     }
 
     port.stevegore.au {
-      reverse_proxy 10.20.30.1:9000
+      reverse_proxy pico:9000
       import defaults
     }
 
     huggin.stevegore.au {
-      reverse_proxy 10.20.30.1:3000
+      reverse_proxy pico:3000
       import defaults
     }
 
     pdf.stevegore.au {
-      reverse_proxy 10.20.30.1:8083
+      reverse_proxy pico:8083
     }
 
     strava.stevegore.au {
-      reverse_proxy 10.20.30.1:8180
+      reverse_proxy pico:8180
     }
 
     stevegore.au {
       respond /health "I'm doing ok, thanks for asking :)"
       respond /healthz "I'm doing ok, thanks for asking :)"
-      reverse_proxy 10.20.30.1:8788
+      reverse_proxy pico:8788
     }

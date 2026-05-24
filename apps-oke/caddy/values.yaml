@@ -88,3 +88,29 @@ podAntiAffinity:
   # doesn't take Caddy down. Required (not preferred) — we explicitly want
   # to fail to schedule rather than silently land both on the same node.
   enabled: true
+
+# Pico reachability via the Tailscale Operator's Egress Service pattern.
+# Creates a Service named `pico` in this namespace. The operator watches for
+# the `tailscale.com/tailnet-fqdn` annotation, spawns a proxy pod that joins
+# the tailnet and resolves pico's MagicDNS name, and rewrites the Service to
+# point at it. Caddyfile upstreams use `pico:<port>` and never see the
+# tailnet name or 100.x IP — so this stays portable across tailnet renames.
+pico:
+  enabled: true
+  # MagicDNS name for pico inside the tailnet. Get it from `tailscale status`
+  # on pico — pico's row shows the suffix (e.g. tail1234a.ts.net). Replace
+  # placeholder before first OKE deploy.
+  tailnetFqdn: pico.your-tailnet.ts.net
+  # Ports the proxy needs to forward. Keep in sync with the upstream lines
+  # in templates/configmap.yaml.
+  ports:
+    - { name: hass,    port: 8123  }
+    - { name: desk,    port: 8111  }
+    - { name: gym,     port: 8112  }
+    - { name: plex,    port: 32400 }
+    - { name: immich,  port: 2283  }
+    - { name: port,    port: 9000  }
+    - { name: huggin,  port: 3000  }
+    - { name: pdf,     port: 8083  }
+    - { name: strava,  port: 8180  }
+    - { name: ttyd,    port: 8788  }
