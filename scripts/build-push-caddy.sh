@@ -9,7 +9,7 @@
 #   bash scripts/build-push-caddy.sh
 #
 # Behavior:
-#   - Reads image.repository + image.tag from apps/caddy/values.yaml (so the
+#   - Reads image.repository + image.tag from apps-oke/caddy/values.yaml (so the
 #     tag pushed and the tag ArgoCD pulls always match). Override with --tag.
 #   - OCIR creds resolved in this order:
 #       1. $OCIR_USER + $OCIR_TOKEN env vars (skip Vault entirely)
@@ -29,8 +29,8 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-VALUES="$REPO_ROOT/apps/caddy/values.yaml"
-DOCKERFILE_DIR="$REPO_ROOT/apps/caddy"
+VALUES="$REPO_ROOT/apps-oke/caddy/values.yaml"
+DOCKERFILE_DIR="$REPO_ROOT/apps-oke/caddy"
 BUILDER_NAME="multiarch"
 PLATFORM="linux/arm64"
 

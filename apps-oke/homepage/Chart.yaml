@@ -1,0 +1,6 @@
+apiVersion: v2
+name: homepage
+description: Homepage dashboard (gethomepage/homepage) — OKE replica of the pico copy
+type: application
+version: 1.0.0
+appVersion: "0.10.9"
