@@ -70,8 +70,7 @@ Failure modes today:
        │            │                                    │              │
        │            ▼                                    ▼              │
       │  ┌──────────────────────────────────────────────────────────┐  │
-      │  │  OCI Block Volume CSI: vaultwarden /data PVC (50 GB)    │  │
-      │  │                        uptime-kuma history PVC (50 GB)   │  │
+      │  │  OCI Block Volume CSI: uptime-kuma history PVC (50 GB)   │  │
       │  │  OCI Object Storage: vault-storage (live Vault backend)  │  │
       │  │                      caddy-acme   (Caddy cert state)     │  │
       │  └──────────────────────────────────────────────────────────┘  │
@@ -208,7 +207,7 @@ Pick the right primitive per workload — don't reach for PVCs by default.
 | Vault | **OCI Object Storage** | `vault-storage` bucket (existing). Standalone deployment, auto-unseal via OCI KMS. See §7.2. |
 | Caddy ACME store | **OCI Object Storage** | New `caddy-acme` bucket via `certmagic-s3` plugin. Both replicas share state, no PVC. |
 | Vaultwarden DB | **MySQL HeatWave Free** | Managed database for core vault records. See §7.1. |
-| Vaultwarden `/data` | **OCI Block Volume CSI** (RWO) | 50 GB PVC for attachments, file Sends, RSA keys, and other file-backed state. Single-writer only; volume reattaches on failover. See §7.1. |
+| Vaultwarden `/data` | **`emptyDir` (ephemeral)** | All meaningful state is in MySQL; everything else in `/data` is either unused, regenerable, or accepts a "clients re-auth on restart" cost. See §7.1. |
 | Uptime Kuma history | **OCI Block Volume CSI** (RWO) | 50 GB PVC for the SQLite DB. |
 | Tiny config (dex secrets, etc.) | **k8s Secret / ConfigMap** | Lives in etcd, replicated free with control plane. |
 | Photo backup | **Backblaze B2** (already configured) | Duplicati on pico → B2. Existing path; see §7.3. |
@@ -228,11 +227,16 @@ Vaultwarden's credentials are the single most critical thing in this stack, so w
 - **Storage:** 50 GB included with the Free shape; Oracle handles backups automatically.
 - **Network:** lives in an OCI subnet inside our VCN; private endpoint reachable from OKE workers via the existing VCN routing.
 - **Connection from Vaultwarden:** `DATABASE_URL=mysql://vaultwarden:<pw>@<private-endpoint>:3306/vaultwarden` (credentials via VSO from Vault).
-- **Non-database state:** Vaultwarden keeps `/data` on a dedicated **50 GB OCI Block Volume CSI PVC**. This covers attachments, file-based Sends, RSA key material, icon cache, and other file-backed runtime state that should survive pod rescheduling.
-- **Failover shape:** the Vaultwarden pod stays single-replica and mounts the PVC `ReadWriteOnce`. If the worker node dies, Kubernetes reschedules the pod to the surviving node and the CSI driver reattaches the volume there. This is restart-on-another-node, not active-active, but it preserves `/data` without inventing an object-storage shim.
-- **HA caveat:** Always Free is single-node. Node failure → Oracle restores from auto-backup (minutes, no manual ops). This is acceptable for our scale; full HA MySQL HeatWave costs.
+- **`/data` is ephemeral.** Vaultwarden's only durable surface in OKE is MySQL; the container's `/data` is an `emptyDir`. Walking through what's normally in there (see the upstream backup wiki) against our actual usage:
+  - `db.sqlite3` — unused; state is in MySQL.
+  - `attachments/` — none. The only historical attachment was deleted 2026-05-24; we accept that future attachments are similarly disposable, or we revisit this decision then.
+  - `sends/` — never used; ephemeral by Vaultwarden's own design anyway.
+  - `rsa_key.{pem,der,pub.der}` — upstream wiki notes "deletion only forces re-login." A new pod regenerates these on first start; clients re-auth once and continue. Acceptable for a stateless rebuild.
+  - `icon_cache/` — favicons. Lazy-rebuilt from live fetches on first vault open.
+  - `config.json` — unused; we configure via env vars and Vault-mounted secrets.
+- **HA caveat:** Always Free MySQL HeatWave is single-node. Node failure → Oracle restores from auto-backup (minutes, no manual ops). Acceptable for our scale; full HA HeatWave costs.
 
-This replaces the earlier plan to run CloudNative-PG. Net effect: zero in-cluster DB pods, no CNPG operator, no postgres PVCs, no postgres CRDs. We do still spend **one 50 GB PVC** on Vaultwarden's `/data`, because the non-database state is real and should survive node loss. The 100 GB we'd have spent on postgres replicas still stays in the block-volume budget.
+This replaces the earlier plan to run CloudNative-PG. Net effect: zero in-cluster DB pods, no CNPG operator, no postgres PVCs, no postgres CRDs, **and no Vaultwarden PVC** — Vaultwarden becomes fully stateless against MySQL. The 50 GB block-volume slot previously earmarked for `/data` returns to free-tier headroom.
 
 If we later adopt a postgres-only HA app, we can revisit (CNPG, or add a second managed DB — there is no Always Free postgres-equivalent on OCI yet).
 
@@ -241,7 +245,7 @@ If we later adopt a postgres-only HA app, we can revisit (CNPG, or add a second 
 The OKE Vaultwarden is the primary, but for the credentials-critical workload it's worth keeping a second instance on pico that's *almost* live, so it can be used immediately if MySQL HeatWave Free (or all of OKE) is unreachable.
 
 - **Pico keeps running its existing Vaultwarden container** in sqlite mode (no upstream MySQL dependency, no Tailscale dependency).
-- **Hourly sync** via systemd timer on pico: `mysqldump --single-transaction --databases vaultwarden` from HeatWave Free → convert with `mysql2sqlite` (or equivalent) → swap the pico sqlite file atomically while the container is briefly stopped (`docker stop vaultwarden && mv new.sqlite data/db.sqlite3 && docker start vaultwarden`). In the same window, sync Vaultwarden's non-database state (attachments, file Sends, RSA keys) from the OKE primary's `/data` PVC backup/export source to pico so the standby stays functionally close to the primary. Total downtime per sync: ~5 sec on the standby; the primary on OKE isn't touched.
+- **Hourly sync** via systemd timer on pico: `mysqldump --single-transaction --databases vaultwarden` from HeatWave Free → convert with `mysql2sqlite` (or equivalent) → swap the pico sqlite file atomically while the container is briefly stopped (`docker stop vaultwarden && mv new.sqlite data/db.sqlite3 && docker start vaultwarden`). No `/data` sync — pico's standby and the OKE primary keep their own RSA keys (clients re-auth on a failover, per §7.1), and there's no other meaningful file state to mirror. Total downtime per sync: ~5 sec on the standby; the primary on OKE isn't touched.
 - **External exposure via Cloudflare Tunnel** (same `cloudflared.service` already running for `hass2.stevegore.au`): `bw2.stevegore.au` is already configured to route to `http://localhost:8081`, with the Cloudflare DNS CNAME pointing at the existing pico tunnel.
 - **Independence from the OKE path entirely.** bw2 doesn't traverse Caddy, doesn't traverse the OCI NLB, doesn't traverse Tailscale. It's a completely separate ingress (Cloudflare → tunnel → pico-local Vaultwarden → pico-local sqlite). So a failure of *any* OKE-side component still leaves bw2 working.
 - **Bitwarden clients**: switch the server URL to `https://bw2.stevegore.au` when needed. Mobile/desktop clients cache the vault locally, so for read-only access during a brief outage the URL swap may not even be needed.
@@ -292,13 +296,13 @@ PhotoPrism is being sunset; Immich stays on pico as the only photo service.
 
 | Tier | Free quota | Allocated | Purpose |
 | --- | --- | --- | --- |
-| OCI Block Volume | 200 GB | 100 GB | Vaultwarden `/data` (50 GB) + Uptime Kuma history (50 GB) |
+| OCI Block Volume | 200 GB | 50 GB | Uptime Kuma history (50 GB) |
 | OCI Object Storage | 20 GB free request tier | <1 GB | `vault-storage` (live Vault backend) + `caddy-acme` (Caddy certs) |
 | MySQL HeatWave | 1 instance Always Free | 1 instance / 50 GB | Vaultwarden DB |
 | Backblaze B2 | n/a (separate billing) | ~1 TB | Photo + critical-app backups from pico |
 | pico local | 3.6 TB NVMe | ~2 TB | Media, photos, HA DB, container volumes |
 
-**100 GB of block-tier headroom** remains for future PVC needs. Existing volumes can also expand online (just not shrink).
+**150 GB of block-tier headroom** remains for future PVC needs. Existing volumes can also expand online (just not shrink).
 
 ---
 
@@ -317,7 +321,7 @@ PhotoPrism is being sunset; Immich stays on pico as the only photo service.
 | Vault | ampere (MicroK8s) | **OKE (standalone, bucket-backed)** | n/a — tuned-toleration restart, ~90s gap on node loss | Existing setup, just moved. No PVC. See §7.2 for failure analysis. |
 | ArgoCD | ampere (MicroK8s) | **OKE (HA install)** | implicit | Stateless, git is source of truth. |
 | Caddy | ampere | **OKE (2 replicas)** | implicit | Edge stays at edge. |
-| Vaultwarden | pico | **OKE (active, `bw.stevegore.au`)** + pico (warm standby, `bw2.stevegore.au`) | Yes — hourly one-way sync | Primary on OKE with MySQL HeatWave Free backend and a 50 GB RWO PVC for `/data`. Pico keeps a sqlite-mode standby fed by hourly mysqldump+convert, exposed via Cloudflare Tunnel as a completely independent ingress path. See §7.1.1. |
+| Vaultwarden | pico | **OKE (active, `bw.stevegore.au`)** + pico (warm standby, `bw2.stevegore.au`) | Yes — hourly one-way sync | Primary on OKE with MySQL HeatWave Free backend; no PVC (`/data` is ephemeral — see §7.1). Pico keeps a sqlite-mode standby fed by hourly mysqldump+convert, exposed via Cloudflare Tunnel as a completely independent ingress path. See §7.1.1. |
 | Homepage | pico | **OKE (replica)** + pico (replica) | Yes | Config in git; both pull. External users hit OKE one; LAN can hit either. |
 | Uptime Kuma | pico (new) | **OKE** | n/a (moves entirely) | Needs to detect *pico* outages → can't live on pico. |
 | Inter-site mesh | WireGuard (hub on ampere) | **Tailscale** (operator-managed Connector in OKE; tailscaled on pico) | n/a — no central listener | See §5.3. Eliminates UDP exposure, key juggling, and failover ops. |
@@ -335,7 +339,7 @@ PhotoPrism is being sunset; Immich stays on pico as the only photo service.
 | Single fault domain (AD-1) | Multi-AD | Multi-AD costs money; AD-1 with FD-1+FD-2 nodes is the free way to get host-level HA. |
 | MySQL HeatWave Free for Vaultwarden DB | CloudNative-PG self-hosted in OKE | Managed (Oracle does backups + restore), zero in-cluster DB footprint, no CNPG operator. Trade-off: locked to Oracle MySQL service + single-node free tier. Acceptable. |
 | Existing Duplicati→B2 for photo backup | rclone → OCI Object Storage (cold copy) | Already paid for and working (modulo the 2026-05-24 fix). No need to add a second backup target. |
-| OCI Block Volume CSI used sparingly | OCI CSI by default for everything | Block storage has a 50 GB-per-volume floor and counts against the 200 GB free tier. Vaultwarden `/data` and Uptime Kuma's SQLite genuinely need block; everything else uses ConfigMap/Secret/Object Storage (incl. Caddy ACME via S3 plugin, Vault via the existing `vault-storage` bucket). |
+| OCI Block Volume CSI used sparingly | OCI CSI by default for everything | Block storage has a 50 GB-per-volume floor and counts against the 200 GB free tier. Only Uptime Kuma's SQLite genuinely needs block; everything else uses ConfigMap/Secret/Object Storage (incl. Caddy ACME via S3 plugin, Vault via the existing `vault-storage` bucket) or treats `/data` as ephemeral (Vaultwarden, see §7.1). |
 | Caddy built-in ACME, no cert-manager | cert-manager + k8s Secret | Caddy does ACME natively. cert-manager adds CRDs, controller, RBAC for zero gain since no non-Caddy workload needs certs. |
 | Tailscale for inter-site mesh | WireGuard (hub pod + DNS + failover operator) | No public UDP listener, no failover plumbing, NAT traversal handled. Trade: SaaS dependency on Tailscale's coordination server. Headscale fallback available if that ever changes. |
 | OCI Network LB (L4 pass-through) | OCI Flexible LB (L7) | Flexible LB caps at 10 Mbps — would kneecap Plex/Immich. NLB is L4, passes TLS through to Caddy (which already terminates), no bandwidth cap. Both are Always Free. |
@@ -356,7 +360,7 @@ You said you don't mind exceeding Always Free during the migration. The plan run
 - [ ] Create OCI Object Storage bucket `caddy-acme` (private, no versioning needed — Caddy manages cert lifecycle). Grant the `vault-instances` dynamic group `manage objects in compartment main where target.bucket.name='caddy-acme'`.
 - [ ] In a branch, add the new app directories so the ApplicationSet picks them up on first sync. Each is a small Helm chart (or wrapper around an upstream chart) with `values.yaml`; secrets via VSO from the existing SOPS bundle:
   - `apps/caddy/` (Caddy + caddy-security + certmagic-s3, 2 replicas)
-  - `apps/vaultwarden/` (Deployment + Service + Ingress, MySQL HeatWave Free as backend, 50 GB `/data` PVC)
+  - `apps/vaultwarden/` (Deployment + Service + Ingress, MySQL HeatWave Free as backend, no PVC — `/data` is `emptyDir`)
   - `apps/uptime-kuma/` (single Deployment + small PVC)
   - `apps/tailscale-operator/` (wrapper for `tailscale/tailscale-operator` chart + `Connector` CRD)
   - `apps/homepage/` (OKE replica; same chart values as pico modulo `replicas: 1` per side)
@@ -427,12 +431,11 @@ No data migration — the new Vault pod uses the same `vault-storage` bucket and
 - [ ] On pico: stop Vaultwarden, snapshot `data/db.sqlite3`.
 - [ ] Convert sqlite → MySQL (Vaultwarden has scripts for this; alternatively use `vw_data_export` + `vw_data_import` against a fresh DB).
 - [ ] Load into MySQL HeatWave Free (already provisioned in phase 2). Store the connection string in Vault at `kv/vaultwarden/database_url`.
-- [ ] Copy pico's existing Vaultwarden `/data` non-database state (attachments, file Sends, RSA keys, etc.) into the new Vaultwarden PVC before cutover.
-- [ ] `apps/vaultwarden/` (already committed in Phase 0) becomes effective once the database secret exists and the PVC is provisioned: ArgoCD has been waiting in a `Degraded` state for the VSO-managed Secret, which now appears, and Vaultwarden starts against MySQL plus the restored `/data` volume.
-- [ ] Verify with one device, then full client roll.
+- [ ] `apps/vaultwarden/` (already committed in Phase 0) becomes effective once the database secret exists: ArgoCD has been waiting in a `Degraded` state for the VSO-managed Secret, which now appears, and Vaultwarden starts against MySQL with an `emptyDir` `/data` (no PVC, no migration of file state — see §7.1).
+- [ ] Verify with one device, then full client roll. (First-login note: because the OKE pod's RSA keys are fresh, every client will be asked to re-authenticate once on cutover — expected, not a regression.)
 - [ ] Cutover bw.stevegore.au.
 - [ ] On pico: keep the existing Vaultwarden container running in sqlite mode as a **warm standby** (see §7.1.1).
-  - Install hourly sync: systemd timer + service in `~/code/infra/scripts/vw-mysql-to-sqlite.{service,timer}`. Service body: `mysqldump --single-transaction` from HeatWave Free → `mysql2sqlite` → atomic swap of `data/db.sqlite3` with a brief container stop/start, plus sync of Vaultwarden `/data` non-database files from the OKE primary's backup/export path.
+  - Install hourly sync: systemd timer + service in `~/code/infra/scripts/vw-mysql-to-sqlite.{service,timer}`. Service body: `mysqldump --single-transaction` from HeatWave Free → `mysql2sqlite` → atomic swap of `data/db.sqlite3` with a brief container stop/start. No `/data` sync — both instances keep their own RSA keys and have no other meaningful file state.
   - Verify the existing Cloudflare Tunnel route for `bw2.stevegore.au` still points to `http://localhost:8081` and survives the standby sync timer setup.
   - Verify external access at `https://bw2.stevegore.au` with a test login.
 
@@ -455,7 +458,7 @@ No data migration — the new Vault pod uses the same `vault-storage` bucket and
 | 2 × A1.Flex 2 OCPU / 12 GB workers | $0 (Always Free) |
 | OKE enhanced cluster control plane | $0 (Always Free) |
 | 1 × OCI Network LB | $0 (Always Free) |
-| 2 × 50 GB block volumes (Vaultwarden `/data` + Uptime Kuma history) | $0 (within 200 GB Always Free, 100 GB headroom) |
+| 1 × 50 GB block volume (Uptime Kuma history) | $0 (within 200 GB Always Free, 150 GB headroom) |
 | OCI KMS HSM key | $0 (one Always Free vault) |
 | OCI Object Storage — `vault-storage` + `caddy-acme` | $0 (well under 20 GB tier) |
 | 1 × MySQL HeatWave Free (Vaultwarden DB) | $0 (Always Free) |
@@ -498,6 +501,7 @@ These started as open questions and were resolved during proposal review (Steve,
 | OKE API endpoint public or private? | **Public, but home-IP-whitelisted** — keeps `kubectl` from pico simple and independent of Tailscale while leaving the worker nodes private. |
 | WireGuard failover — manual or operator? | **Replaced entirely by Tailscale (managed)**. No central listener, no DNS gymnastics, no failover operator. SaaS dep on Tailscale's coordination server (acceptable; headscale fallback available). |
 | cert-manager? | **No** — Caddy's built-in ACME is sufficient; nothing else in cluster needs certs. |
+| Vaultwarden `/data` PVC? | **No — treat `/data` as ephemeral (`emptyDir`).** Every file in `/data` is either superseded by MySQL (`db.sqlite3`), unused (`sends/`, `config.json`), regenerable (`icon_cache/`), or only triggers a one-time client re-auth on loss (`rsa_key.*`). The lone historical attachment was deleted 2026-05-24 to make this hold cleanly. Saves 50 GB of block-volume budget and removes the RWO single-writer constraint from the failover story. |
 
 ---
 
