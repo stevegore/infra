@@ -171,6 +171,17 @@ fresh ampere host, those will be set automatically.
 | Public Access | No                              |
 | Purpose       | HashiCorp Vault storage backend |
 
+### Bucket: infra-tfstate
+
+| Property      | Value                                                            |
+| ------------- | ---------------------------------------------------------------- |
+| Namespace     | `sdajdczqv0qo`                                                   |
+| Compartment   | main                                                             |
+| Versioning    | Enabled                                                          |
+| Public Access | No                                                               |
+| Purpose       | Terraform remote state for the `infra/terraform/` stack.         |
+| Accessed via  | OCI S3-compatibility endpoint, HMAC creds (`terraform-state-s3`) |
+
 ---
 
 ## Identity & Access Management (IAM)
@@ -196,3 +207,30 @@ Allow dynamic-group vault-instances to use keys in compartment main
 Allow dynamic-group vault-instances to manage objects in compartment main where target.bucket.name='vault-storage'
 Allow dynamic-group vault-instances to read buckets in compartment main
 ```
+
+### Customer Secret Keys (HMAC creds for S3-compat endpoint)
+
+| Display Name       | Access Key ID                              | Purpose                                                  | Stored in Vault at      |
+| ------------------ | ------------------------------------------ | -------------------------------------------------------- | ----------------------- |
+| `terraform-state-s3` | `edde148ef34b728522e7ad399f7b5b818bec5754` | Terraform `s3` backend → `infra-tfstate` bucket          | `kv/oci/tf-state-s3`    |
+
+OCI users are capped at 2 active Customer Secret Keys. List + delete via
+`oci iam customer-secret-key list --user-id <user-ocid>`.
+
+---
+
+## Terraform / Resource Manager
+
+The OCI footprint (everything in `main` plus the IAM dynamic-group + policy)
+is managed by Terraform at `terraform/` in this repo. State lives in the
+`infra-tfstate` bucket via the S3-compat endpoint. See `terraform/README.md`
+for the local-plan / ORM-apply workflow.
+
+| Component               | Detail                                                                       |
+| ----------------------- | ---------------------------------------------------------------------------- |
+| ORM Stack display name  | `homelab-tf` (created by `scripts/provision-orm-stack.sh`)                   |
+| State backend           | `s3` → `https://sdajdczqv0qo.compat.objectstorage.ap-sydney-1.oraclecloud.com` |
+| State bucket / key      | `infra-tfstate` / `homelab/main.tfstate`                                     |
+| GitHub source           | `stevegore/infra`, branch `main`, working directory `terraform/`             |
+| GitHub PAT in Vault     | `kv/github/orm-pat`                                                          |
+| Resources under control | 30 (see `terraform state list` for the authoritative inventory)              |

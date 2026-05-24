@@ -3,3 +3,16 @@
 # Decrypted age private key — must never be committed. The wrapped versions
 # (age-identity.txt.age and age-identity.txt.kms) are safe to commit.
 config/age-identity.txt
+
+# Terraform local state, plan output, and provider downloads. State lives
+# in the OCI Object Storage backend (see terraform/backend.tf), never on disk.
+terraform/.terraform/
+terraform/*.tfstate
+terraform/*.tfstate.*
+terraform/*.tfplan
+terraform/crash.log
+terraform/crash.*.log
+terraform/override.tf
+terraform/override.tf.json
+terraform/*_override.tf
+terraform/*_override.tf.json
