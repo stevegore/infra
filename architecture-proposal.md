@@ -1,9 +1,17 @@
 # Proposed Architecture: OKE + Split Ampere + pico
 
-**Status:** Proposal, not yet adopted
+**Status:** Adopted; Phase 0 in progress
 **Author:** Steve / Claude
-**Date:** 2026-05-23
+**Date:** 2026-05-23 (last updated 2026-05-24)
 **Trigger:** Single-host outage on 2026-05-23 (ampere-ubuntu hit a 20-min Oracle maintenance window; all externally-accessible services down for the duration)
+
+**Progress (2026-05-24):**
+- All five OKE chart scaffolds committed under `apps-oke/` (`caddy`, `vaultwarden`, `uptime-kuma`, `tailscale-operator`, `homepage`) — separated from `apps/` so the live ampere `infra-apps` ApplicationSet doesn't try to reconcile them. Charts lint + render clean.
+- `apps/vault/values.yaml` tolerations added (live; affects ampere too).
+- OKE-side ApplicationSet template added at `argocd/applicationset-oke.yaml`, targeting `apps-oke/*`. Not yet applied (no OKE cluster yet).
+- Helper scripts: `scripts/provision-ocir-creds.sh` (mints OCIR auth token, pushes to `kv/ocir/credentials`) + `scripts/build-push-caddy.sh` (cross-builds + pushes the custom Caddy image; runs on either pico or Apple Silicon Mac).
+- Caddyfile in `apps-oke/caddy/` already targets pico via the Tailscale Egress Service pattern (`pico:<port>` in-namespace) rather than the legacy `10.20.30.1:<port>` — so Phase 4 doesn't need a separate Caddyfile rewrite.
+- Tailscale OAuth client created; creds in Vault at `kv/tailscale/operator_oauth`.
 
 ---
 
@@ -294,7 +302,7 @@ PhotoPrism is being sunset; Immich stays on pico as the only photo service.
 - During a pico outage `photos.stevegore.au` returns 502 from Caddy. Acceptable: photos aren't latency-critical.
 - DR path on total pico loss: restore from B2 via Duplicati to a new disk.
 
-> **Status note (2026-05-24):** the Duplicati→B2 backup was discovered to have been silently failing since Nov 2023 (a stale DB record for a regenerated PhotoPrism sidecar). A rebuild is in progress at the time of writing; this proposal assumes the rebuild lands successfully. If it doesn't, we revisit and add an OCI-side cold copy.
+> **Status note (2026-05-24):** the Duplicati→B2 backup was discovered to have been silently failing since Nov 2023 (a stale DB record for a regenerated PhotoPrism sidecar). The rebuild landed — verified 2026-05-24: all 4 jobs have fresh successful filesets in B2 within the last 24h, with `dlist/dindex/dblock` PUTs confirmed in Duplicati's per-job `RemoteOperation` table. **However the underlying sidecar-regeneration race is not fixed** — today's scheduled 02:00 Photos run failed with the *exact same* `DatabaseInconsistencyException` on a `.MOV.avc` sidecar; only the post-`Recreate` manual runs at 12:03 and 19:43 succeeded. So as of today the proposal's "rebuild succeeded" assumption holds, but the photos backup has a known recurring failure mode that needs a real fix (kill the sidecar regeneration that's racing, or pin its filename) — track this as a §12 risk until done.
 
 ### 7.4 Storage budget summary
 
@@ -355,23 +363,26 @@ PhotoPrism is being sunset; Immich stays on pico as the only photo service.
 
 You said you don't mind exceeding Always Free during the migration. The plan runs both stacks side-by-side for ~5-7 days. Estimated cost: **$2-7 total** (extra 4 OCPU at $0.01/OCPU/hr × ~150 hours).
 
-**GitOps invariant:** every Kubernetes resource lives under `apps/<name>/` in this repo and is reconciled by the existing `infra-apps` ApplicationSet (`argocd/applicationset.yaml`). The only commands that touch the cluster directly are the one-shot bootstrap (`bootstrap/install.sh`-equivalent for OKE: kubectl-apply ArgoCD raw manifests, then the ApplicationSet) and ad-hoc debug. Every install step below is "commit `apps/foo/`, push, ArgoCD syncs" — never `helm install` against the live cluster.
+**GitOps invariant:** OKE-only charts live under `apps-oke/<name>/`, reconciled by the OKE-side `infra-oke-apps` ApplicationSet (`argocd/applicationset-oke.yaml`). The ampere MicroK8s `infra-apps` ApplicationSet (`argocd/applicationset.yaml`) continues to glob `apps/<name>/` only — that separation is what stops ampere from trying to sync OKE-only primitives (NLB annotations, oci-bv PVCs, OCIR images). The only commands that touch the cluster directly are the one-shot bootstrap (`bootstrap/install.sh`-equivalent for OKE: kubectl-apply ArgoCD raw manifests, then the ApplicationSet) and ad-hoc debug. Every install step below is "commit `apps-oke/foo/`, push, ArgoCD syncs" — never `helm install` against the live cluster. Post-Phase-7 the two trees consolidate: `git mv apps-oke/* apps/`, drop `argocd/applicationset-oke.yaml`, done. Application names are basename-driven so the `source.path` field updates in place without recreating Applications.
 
 ### Phase 0 — Prep (½ day, no risk)
 
-- [ ] Snapshot ampere boot volume (one-click in OCI console).
-- [ ] Take an out-of-band copy of the `vault-storage` bucket as a safety net (`oci os object bulk-download --bucket-name vault-storage --download-dir /backup/vault-pre-migration/`). Current Vault is standalone, so the bucket IS the snapshot.
+- [x] Snapshot ampere boot volume — backup `ocid1.bootvolumebackup.oc1.ap-sydney-1.abzxsljr2zcj7cxywe7ccngd2yhvtjutj6ir7jsqhz2vsltgaihdeacfmvua` (`pre-oke-migration-2026-05-24`, FULL, 47 GB, `free-tier-retained`). Initiated 2026-05-24 via OCI CLI; runs async (~30 min to AVAILABLE).
+- [x] Out-of-band copy of `vault-storage` bucket → `~/Backups/vault-storage-2026-05-24/` on the Mac. 103/103 objects, 412 KB. Contents are Vault-encrypted on disk so the local copy is safe unwrapped.
 - [ ] Create OCI Object Storage bucket `caddy-acme` (private, no versioning needed — Caddy manages cert lifecycle). Grant the `vault-instances` dynamic group `manage objects in compartment main where target.bucket.name='caddy-acme'`.
-- [ ] In a branch, add the new app directories so the ApplicationSet picks them up on first sync. Each is a small Helm chart (or wrapper around an upstream chart) with `values.yaml`; secrets via VSO from the existing SOPS bundle:
-  - `apps/caddy/` (Caddy + caddy-security + certmagic-s3, 2 replicas)
-  - `apps/vaultwarden/` (Deployment + Service + Ingress, MySQL HeatWave Free as backend, no PVC — `/data` is `emptyDir`)
-  - `apps/uptime-kuma/` (single Deployment + small PVC)
-  - `apps/tailscale-operator/` (wrapper for `tailscale/tailscale-operator` chart + `Connector` CRD)
-  - `apps/homepage/` (OKE replica; same chart values as pico modulo `replicas: 1` per side)
-  - Update `apps/vault/values.yaml` to add the tuned tolerations from §7.2 (single in-place edit; ArgoCD reconciles after Phase 2 sync). No raft / standalone-mode change needed — existing values already use standalone + Object Storage backend.
-- [ ] Create Tailscale account (if not already), generate a reusable + ephemeral auth key for OKE Connector, plus a non-ephemeral auth key for pico. Stash both in `kv/tailscale/` in Vault.
+- [x] Add the new app directories under `apps-oke/` (kept out of `apps/` so the live ampere ApplicationSet doesn't try to reconcile them). Each is a small Helm chart with `values.yaml`; secrets via VSO.
+  - [x] `apps-oke/caddy/` (Caddy + caddy-security + certmagic-s3, 2 replicas, custom OCIR image — `Dockerfile` colocated)
+  - [x] `apps-oke/vaultwarden/` (MySQL HeatWave Free backend, no PVC — `/data` is `emptyDir`)
+  - [x] `apps-oke/uptime-kuma/` (single Deployment + 50 GB oci-bv PVC)
+  - [x] `apps-oke/tailscale-operator/` (wrapper for `tailscale/tailscale-operator` chart + `Connector` CRD)
+  - [x] `apps-oke/homepage/` (OKE replica; placeholder ConfigMap pending copy of pico's live config)
+  - [x] `apps/vault/values.yaml` tolerations from §7.2 (live — will roll vault-0 on ampere on next ArgoCD reconcile).
+- [x] Add `argocd/applicationset-oke.yaml` — applied during Phase 2 on the new cluster to drive the `apps-oke/*` reconciliation.
+- [x] Create Tailscale OAuth client; stash creds at `kv/tailscale/operator_oauth` in Vault. Non-ephemeral auth key for pico still pending (created on demand at Phase 4).
 - [ ] Extend `vault-instances` dynamic group to include the *new* OKE workers (matching rule: instance.compartment.id = main).
-- [ ] Confirm Duplicati→B2 photo backup is producing fresh filesets (post-2026-05-24 fix).
+- [x] Confirm Duplicati→B2 photo backup is producing fresh filesets — verified 2026-05-24: all 4 jobs (Docker Volumes, Home Assistant, Bitwarden, Photos) have successful filesets within 24h; Photos shows two successful runs today (12:03 + 19:43) with `dlist/dindex/dblock` PUTs to B2 confirmed in the per-job `RemoteOperation` table. See §7.3 caveat — the sidecar race that caused the original silent failure is *not* fixed; it recurred at the scheduled 02:00 run today and only the manual `Recreate`-then-run path is producing successful filesets.
+- [x] Provision OCIR auth token + push to `kv/ocir/credentials` (`bash scripts/provision-ocir-creds.sh` from the Mac).
+- [x] Build and push the custom Caddy image to OCIR (`bash scripts/build-push-caddy.sh` — runs on either pico or Mac).
 
 ### Phase 1 — Provision OKE (½ day)
 
@@ -384,25 +395,25 @@ You said you don't mind exceeding Always Free during the migration. The plan run
 ### Phase 2 — Cluster baseline (1 day)
 
 - [ ] Bootstrap ArgoCD into the empty cluster: `kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/ha/install.yaml`. This is the only direct kubectl-apply in the whole migration; from here on ArgoCD owns its own lifecycle via `apps/argocd/`.
-- [ ] `kubectl apply -f argocd/applicationset.yaml` once. The ApplicationSet generator walks `apps/*` and creates an Application per directory.
+- [ ] `kubectl apply -f argocd/applicationset.yaml` (ampere-shared apps: vault, vault-secrets-operator, argocd, openclaw) and `kubectl apply -f argocd/applicationset-oke.yaml` (OKE-only apps under `apps-oke/`). Both ApplicationSet generators walk their directory globs and create an Application per directory.
 - [ ] Watch ArgoCD sync: `apps/argocd/` reconciles ArgoCD itself, `apps/vault-secrets-operator/` brings VSO, `apps/vault/` brings Vault (standalone, pointing at the existing `vault-storage` bucket — secrets appear without a data migration), etc.
 - [ ] Verify private-node egress before layering apps on top: test image pulls, OCI Object Storage access, OCI KMS access, and outbound package/API reachability through the NAT Gateway from a debug pod.
-- [ ] Out-of-band: provision **MySQL HeatWave Free** in Sydney AD-1 (`oci mysql db-system create --shape-name MySQL.Free ...`), in a private subnet of the existing `nebula` VCN, with NSG opened only to OKE worker CIDR. (Not a k8s resource → not in `apps/`; could be Terraform later.)
+- [ ] Out-of-band: provision **MySQL HeatWave Free** in Sydney AD-1 (`oci mysql db-system create --shape-name MySQL.Free ...`), in a private subnet of the existing `nebula` VCN, with NSG opened only to OKE worker CIDR. (Not a k8s resource → not in `apps-oke/`; could be Terraform later.)
 - [ ] Verify: Vault auto-unseals via OCI KMS, VSO authenticates against the new Vault, MySQL endpoint resolvable from a debug pod.
 
 ### Phase 3 — Edge stack (1 day)
 
-- [ ] Build Caddy container image with `xcaddy build --with github.com/greenpau/caddy-security --with github.com/ss098/certmagic-s3` and push to OCI Container Registry (Always Free, 5 GB). Image tag pinned in `apps/caddy/values.yaml`.
-- [ ] Commit `apps/caddy/` — Helm chart producing: Deployment (2 replicas), Service type `LoadBalancer` with annotation `oci.oraclecloud.com/load-balancer-type: "nlb"` (this is how ArgoCD-driven k8s tells OCI to provision the NLB; no separate `oci nlb create` needed), ConfigMap (Caddyfile + `storage s3` global option), VaultStaticSecret for caddy.env + JWT keys + S3 credentials. ArgoCD syncs it; the OCI CCM provisions the NLB.
+- [ ] Build Caddy container image: `bash scripts/build-push-caddy.sh` (reads `apps-oke/caddy/values.yaml` for repo + tag; xcaddy build with `caddy-security` + `certmagic-s3`; pushes to OCIR). Already runnable as of Phase 0.
+- [x] `apps-oke/caddy/` Helm chart producing: Deployment (2 replicas), Service type `LoadBalancer` with `oci.oraclecloud.com/load-balancer-type: "nlb"` + the reserved-IP annotation, ConfigMap (Caddyfile + `storage s3` global option), VaultStaticSecret for OAuth + JWT keys + S3 credentials, and `pico-egress.yaml` (Tailscale Egress Service so Caddyfile upstreams use `pico:<port>`). ArgoCD on OKE syncs it; the OCI CCM provisions the NLB.
 - [ ] Detach the existing reserved public IP (`publicip20230914115348`) from the ampere VNIC and reattach to the NLB the CCM created — DNS records continue pointing at the same IP, zero Cloudflare change needed. (This step is out-of-band; the CCM accepts a pre-existing reserved IP via the `service.beta.kubernetes.io/oci-load-balancer-reserved-ip` annotation on the Service if we want it fully declarative from day 1.)
 - [ ] Point a **test** subdomain (e.g. `oke-test.stevegore.au`) at the new LB IP — verify Caddy + cert issuance work end-to-end before touching real records.
 
 ### Phase 4 — Tailscale rollout (½ day)
 
 - [ ] On pico: `sudo apt install tailscale && sudo tailscale up --authkey=<from Vault>`. Confirm pico is visible in the Tailscale admin console with a stable node identity.
-- [ ] `apps/tailscale-operator/` already commits the Tailscale K8s Operator (Helm dependency) plus the OKE-side tailnet connectivity resources — ArgoCD syncs it on its next reconcile. The operator pod joins the tailnet using the OAuth secret from Vault (via VSO).
-- [ ] Update Caddy upstreams from `10.20.30.1:<port>` to pico's native Tailscale name (`pico.<tailnet>.ts.net:<port>`, or the stable `100.x` node IP if MagicDNS proves awkward). ArgoCD syncs the Caddy chart with those upstream changes.
-- [ ] Verify end-to-end: `kubectl exec -n caddy <pod> -- curl -sI http://pico.<tailnet>.ts.net:8123` returns 200.
+- [x] `apps-oke/tailscale-operator/` commits the Tailscale K8s Operator (Helm dependency) plus the OKE-side `Connector` CRD — ArgoCD syncs it on its next reconcile. The operator pod joins the tailnet using the OAuth secret from Vault (via VSO).
+- [ ] Set `pico.tailnetFqdn` in `apps-oke/caddy/values.yaml` to pico's MagicDNS name (e.g. `pico.tail1234a.ts.net`). The `pico` Egress Service in the caddy namespace then proxies through the operator; Caddy upstreams (`pico:<port>`) stay unchanged.
+- [ ] Verify end-to-end: `kubectl exec -n caddy <pod> -- curl -sI http://pico:8123` returns 200.
 - [ ] Optional only if later needed: advertise `192.168.4.0/24` from pico and approve that route in the Tailscale admin so OKE can reach other home LAN devices behind pico.
 - [ ] Old WG hub on ampere-ubuntu stays up during the transition — pico still has the WG peer; can flap back to it if Tailscale misbehaves.
 - [ ] After 1 week of clean operation, remove the WG peer from pico's `wg0.conf` (and the now-orphaned hub on ampere) at decommission time (Phase 7).
@@ -435,7 +446,7 @@ No data migration — the new Vault pod uses the same `vault-storage` bucket and
 - [ ] On pico: stop Vaultwarden, snapshot `data/db.sqlite3`.
 - [ ] Convert sqlite → MySQL (Vaultwarden has scripts for this; alternatively use `vw_data_export` + `vw_data_import` against a fresh DB).
 - [ ] Load into MySQL HeatWave Free (already provisioned in phase 2). Store the connection string in Vault at `kv/vaultwarden/database_url`.
-- [ ] `apps/vaultwarden/` (already committed in Phase 0) becomes effective once the database secret exists: ArgoCD has been waiting in a `Degraded` state for the VSO-managed Secret, which now appears, and Vaultwarden starts against MySQL with an `emptyDir` `/data` (no PVC, no migration of file state — see §7.1).
+- [ ] `apps-oke/vaultwarden/` (already committed in Phase 0) becomes effective once the database secret exists: ArgoCD has been waiting in a `Degraded` state for the VSO-managed Secret, which now appears, and Vaultwarden starts against MySQL with an `emptyDir` `/data` (no PVC, no migration of file state — see §7.1).
 - [ ] Verify with one device, then full client roll. (First-login note: because the OKE pod's RSA keys are fresh, every client will be asked to re-authenticate once on cutover — expected, not a regression.)
 - [ ] Cutover bw.stevegore.au.
 - [ ] On pico: keep the existing Vaultwarden container running in sqlite mode as a **warm standby** (see §7.1.1).
