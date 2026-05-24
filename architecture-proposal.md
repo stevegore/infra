@@ -9,7 +9,7 @@
 - All five OKE chart scaffolds committed under `apps-oke/` (`caddy`, `vaultwarden`, `uptime-kuma`, `tailscale-operator`, `homepage`) — separated from `apps/` so the live ampere `infra-apps` ApplicationSet doesn't try to reconcile them. Charts lint + render clean.
 - `apps/vault/values.yaml` tolerations added (live; affects ampere too).
 - OKE-side ApplicationSet template added at `argocd/applicationset-oke.yaml`, targeting `apps-oke/*`. Not yet applied (no OKE cluster yet).
-- Helper scripts: `scripts/provision-ocir-creds.sh` (mints OCIR auth token, pushes to `kv/ocir/credentials`) + `scripts/build-push-caddy.sh` (cross-builds + pushes the custom Caddy image; runs on either pico or Apple Silicon Mac).
+- Helper scripts: `scripts/provision-ocir-creds.sh` (mints OCIR auth token, pushes to `kv/oci/ocir`) + `scripts/build-push-caddy.sh` (cross-builds + pushes the custom Caddy image; runs on either pico or Apple Silicon Mac).
 - Caddyfile in `apps-oke/caddy/` already targets pico via the Tailscale Egress Service pattern (`pico:<port>` in-namespace) rather than the legacy `10.20.30.1:<port>` — so Phase 4 doesn't need a separate Caddyfile rewrite.
 - Tailscale OAuth client created; creds in Vault at `kv/tailscale/operator_oauth`.
 
@@ -381,7 +381,7 @@ You said you don't mind exceeding Always Free during the migration. The plan run
 - [x] Create Tailscale OAuth client; stash creds at `kv/tailscale/operator_oauth` in Vault. Non-ephemeral auth key for pico still pending (created on demand at Phase 4).
 - [ ] Extend `vault-instances` dynamic group to include the *new* OKE workers (matching rule: instance.compartment.id = main).
 - [x] Confirm Duplicati→B2 photo backup is producing fresh filesets — verified 2026-05-24: all 4 jobs (Docker Volumes, Home Assistant, Bitwarden, Photos) have successful filesets within 24h; Photos shows two successful runs today (12:03 + 19:43) with `dlist/dindex/dblock` PUTs to B2 confirmed in the per-job `RemoteOperation` table. See §7.3 caveat — the sidecar race that caused the original silent failure is *not* fixed; it recurred at the scheduled 02:00 run today and only the manual `Recreate`-then-run path is producing successful filesets.
-- [x] Provision OCIR auth token + push to `kv/ocir/credentials` (`bash scripts/provision-ocir-creds.sh` from the Mac).
+- [x] Provision OCIR auth token + push to `kv/oci/ocir` (`bash scripts/provision-ocir-creds.sh` from the Mac).
 - [x] Build and push the custom Caddy image to OCIR (`bash scripts/build-push-caddy.sh` — runs on either pico or Mac).
 
 ### Phase 1 — Provision OKE (½ day)

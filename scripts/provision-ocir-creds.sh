@@ -7,7 +7,7 @@
 #   3. Save a local backup at ~/.config/ocir/credentials.json (mode 600)
 #      — OCI only ever shows an auth token once, so this is your only copy
 #      outside Vault.
-#   4. Push the pair to Vault at kv/ocir/credentials (fields:
+#   4. Push the pair to Vault at kv/oci/ocir (fields:
 #      `username`, `auth_token`) for scripts/build-push-caddy.sh to consume.
 #
 # Usage:
@@ -27,7 +27,7 @@ done
   exit 1
 }
 
-VAULT_PATH="kv/ocir/credentials"
+VAULT_PATH="kv/oci/ocir"
 LOCAL_BACKUP="${HOME}/.config/ocir/credentials.json"
 DESCRIPTION="OCIR push from $(hostname -s) ($(date -u +%Y-%m-%d))"
 
