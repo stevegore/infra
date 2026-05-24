@@ -90,6 +90,21 @@ vault:
     annotations:
       oci.oraclecloud.com/instance-principal: "true"
 
+    # Tuned tolerations: standalone Vault means a node loss takes Vault down
+    # until the pod is rescheduled. Default unreachable/not-ready tolerations
+    # are 300s; shortening them to 30s compresses the gap to ~90s. See
+    # architecture-proposal.md §7.2 — nothing in the hot path polls Vault,
+    # so the trade-off (more aggressive eviction on transient blips) is fine.
+    tolerations:
+      - key: node.kubernetes.io/unreachable
+        operator: Exists
+        effect: NoExecute
+        tolerationSeconds: 30
+      - key: node.kubernetes.io/not-ready
+        operator: Exists
+        effect: NoExecute
+        tolerationSeconds: 30
+
   ui:
     enabled: true
     serviceType: NodePort
