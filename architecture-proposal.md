@@ -16,7 +16,8 @@
 - OKE-side ApplicationSet template added at `argocd/applicationset-oke.yaml`, targeting `apps-oke/*`. Not yet applied (no OKE cluster yet).
 - Helper scripts: `scripts/provision-ocir-creds.sh` (mints OCIR auth token, pushes to `kv/oci/ocir`) + `scripts/build-push-caddy.sh` (cross-builds + pushes the custom Caddy image; runs on either pico or Apple Silicon Mac).
 - Caddyfile in `apps-oke/caddy/` already targets pico via the Tailscale Egress Service pattern (`pico:<port>` in-namespace) rather than the legacy `10.20.30.1:<port>` — so Phase 4 doesn't need a separate Caddyfile rewrite.
-- Tailscale OAuth client created; creds in Vault at `kv/tailscale/operator_oauth`.
+- Tailscale OAuth client created; creds in Vault at `kv/tailscale/operator_oauth` (for the OKE operator). Tailnet name `stevegore.github` (MagicDNS suffix `chipmunk-fir.ts.net`).
+- Pico **already** on the tailnet — `tailscaled` running, MagicDNS `pico.chipmunk-fir.ts.net` (100.98.212.71). The Phase 4 "install tailscale on pico" checkbox is therefore already done; pico just needs the WG hub teardown when ampere goes (Phase 7). `apps-oke/caddy/values.yaml` pinned to this MagicDNS name.
 
 ---
 
@@ -405,7 +406,7 @@ The TF resource matrix (current + planned):
   - [x] `apps-oke/homepage/` (OKE replica; placeholder ConfigMap pending copy of pico's live config)
   - [x] `apps/vault/values.yaml` tolerations from §7.2 (live — will roll vault-0 on ampere on next ArgoCD reconcile).
 - [x] Add `argocd/applicationset-oke.yaml` — applied during Phase 2 on the new cluster to drive the `apps-oke/*` reconciliation.
-- [x] Create Tailscale OAuth client; stash creds at `kv/tailscale/operator_oauth` in Vault. Non-ephemeral auth key for pico still pending (created on demand at Phase 4).
+- [x] Create Tailscale OAuth client; stash creds at `kv/tailscale/operator_oauth` in Vault. (For the OKE operator only — pico is already on the tailnet so no separate pico auth key needed.)
 - [ ] Extend `vault-instances` dynamic group to include the *new* OKE workers (change matching rule from `instance.id = <ampere>` to `instance.compartment.id = <main>` — covers ampere today and any future compute). **Via TF** (`terraform/identity.tf`).
 - [x] Confirm Duplicati→B2 photo backup is producing fresh filesets — verified 2026-05-24: all 4 jobs (Docker Volumes, Home Assistant, Bitwarden, Photos) have successful filesets within 24h; Photos shows two successful runs today (12:03 + 19:43) with `dlist/dindex/dblock` PUTs to B2 confirmed in the per-job `RemoteOperation` table. See §7.3 caveat — the sidecar race that caused the original silent failure is *not* fixed; it recurred at the scheduled 02:00 run today and only the manual `Recreate`-then-run path is producing successful filesets.
 - [x] Provision OCIR auth token + push to `kv/oci/ocir` (`bash scripts/provision-ocir-creds.sh` from the Mac).
@@ -439,9 +440,9 @@ All provisioning **via TF** (`terraform/oke.tf` + `terraform/oke-iam.tf`). Singl
 
 ### Phase 4 — Tailscale rollout (½ day)
 
-- [ ] On pico: `sudo apt install tailscale && sudo tailscale up --authkey=<from Vault>`. Confirm pico is visible in the Tailscale admin console with a stable node identity.
+- [x] On pico: `tailscaled` already running, joined to tailnet `stevegore.github` (MagicDNS `pico.chipmunk-fir.ts.net`, tailnet IP `100.98.212.71`). Pre-existing from before this migration started — no action needed.
 - [x] `apps-oke/tailscale-operator/` commits the Tailscale K8s Operator (Helm dependency) plus the OKE-side `Connector` CRD — ArgoCD syncs it on its next reconcile. The operator pod joins the tailnet using the OAuth secret from Vault (via VSO).
-- [ ] Set `pico.tailnetFqdn` in `apps-oke/caddy/values.yaml` to pico's MagicDNS name (e.g. `pico.tail1234a.ts.net`). The `pico` Egress Service in the caddy namespace then proxies through the operator; Caddy upstreams (`pico:<port>`) stay unchanged.
+- [x] `pico.tailnetFqdn` in `apps-oke/caddy/values.yaml` set to `pico.chipmunk-fir.ts.net`. The `pico` Egress Service in the caddy namespace proxies through the operator; Caddy upstreams (`pico:<port>`) stay unchanged.
 - [ ] Verify end-to-end: `kubectl exec -n caddy <pod> -- curl -sI http://pico:8123` returns 200.
 - [ ] Optional only if later needed: advertise `192.168.4.0/24` from pico and approve that route in the Tailscale admin so OKE can reach other home LAN devices behind pico.
 - [ ] Old WG hub on ampere-ubuntu stays up during the transition — pico still has the WG peer; can flap back to it if Tailscale misbehaves.

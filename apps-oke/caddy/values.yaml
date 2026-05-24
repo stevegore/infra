@@ -97,10 +97,10 @@ podAntiAffinity:
 # tailnet name or 100.x IP — so this stays portable across tailnet renames.
 pico:
   enabled: true
-  # MagicDNS name for pico inside the tailnet. Get it from `tailscale status`
-  # on pico — pico's row shows the suffix (e.g. tail1234a.ts.net). Replace
-  # placeholder before first OKE deploy.
-  tailnetFqdn: pico.your-tailnet.ts.net
+  # MagicDNS name for pico inside the tailnet `stevegore.github`
+  # (suffix `chipmunk-fir.ts.net`). Confirm with `tailscale status` on pico
+  # before changing — a tailnet rename would invalidate this.
+  tailnetFqdn: pico.chipmunk-fir.ts.net
   # Ports the proxy needs to forward. Keep in sync with the upstream lines
   # in templates/configmap.yaml.
   ports:
