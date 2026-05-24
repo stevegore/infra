@@ -509,7 +509,7 @@ services:
       - tmpdir:/var/tmp
     ports:
       - 8788:8788
-    restart: unless-stopped
+    restart: always
     deploy:
       resources:
         limits:
@@ -549,7 +549,8 @@ volumes:
 **Resource Limits:** 0.5 CPU cores, 250M memory, 250 max processes, 500 file descriptors  
 **Storage:** All tmpfs-backed (ephemeral) - homedir 500M (uid/gid 222), tmpdir 500M  
 **Restarter:** Sidecar container restarts ttyd every 30 minutes via Docker socket  
-**Volumes:** `stevegore-au_homedir` (tmpfs), `stevegore-au_tmpdir` (tmpfs)
+**Volumes:** `stevegore-au_homedir` (tmpfs), `stevegore-au_tmpdir` (tmpfs)  
+**Note:** ttyd uses `restart: always` (not `unless-stopped`) because on 2026-05-24 the host rebooted while ttyd was in an `exited` state — `unless-stopped` skips containers exited at daemon shutdown, leaving the public site 502 for ~14h until the container was manually started.
 
 ---
 
