@@ -34,7 +34,7 @@ key_file=~/oci.pem
 | Memory              | 24 GB                                                                                         |
 | Processor           | 3.0 GHz Ampere® Altra™                                                                        |
 | State               | RUNNING                                                                                       |
-| Availability Domain | AP-SYDNEY-1-AD-1                                                                              |
+| Availability Domain | AP-SYDNEY-1-AD-1 (CLI form: `tbGS:AP-SYDNEY-1-AD-1` — tenancy-aliased)                        |
 | Fault Domain        | FAULT-DOMAIN-2                                                                                |
 | Created             | 2023-09-14                                                                                    |
 | Private IP          | 10.0.0.127                                                                                    |
