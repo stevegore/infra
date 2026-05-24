@@ -4,8 +4,9 @@
 # (age-identity.txt.age and age-identity.txt.kms) are safe to commit.
 config/age-identity.txt
 
-# Terraform local state, plan output, and provider downloads. State lives
-# in the OCI Object Storage backend (see terraform/backend.tf), never on disk.
+# Terraform local artifacts. State lives in ORM (see terraform/README.md);
+# scripts/tf-env.sh materializes a backend_override.tf pointing at a cached
+# pull of that state for fast local plans — never commit it.
 terraform/.terraform/
 terraform/*.tfstate
 terraform/*.tfstate.*
