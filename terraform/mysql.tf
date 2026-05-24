@@ -91,6 +91,12 @@ resource "oci_mysql_mysql_db_system" "heatwave" {
   # 'CreateDbSystem' operation for an Always Free DB system"). Free tier
   # gets one automatic daily backup, retention not user-configurable.
 
+  # Explicit dependency on the service policy: without this, TF can call
+  # CreateDbSystem in parallel with the policy create/update and the auth
+  # check on MySQL's side hits the old (insufficient) grants. Mentioning
+  # the policy resource in depends_on forces a happens-before ordering.
+  depends_on = [oci_identity_policy.mysql_service]
+
   # Don't taint on minor MySQL version bumps from OCI; the service does
   # rolling minor upgrades inside the major version we picked.
   lifecycle {

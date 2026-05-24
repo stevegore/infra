@@ -21,12 +21,14 @@ resource "oci_identity_policy" "oke_service" {
   ]
 }
 
-# MySQL service needs:
-#   - virtual-network-family: provision VNICs for the DB system endpoint
-#   - instance-family read: inspect compute resources for shape validation
-#   - work-requests inspect: track its own provisioning work requests
-# Without these, DB creation surfaces in TF as the vague "expected ACTIVE,
-# got FAILED" (the underlying OCI work-request error is "AuthorizationFailed").
+# MySQL service needs all of these to provision a DB system:
+#   - virtual-network-family: VNICs for the DB endpoint
+#   - instance-family read: shape validation
+#   - object-family manage: automatic backups to Oracle-managed storage
+#   - KMS access: encryption-at-rest key handling (even with Oracle-managed keys)
+#   - work-requests inspect: track its own provisioning state
+# Without the full set, creation fails with the unhelpful "AuthorizationFailed"
+# (TF surfaces it as "expected ACTIVE, got FAILED" with no further detail).
 # See https://docs.oracle.com/en-us/iaas/mysql-database/doc/iam-policies.html
 resource "oci_identity_policy" "mysql_service" {
   compartment_id = oci_identity_compartment.export_main.id
@@ -36,6 +38,8 @@ resource "oci_identity_policy" "mysql_service" {
   statements = [
     "Allow service mysql to use virtual-network-family in compartment main",
     "Allow service mysql to read instance-family in compartment main",
+    "Allow service mysql to manage object-family in compartment main",
+    "Allow service mysql to {KEY_READ, KEY_VERSION_READ, KMS_CONFIG_READ, KMS_KEY_USE} in compartment main",
     "Allow service mysql to inspect work-requests in compartment main",
   ]
 }
