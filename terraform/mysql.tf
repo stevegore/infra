@@ -86,10 +86,10 @@ resource "oci_mysql_mysql_db_system" "heatwave" {
 
   nsg_ids = [oci_core_network_security_group.mysql.id]
 
-  backup_policy {
-    is_enabled        = true
-    retention_in_days = 7
-  }
+  # backup_policy intentionally omitted — OCI rejects it at create time
+  # for MySQL.Free DB systems ("Cannot specify backup policy with
+  # 'CreateDbSystem' operation for an Always Free DB system"). Free tier
+  # gets one automatic daily backup, retention not user-configurable.
 
   # Don't taint on minor MySQL version bumps from OCI; the service does
   # rolling minor upgrades inside the major version we picked.
