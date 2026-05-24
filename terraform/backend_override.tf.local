@@ -1,0 +1,14 @@
+# Local-backend override template, committed for visibility.
+#
+# Activate:    scripts/tf-env.sh        (renames to backend_override.tf + pulls state)
+# Deactivate:  scripts/tf-env-off.sh    (renames back to .local + cleans cache)
+#
+# The active form (backend_override.tf) shadows the absent backend block in
+# the rest of the config, so terraform uses the local state file below for
+# the entire session. Apply is still ORM-only by convention — pushing to
+# GitHub triggers the ORM apply path.
+terraform {
+  backend "local" {
+    path = ".tfstate-cache/homelab-tf.tfstate"
+  }
+}
