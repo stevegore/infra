@@ -3,26 +3,6 @@
 data oci_objectstorage_namespace export_namespace {
   compartment_id = var.compartment_ocid
 }
-resource oci_objectstorage_bucket export_infra-tfstate {
-  access_type    = "NoPublicAccess"
-  auto_tiering   = "Disabled"
-  compartment_id = var.compartment_ocid
-  defined_tags = {
-    "Oracle-Tags.CreatedBy" = "oracleidentitycloudservice/steve.j.gore@gmail.com"
-    "Oracle-Tags.CreatedOn" = "2026-05-24T12:59:18.699Z"
-  }
-  freeform_tags = {
-  }
-  #kms_key_id = <<Optional value not found in discovery>>
-  metadata = {
-  }
-  name                  = "infra-tfstate"
-  namespace             = data.oci_objectstorage_namespace.export_namespace.namespace
-  object_events_enabled = "false"
-  storage_tier          = "Standard"
-  versioning            = "Enabled"
-}
-
 resource oci_objectstorage_bucket export_vault-storage {
   access_type    = "NoPublicAccess"
   auto_tiering   = "Disabled"
