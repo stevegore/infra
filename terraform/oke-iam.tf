@@ -21,16 +21,21 @@ resource "oci_identity_policy" "oke_service" {
   ]
 }
 
-# MySQL service needs permission to create VNICs in our subnet for the
-# DB system endpoint. Without this, DB creation fails immediately with
-# "AuthorizationFailed" (which surfaces in TF as the vague "expected ACTIVE,
-# got FAILED"). See https://docs.oracle.com/en-us/iaas/mysql-database/doc/iam-policies.html
+# MySQL service needs:
+#   - virtual-network-family: provision VNICs for the DB system endpoint
+#   - instance-family read: inspect compute resources for shape validation
+#   - work-requests inspect: track its own provisioning work requests
+# Without these, DB creation surfaces in TF as the vague "expected ACTIVE,
+# got FAILED" (the underlying OCI work-request error is "AuthorizationFailed").
+# See https://docs.oracle.com/en-us/iaas/mysql-database/doc/iam-policies.html
 resource "oci_identity_policy" "mysql_service" {
   compartment_id = oci_identity_compartment.export_main.id
   name           = "mysql-service-policy"
-  description    = "Allow the MySQL service to provision DB system VNICs in main."
+  description    = "Allow the MySQL service to provision and manage DB systems in main."
 
   statements = [
-    "Allow service MySQL to use virtual-network-family in compartment main",
+    "Allow service mysql to use virtual-network-family in compartment main",
+    "Allow service mysql to read instance-family in compartment main",
+    "Allow service mysql to inspect work-requests in compartment main",
   ]
 }
