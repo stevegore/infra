@@ -1,0 +1,32 @@
+{{- if .Values.pico.enabled }}
+# Tailscale Egress Service for pico.
+#
+# The Tailscale Kubernetes Operator watches Services with the
+# `tailscale.com/tailnet-fqdn` annotation. It:
+#   1. Spawns a proxy pod that joins the tailnet under tag:k8s-operator
+#   2. Resolves the FQDN via MagicDNS from inside the tailnet
+#   3. Rewrites this Service's endpoints to point at the proxy
+#
+# Caddy reaches pico-hosted services via `pico:<port>` (in-namespace short
+# name) — agnostic of pico's tailnet IP and the tailnet name itself.
+apiVersion: v1
+kind: Service
+metadata:
+  name: pico
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "caddy.labels" . | nindent 4 }}
+  annotations:
+    tailscale.com/tailnet-fqdn: {{ .Values.pico.tailnetFqdn | quote }}
+spec:
+  # The operator overwrites externalName once the proxy pod is up; the
+  # placeholder just satisfies the ExternalName schema.
+  type: ExternalName
+  externalName: placeholder
+  ports:
+    {{- range .Values.pico.ports }}
+    - name: {{ .name }}
+      port: {{ .port }}
+      protocol: TCP
+    {{- end }}
+{{- end }}
