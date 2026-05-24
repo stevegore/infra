@@ -13,7 +13,7 @@
 #     tag pushed and the tag ArgoCD pulls always match). Override with --tag.
 #   - OCIR creds resolved in this order:
 #       1. $OCIR_USER + $OCIR_TOKEN env vars (skip Vault entirely)
-#       2. Vault at kv/ocir/credentials with fields `username` + `auth_token`
+#       2. Vault at kv/oci/ocir with fields `username` + `auth_token`
 #          (requires VAULT_TOKEN to be set — `source scripts/vault-env.sh &&
 #          vlogin` works on both pico and Mac)
 #       3. interactive prompt
@@ -25,7 +25,7 @@
 #   source scripts/vault-env.sh && vlogin
 #   bash scripts/provision-ocir-creds.sh
 # That uses the OCI CLI to mint a fresh auth token and pushes it to
-# kv/ocir/credentials with the correctly-formed docker username.
+# kv/oci/ocir with the correctly-formed docker username.
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -65,7 +65,7 @@ get_creds_from_vault() {
   command -v vault >/dev/null || return 1
   [[ -n "${VAULT_TOKEN:-}" ]] || return 1
   local out
-  out=$(vault kv get -format=json kv/ocir/credentials 2>/dev/null) || return 1
+  out=$(vault kv get -format=json kv/oci/ocir 2>/dev/null) || return 1
   OCIR_USER=$(jq -r '.data.data.username'   <<<"$out")
   OCIR_TOKEN=$(jq -r '.data.data.auth_token' <<<"$out")
   [[ -n "$OCIR_USER" && "$OCIR_USER" != "null" ]] || return 1
@@ -74,7 +74,7 @@ get_creds_from_vault() {
 
 if [[ -z "${OCIR_USER:-}" || -z "${OCIR_TOKEN:-}" ]]; then
   if get_creds_from_vault; then
-    echo "    creds: kv/ocir/credentials"
+    echo "    creds: kv/oci/ocir"
   else
     echo "    creds: interactive (set OCIR_USER + OCIR_TOKEN to skip)"
     read -rp "OCIR user (e.g. sdajdczqv0qo/youruser): " OCIR_USER
