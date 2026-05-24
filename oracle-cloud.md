@@ -233,6 +233,55 @@ OCI users are capped at 2 active Customer Secret Keys. List + delete via
 
 ---
 
+## Kubernetes (OKE)
+
+### Cluster: homelab
+
+| Property                | Value                                                                                                |
+| ----------------------- | ---------------------------------------------------------------------------------------------------- |
+| OCID                    | `ocid1.cluster.oc1.ap-sydney-1.aaaaaaaaok3ygaxxoaf3vlwoytcnift4yxrmr4dmd75be53iocfghlpevogq`         |
+| Kubernetes version      | `v1.35.2`                                                                                            |
+| Type                    | ENHANCED_CLUSTER (Always Free)                                                                       |
+| API endpoint            | Public, NSG-restricted to home IP `159.196.97.38/32`                                                 |
+| CNI                     | FLANNEL_OVERLAY (pods 10.244.0.0/16, services 10.96.0.0/16)                                          |
+| Node pool               | `homelab-arm`, VM.Standard.A1.Flex 2 OCPU / 12 GB, 2 nodes (FD-1 + FD-2 in Private Subnet-nebula)    |
+| Worker NSG              | `oke-workers`                                                                                        |
+| API endpoint NSG        | `oke-api-endpoint`                                                                                   |
+| API endpoint subnet     | `oke-api-endpoint` (10.0.2.0/28)                                                                     |
+| Managed by              | Terraform (`terraform/oke-*.tf`)                                                                     |
+
+### Kubeconfig
+
+| Path                                | Notes                                                                              |
+| ----------------------------------- | ---------------------------------------------------------------------------------- |
+| `~/.kube/oke-homelab.config`        | Generated locally on the Mac; uses OCI CLI auth (your `~/.oci/config` API key).    |
+
+Regenerate (e.g. on a fresh machine, or to refresh the OCI token cache):
+
+```bash
+oci ce cluster create-kubeconfig \
+  --cluster-id ocid1.cluster.oc1.ap-sydney-1.aaaaaaaaok3ygaxxoaf3vlwoytcnift4yxrmr4dmd75be53iocfghlpevogq \
+  --file ~/.kube/oke-homelab.config \
+  --region ap-sydney-1 \
+  --token-version 2.0.0 \
+  --kube-endpoint PUBLIC_ENDPOINT
+```
+
+Use:
+
+```bash
+export KUBECONFIG=~/.kube/oke-homelab.config
+kubectl get nodes
+```
+
+Or per-command: `KUBECONFIG=~/.kube/oke-homelab.config kubectl ...`.
+
+Access is allowed only from the home IP (`159.196.97.38/32`); from anywhere else
+you'll get a TCP timeout on 6443. If the home IP changes, update the NSG ingress
+rule in `terraform/oke-networking.tf` (`oke_api_kubectl_home`).
+
+---
+
 ## Terraform / Resource Manager
 
 The OCI footprint (everything in `main` plus the IAM dynamic-group + policy)
