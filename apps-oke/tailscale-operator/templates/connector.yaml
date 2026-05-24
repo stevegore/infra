@@ -1,0 +1,15 @@
+{{- if .Values.connector.enabled }}
+apiVersion: tailscale.com/v1alpha1
+kind: Connector
+metadata:
+  name: {{ .Values.connector.hostname }}
+spec:
+  hostname: {{ .Values.connector.hostname }}
+  tags:
+    {{- toYaml .Values.connector.tags | nindent 4 }}
+  {{- if .Values.connector.advertiseRoutes }}
+  subnetRouter:
+    advertiseRoutes:
+      {{- toYaml .Values.connector.advertiseRoutes | nindent 6 }}
+  {{- end }}
+{{- end }}

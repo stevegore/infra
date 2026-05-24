@@ -1,0 +1,83 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "vaultwarden.fullname" . }}
+  labels:
+    {{- include "vaultwarden.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  strategy:
+    # Single writer against a shared MySQL — use Recreate to avoid two replicas
+    # briefly coexisting during a rollout.
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "vaultwarden.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "vaultwarden.selectorLabels" . | nindent 8 }}
+    spec:
+      containers:
+        - name: vaultwarden
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: web
+              containerPort: 80
+              protocol: TCP
+            - name: websocket
+              containerPort: 3012
+              protocol: TCP
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.vault.secretName }}
+                  key: database_url
+            - name: ADMIN_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.vault.secretName }}
+                  key: admin_token
+                  optional: true
+            - name: DOMAIN
+              value: {{ .Values.domain | quote }}
+            - name: SIGNUPS_ALLOWED
+              value: {{ .Values.config.signupsAllowed | quote }}
+            - name: INVITATIONS_ALLOWED
+              value: {{ .Values.config.invitationsAllowed | quote }}
+            - name: WEBSOCKET_ENABLED
+              value: {{ .Values.config.websocketEnabled | quote }}
+            - name: WEB_VAULT_ENABLED
+              value: {{ .Values.config.webVaultEnabled | quote }}
+            - name: LOG_LEVEL
+              value: {{ .Values.config.logLevel | quote }}
+            - name: ROCKET_PORT
+              value: "80"
+            # /data still has to exist for Vaultwarden to start — emptyDir per §7.1.
+            - name: DATA_FOLDER
+              value: /data
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          readinessProbe:
+            httpGet:
+              path: /alive
+              port: web
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /alive
+              port: web
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      volumes:
+        # Per §7.1: /data holds nothing durable. db.sqlite3 is unused (MySQL
+        # holds state), rsa_key.* regenerate (clients re-auth once), icon_cache
+        # rebuilds, sends/ + config.json are unused.
+        - name: data
+          emptyDir: {}

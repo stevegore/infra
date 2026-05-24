@@ -1,0 +1,47 @@
+# Homepage config — placeholders. Copy the live config from pico
+#   sudo cat /path/to/homepage/{settings,services,widgets,bookmarks,docker,kubernetes}.yaml
+# and paste below. Both copies are then driven from this ConfigMap.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "homepage.fullname" . }}-config
+  labels:
+    {{- include "homepage.labels" . | nindent 4 }}
+data:
+  settings.yaml: |
+    title: Steve's Homepage
+    theme: dark
+    color: slate
+    layout:
+      Infra:
+        style: row
+        columns: 4
+  services.yaml: |
+    - Infra:
+        - Vault:
+            href: https://vault.stevegore.au
+            description: HashiCorp Vault
+        - ArgoCD:
+            href: https://argocd.stevegore.au
+            description: GitOps
+        - Vaultwarden:
+            href: https://bw.stevegore.au
+            description: Password manager
+  widgets.yaml: |
+    - resources:
+        cpu: true
+        memory: true
+        disk: /
+    - search:
+        provider: duckduckgo
+        target: _blank
+  bookmarks.yaml: |
+    []
+  docker.yaml: |
+    {}
+  kubernetes.yaml: |
+    mode: cluster
+  custom.css: |
+    /* custom styles */
+  custom.js: |
+    /* custom js */

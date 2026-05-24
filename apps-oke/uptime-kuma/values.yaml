@@ -1,0 +1,28 @@
+# Uptime Kuma — single replica + 50 GB OCI block volume for SQLite history.
+# Lives on OKE so it can detect pico outages (proposal §8).
+
+replicaCount: 1
+
+image:
+  repository: louislam/uptime-kuma
+  tag: "1.23.16-alpine"
+  pullPolicy: IfNotPresent
+
+resources:
+  requests:
+    memory: 256Mi
+    cpu: 100m
+  limits:
+    memory: 1Gi
+    cpu: 1000m
+
+service:
+  type: ClusterIP
+  port: 3001
+
+persistence:
+  # OCI block volume floor is 50 GB regardless of what's requested — pick the
+  # floor so the storage budget is honest (proposal §7).
+  size: 50Gi
+  # OCI CSI BV class — RWO, expandable, can't shrink.
+  storageClass: oci-bv
