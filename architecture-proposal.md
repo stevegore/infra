@@ -5,6 +5,11 @@
 **Date:** 2026-05-23 (last updated 2026-05-24)
 **Trigger:** Single-host outage on 2026-05-23 (ampere-ubuntu hit a 20-min Oracle maintenance window; all externally-accessible services down for the duration)
 
+**Progress (2026-05-25):**
+- Terraform pipeline live: ORM Stack `homelab-tf` (`github.com/stevegore/infra` `terraform/`) owns OCI state. Local CLI plans via `scripts/tf-env.sh` (pulls ORM state snapshot, renames `backend_override.tf.local` → `.tf`); apply goes through ORM jobs only. 30 existing resources under TF (VCN/subnets/SLs/NSGs/gateways, ampere instance, KMS vault+key, vault-storage bucket, vault-instances DG + policy). See `terraform/README.md`.
+- All OCI infrastructure changes go through this pipeline from now on — no console edits. See §10's "Terraform invariant" alongside the existing GitOps invariant.
+- `kv/oci/` is the canonical namespace for OCI secrets: `kv/oci/api-key` (the local CLI API key), `kv/oci/ocir` (registry token).
+
 **Progress (2026-05-24):**
 - All five OKE chart scaffolds committed under `apps-oke/` (`caddy`, `vaultwarden`, `uptime-kuma`, `tailscale-operator`, `homepage`) — separated from `apps/` so the live ampere `infra-apps` ApplicationSet doesn't try to reconcile them. Charts lint + render clean.
 - `apps/vault/values.yaml` tolerations added (live; affects ampere too).
@@ -365,11 +370,33 @@ You said you don't mind exceeding Always Free during the migration. The plan run
 
 **GitOps invariant:** OKE-only charts live under `apps-oke/<name>/`, reconciled by the OKE-side `infra-oke-apps` ApplicationSet (`argocd/applicationset-oke.yaml`). The ampere MicroK8s `infra-apps` ApplicationSet (`argocd/applicationset.yaml`) continues to glob `apps/<name>/` only — that separation is what stops ampere from trying to sync OKE-only primitives (NLB annotations, oci-bv PVCs, OCIR images). The only commands that touch the cluster directly are the one-shot bootstrap (`bootstrap/install.sh`-equivalent for OKE: kubectl-apply ArgoCD raw manifests, then the ApplicationSet) and ad-hoc debug. Every install step below is "commit `apps-oke/foo/`, push, ArgoCD syncs" — never `helm install` against the live cluster. Post-Phase-7 the two trees consolidate: `git mv apps-oke/* apps/`, drop `argocd/applicationset-oke.yaml`, done. Application names are basename-driven so the `source.path` field updates in place without recreating Applications.
 
+**Terraform invariant:** All OCI infrastructure changes go through `terraform/` → ORM Stack `homelab-tf`. No console edits, no out-of-band `oci` CLI mutations. Workflow is identical to the GitOps one: edit `terraform/*.tf` → `source scripts/tf-env.sh && terraform plan` (local sanity check) → commit + push → ORM apply job runs against the new revision. State lives in ORM; local plans pull a snapshot via `scripts/tf-env.sh`. Two-and-only-two exceptions stay out of state because their secret material would leak into it: (1) **Customer Secret Keys** (the HMAC keys behind `kv/oci/ocir` and the future Caddy ACME bucket) — minted via `scripts/provision-*-creds.sh`; (2) **OCI Vault Secrets containing PATs / unseal keys** if we ever start using them — referenced by OCID from TF, never inlined. Every other primitive — buckets, IAM, KMS, networking, compute, OKE cluster + node pool, NLB, MySQL HeatWave, OCIR repos — lives in TF.
+
+The TF resource matrix (current + planned):
+
+| Phase | Resource | Status |
+| --- | --- | --- |
+| (pre-migration) | VCN `nebula`, subnets, SLs, NSGs, gateways | ✅ under TF (Resource Discovery import) |
+| (pre-migration) | KMS vault `hashicorp-vault-unseal` + key + key version | ✅ under TF |
+| (pre-migration) | `vault-storage` bucket | ✅ under TF |
+| (pre-migration) | `vault-instances` dynamic group + `vault-kms-objectstorage-policy` | ✅ under TF |
+| (pre-migration) | `ampere-ubuntu` instance + private IP attachment | ✅ under TF (will `terraform destroy` in Phase 7) |
+| 3 | New RESERVED public IP for NLB (current `publicip20230914115348` is ephemeral on ampere's VNIC and can't be in-place promoted) | ⬜ create fresh in Phase 3; update Cloudflare DNS to the new value (TTL 60s 24h before cutover) |
+| 0 | `caddy-acme` bucket | ⬜ create via TF |
+| 0 | Broaden `vault-instances` DG → match by compartment (covers future OKE workers) | ⬜ update via TF |
+| 0 | Extend policy to allow `manage objects … target.bucket.name='caddy-acme'` | ⬜ update via TF |
+| 1 | OKE Enhanced cluster + node pool (2 × A1.Flex 2OCPU/12GB across FD-1 + FD-2) | ⬜ create via TF |
+| 1 | OKE control-plane endpoint security (home-IP allowlist NSG) | ⬜ create via TF |
+| 1 | OCIR repos (`caddy`, plus others as needed) | ⬜ create via TF |
+| 2 | MySQL HeatWave Free DB system | ⬜ create via TF |
+| 3 | Reattach reserved IP to NLB | ⬜ via CCM annotation on the K8s Service (declarative from day 1) |
+
 ### Phase 0 — Prep (½ day, no risk)
 
 - [x] Snapshot ampere boot volume — backup `ocid1.bootvolumebackup.oc1.ap-sydney-1.abzxsljr2zcj7cxywe7ccngd2yhvtjutj6ir7jsqhz2vsltgaihdeacfmvua` (`pre-oke-migration-2026-05-24`, FULL, 47 GB, `free-tier-retained`). Initiated 2026-05-24 via OCI CLI; runs async (~30 min to AVAILABLE).
 - [x] Out-of-band copy of `vault-storage` bucket → `~/Backups/vault-storage-2026-05-24/` on the Mac. 103/103 objects, 412 KB. Contents are Vault-encrypted on disk so the local copy is safe unwrapped.
-- [ ] Create OCI Object Storage bucket `caddy-acme` (private, no versioning needed — Caddy manages cert lifecycle). Grant the `vault-instances` dynamic group `manage objects in compartment main where target.bucket.name='caddy-acme'`.
+- [ ] Create OCI Object Storage bucket `caddy-acme` (private, no versioning needed — Caddy manages cert lifecycle). Grant the `vault-instances` dynamic group `manage objects in compartment main where target.bucket.name='caddy-acme'`. **Via TF** (`terraform/caddy-acme.tf` + extend `identity.tf` policy statement).
+- [ ] Mint Customer Secret Key for the Caddy ACME bucket (separate from the OCIR + tf-state ones); push to Vault at `kv/oci/caddy-acme` so VSO can mount it into the Caddy pod for the certmagic-s3 plugin. **Via script** (TF would store the secret in state); add `scripts/provision-caddy-acme-creds.sh` mirroring `provision-ocir-creds.sh`.
 - [x] Add the new app directories under `apps-oke/` (kept out of `apps/` so the live ampere ApplicationSet doesn't try to reconcile them). Each is a small Helm chart with `values.yaml`; secrets via VSO.
   - [x] `apps-oke/caddy/` (Caddy + caddy-security + certmagic-s3, 2 replicas, custom OCIR image — `Dockerfile` colocated)
   - [x] `apps-oke/vaultwarden/` (MySQL HeatWave Free backend, no PVC — `/data` is `emptyDir`)
@@ -379,17 +406,19 @@ You said you don't mind exceeding Always Free during the migration. The plan run
   - [x] `apps/vault/values.yaml` tolerations from §7.2 (live — will roll vault-0 on ampere on next ArgoCD reconcile).
 - [x] Add `argocd/applicationset-oke.yaml` — applied during Phase 2 on the new cluster to drive the `apps-oke/*` reconciliation.
 - [x] Create Tailscale OAuth client; stash creds at `kv/tailscale/operator_oauth` in Vault. Non-ephemeral auth key for pico still pending (created on demand at Phase 4).
-- [ ] Extend `vault-instances` dynamic group to include the *new* OKE workers (matching rule: instance.compartment.id = main).
+- [ ] Extend `vault-instances` dynamic group to include the *new* OKE workers (change matching rule from `instance.id = <ampere>` to `instance.compartment.id = <main>` — covers ampere today and any future compute). **Via TF** (`terraform/identity.tf`).
 - [x] Confirm Duplicati→B2 photo backup is producing fresh filesets — verified 2026-05-24: all 4 jobs (Docker Volumes, Home Assistant, Bitwarden, Photos) have successful filesets within 24h; Photos shows two successful runs today (12:03 + 19:43) with `dlist/dindex/dblock` PUTs to B2 confirmed in the per-job `RemoteOperation` table. See §7.3 caveat — the sidecar race that caused the original silent failure is *not* fixed; it recurred at the scheduled 02:00 run today and only the manual `Recreate`-then-run path is producing successful filesets.
 - [x] Provision OCIR auth token + push to `kv/oci/ocir` (`bash scripts/provision-ocir-creds.sh` from the Mac).
 - [x] Build and push the custom Caddy image to OCIR (`bash scripts/build-push-caddy.sh` — runs on either pico or Mac).
 
 ### Phase 1 — Provision OKE (½ day)
 
-- [ ] Create OKE cluster in `main` compartment, Sydney AD-1, public API endpoint, k8s 1.30, enhanced cluster (free).
-- [ ] Add API endpoint to security list with home IP whitelist.
-- [ ] Create node pool: A1.Flex 2 OCPU / 12 GB, **2 private nodes only**, spread FD-1 + FD-2, placed in `Private Subnet-nebula` with no public IP assignment.
-- [ ] Briefly you'll have 8 OCPU in use — within paid tier. Confirm in console that Always Free A1 quota isn't blocked first.
+All provisioning **via TF** (`terraform/oke.tf` + `terraform/oke-iam.tf`). Single ORM apply spins up cluster + node pool + endpoint NSG + worker NSG together.
+
+- [ ] OKE Enhanced cluster in `main` compartment, Sydney AD-1, public API endpoint, k8s 1.30 (free).
+- [ ] API endpoint NSG — TCP 6443 from home IP (`159.196.97.38/32`) only.
+- [ ] Node pool — A1.Flex 2 OCPU / 12 GB, **2 private nodes**, spread FD-1 + FD-2, in `Private Subnet-nebula` with no public IPs.
+- [ ] Briefly you'll have 8 OCPU in use — within paid tier. Confirm in console that Always Free A1 quota isn't blocked before the apply.
 - [ ] Local kubeconfig: `oci ce cluster create-kubeconfig --cluster-id <ocid> ...`. `kubectl` from pico uses this kubeconfig to reach the public OKE API endpoint directly; it does not depend on Tailscale.
 
 ### Phase 2 — Cluster baseline (1 day)
@@ -398,14 +427,14 @@ You said you don't mind exceeding Always Free during the migration. The plan run
 - [ ] `kubectl apply -f argocd/applicationset.yaml` (ampere-shared apps: vault, vault-secrets-operator, argocd, openclaw) and `kubectl apply -f argocd/applicationset-oke.yaml` (OKE-only apps under `apps-oke/`). Both ApplicationSet generators walk their directory globs and create an Application per directory.
 - [ ] Watch ArgoCD sync: `apps/argocd/` reconciles ArgoCD itself, `apps/vault-secrets-operator/` brings VSO, `apps/vault/` brings Vault (standalone, pointing at the existing `vault-storage` bucket — secrets appear without a data migration), etc.
 - [ ] Verify private-node egress before layering apps on top: test image pulls, OCI Object Storage access, OCI KMS access, and outbound package/API reachability through the NAT Gateway from a debug pod.
-- [ ] Out-of-band: provision **MySQL HeatWave Free** in Sydney AD-1 (`oci mysql db-system create --shape-name MySQL.Free ...`), in a private subnet of the existing `nebula` VCN, with NSG opened only to OKE worker CIDR. (Not a k8s resource → not in `apps-oke/`; could be Terraform later.)
+- [ ] Provision **MySQL HeatWave Free** in Sydney AD-1 (`MySQL.Free` shape), in a private subnet of the existing `nebula` VCN, with NSG opened only to OKE worker CIDR. Admin password generated and stored in Vault at `kv/mysql/heatwave-admin`. **Via TF** (`terraform/mysql.tf`).
 - [ ] Verify: Vault auto-unseals via OCI KMS, VSO authenticates against the new Vault, MySQL endpoint resolvable from a debug pod.
 
 ### Phase 3 — Edge stack (1 day)
 
 - [ ] Build Caddy container image: `bash scripts/build-push-caddy.sh` (reads `apps-oke/caddy/values.yaml` for repo + tag; xcaddy build with `caddy-security` + `certmagic-s3`; pushes to OCIR). Already runnable as of Phase 0.
 - [x] `apps-oke/caddy/` Helm chart producing: Deployment (2 replicas), Service type `LoadBalancer` with `oci.oraclecloud.com/load-balancer-type: "nlb"` + the reserved-IP annotation, ConfigMap (Caddyfile + `storage s3` global option), VaultStaticSecret for OAuth + JWT keys + S3 credentials, and `pico-egress.yaml` (Tailscale Egress Service so Caddyfile upstreams use `pico:<port>`). ArgoCD on OKE syncs it; the OCI CCM provisions the NLB.
-- [ ] Detach the existing reserved public IP (`publicip20230914115348`) from the ampere VNIC and reattach to the NLB the CCM created — DNS records continue pointing at the same IP, zero Cloudflare change needed. (This step is out-of-band; the CCM accepts a pre-existing reserved IP via the `service.beta.kubernetes.io/oci-load-balancer-reserved-ip` annotation on the Service if we want it fully declarative from day 1.)
+- [ ] Provision a new RESERVED public IP via TF (`terraform/nlb.tf`) — needed because the existing `publicip20230914115348` is EPHEMERAL on ampere's VNIC and can't be promoted in place. The CCM picks it up via the `service.beta.kubernetes.io/oci-load-balancer-reserved-ip` annotation on the Caddy Service in `apps-oke/caddy/values.yaml` (update the annotation value to the new reserved-IP OCID before this step). Update the Cloudflare DNS records (`stevegore.au` + wildcard) to the new IP value 24h after dropping TTL to 60s. With Cloudflare proxy on, external clients see no break — they always hit Cloudflare's anycast IPs.
 - [ ] Point a **test** subdomain (e.g. `oke-test.stevegore.au`) at the new LB IP — verify Caddy + cert issuance work end-to-end before touching real records.
 
 ### Phase 4 — Tailscale rollout (½ day)
@@ -511,7 +540,7 @@ These started as open questions and were resolved during proposal review (Steve,
 | Sunset PhotoPrism? | **Yes** — Immich covers the use case; drop PhotoPrism from pico during migration. |
 | Vault HA raft vs. standalone+object-storage? | **Standalone + Object Storage** — kept from current setup. HA raft was rejected after evaluating the trade: 150 GB block-tier cost for ~80 sec of extra availability on a workload nothing polls in the hot path. Tuned tolerations bring node-failure recovery to ~90 sec. |
 | Keep Cloudflare Tunnel `hass2.stevegore.au` as alt-path? | **Yes** — proved useful during the 2026-05-23 outage. |
-| Reserved IP — reuse or fresh? | **Reuse** — detach from ampere VNIC, attach to NLB; DNS records unchanged. |
+| Reserved IP — reuse or fresh? | **Fresh** — the existing `publicip20230914115348` is EPHEMERAL (auto-assigned to ampere on creation in 2023), and OCI doesn't allow in-place ephemeral→reserved promotion. Provision a new RESERVED IP via TF in Phase 3; Cloudflare proxy hides the IP change from external clients (they hit Cloudflare's anycast); only the origin record needs an update. |
 | OKE workers public or private? | **Private** — worker nodes sit in `Private Subnet-nebula` with no public IPs; only the NLB is internet-facing. |
 | OKE API endpoint public or private? | **Public, but home-IP-whitelisted** — keeps `kubectl` from pico simple and independent of Tailscale while leaving the worker nodes private. |
 | Keep legacy `10.20.30.0/24` compatibility subnet? | **No** — drop it from the target design and use pico's native Tailscale identity (MagicDNS or stable tailnet IP) instead. |
