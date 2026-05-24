@@ -17,9 +17,10 @@
 
 ## Cloud / Remote Servers
 
-| Host                   | Notes                        |
-| ---------------------- | ---------------------------- |
-| ubuntu@158.178.136.162 | Oracle Cloud (ampere-ubuntu) |
+| Host                   | Notes                                                                                              |
+| ---------------------- | -------------------------------------------------------------------------------------------------- |
+| ubuntu@158.178.136.162 | Oracle Cloud (ampere-ubuntu) — being decommissioned in Phase 7 of the OKE migration                |
+| OKE cluster `homelab`  | `KUBECONFIG=~/.kube/oke-homelab.config kubectl get nodes` (home-IP only; details in oracle-cloud.md) |
 
 ---
 
