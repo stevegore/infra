@@ -16,6 +16,10 @@ region=ap-sydney-1
 key_file=~/oci.pem
 ```
 
+The private key + all the above fields are backed up in Vault at `kv/oci/api-key`.
+On a fresh machine: `source scripts/vault-env.sh && vlogin && bash scripts/restore-oci-creds.sh`
+materializes both `~/.oci/config` and `~/oci.pem`.
+
 ## Compartments
 
 | Name | OCID                                                                                  |
