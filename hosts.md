@@ -46,15 +46,21 @@
   - Config: `/etc/wireguard/wg0.conf`
   - PersistentKeepalive = 25 (to ampere-ubuntu peer)
   - No ListenPort set — uses ephemeral port (seen by ampere as 159.196.97.38:PORT)
+  - Being replaced by Tailscale (below) per [architecture-proposal.md](architecture-proposal.md) §5.3
+- **Tailscale** — `tailscaled.service`, joined 2026-05-24
+  - Tailnet IP: `100.98.212.71` (also `fd7a:115c:a1e0::f039:d447`)
+  - Hostname in admin: `pico`
+  - Subnet routes: not yet advertised (will add `10.20.30.0/24` + `192.168.4.0/24` during the OKE migration; see proposal §10 Phase 4)
 - **Cloudflare Tunnel** — `cloudflared.service`, exposes HA at `hass2.stevegore.au`
 - **Docker services** — managed via Portainer (`port.stevegore.au`)
 
 **Network:**
 
-| Interface | Address         | DNS                          |
-| --------- | --------------- | ---------------------------- |
-| enp3s0    | 192.168.4.120   | 192.168.4.1 (router)         |
-| wg0       | 10.20.30.1/32   | 10.20.30.2 (~10.20.30.0/24)  |
+| Interface  | Address                                       | DNS                          |
+| ---------- | --------------------------------------------- | ---------------------------- |
+| enp3s0     | 192.168.4.120                                 | 192.168.4.1 (router)         |
+| wg0        | 10.20.30.1/32                                 | 10.20.30.2 (~10.20.30.0/24)  |
+| tailscale0 | 100.98.212.71 / fd7a:115c:a1e0::f039:d447     | 100.100.100.100 (MagicDNS)   |
 
 ---
 
