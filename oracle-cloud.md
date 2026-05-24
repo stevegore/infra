@@ -173,14 +173,16 @@ fresh ampere host, those will be set automatically.
 
 ### Bucket: infra-tfstate
 
-| Property      | Value                                                            |
-| ------------- | ---------------------------------------------------------------- |
-| Namespace     | `sdajdczqv0qo`                                                   |
-| Compartment   | main                                                             |
-| Versioning    | Enabled                                                          |
-| Public Access | No                                                               |
-| Purpose       | Terraform remote state for the `infra/terraform/` stack.         |
-| Accessed via  | OCI S3-compatibility endpoint, HMAC creds (`terraform-state-s3`) |
+| Property      | Value                                                                          |
+| ------------- | ------------------------------------------------------------------------------ |
+| Namespace     | `sdajdczqv0qo`                                                                 |
+| Compartment   | main                                                                           |
+| Versioning    | Enabled                                                                        |
+| Public Access | No                                                                             |
+| Purpose       | Originally provisioned for Terraform s3-backend state, but ORM's job runner    |
+|               | doesn't init custom backends — state lives in ORM directly now. Bucket retained |
+|               | so the Customer Secret Key (`terraform-state-s3`) and `oci_objectstorage_bucket` |
+|               | resource don't need surgery; reuse for future tooling or delete later.         |
 
 ---
 
@@ -229,8 +231,8 @@ for the local-plan / ORM-apply workflow.
 | Component               | Detail                                                                       |
 | ----------------------- | ---------------------------------------------------------------------------- |
 | ORM Stack display name  | `homelab-tf` (created by `scripts/provision-orm-stack.sh`)                   |
-| State backend           | `s3` → `https://sdajdczqv0qo.compat.objectstorage.ap-sydney-1.oraclecloud.com` |
-| State bucket / key      | `infra-tfstate` / `homelab/main.tfstate`                                     |
+| ORM Stack OCID          | `ocid1.ormstack.oc1.ap-sydney-1.amaaaaaaxbp2yoqaytua3d676bavg2kdjw6oud5srw7egs3iea7q7ppiydoq` |
+| State                   | ORM-managed (not a custom backend — see `terraform/README.md`)               |
 | GitHub source           | `stevegore/infra`, branch `main`, working directory `terraform/`             |
 | GitHub PAT in Vault     | `kv/github/orm-pat`                                                          |
 | Resources under control | 30 (see `terraform state list` for the authoritative inventory)              |
