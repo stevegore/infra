@@ -168,6 +168,7 @@ Most records don't change — Cloudflare just points at a different OCI public I
 | --- | --- | --- |
 | `*.stevegore.au` | A → ampere reserved IP | A → OCI LB public IP (same IP if reassigned) |
 | `hass2.stevegore.au` | Cloudflare Tunnel → pico | Unchanged (separate path, useful as backup) |
+| `bw2.stevegore.au` | n/a | Cloudflare Tunnel → pico:8081 (Vaultwarden warm standby — see §7.1.1) |
 | `argocd.stevegore.au` | A → ampere | A → OCI LB IP |
 
 **Resilience benefit from Cloudflare:** with Cloudflare proxied on, Cloudflare's own edge caches responses for cacheable content (homepage, static), so a brief origin blip is invisible to users. Plus we can add a Cloudflare Load Balancer / health check later for active failover to a backup IP.
@@ -226,6 +227,19 @@ Vaultwarden's credentials are the single most critical thing in this stack, so w
 This replaces the earlier plan to run CloudNative-PG. Net effect: zero in-cluster DB pods, no CNPG operator, no postgres PVCs, no postgres CRDs. The 100 GB we'd have spent on postgres replicas stays in the block-volume budget.
 
 If we later adopt a postgres-only HA app, we can revisit (CNPG, or add a second managed DB — there is no Always Free postgres-equivalent on OCI yet).
+
+### 7.1.1 Pico warm-standby mirror — `bw2.stevegore.au`
+
+The OKE Vaultwarden is the primary, but for the credentials-critical workload it's worth keeping a second instance on pico that's *almost* live, so it can be used immediately if MySQL HeatWave Free (or all of OKE) is unreachable.
+
+- **Pico keeps running its existing Vaultwarden container** in sqlite mode (no upstream MySQL dependency, no Tailscale dependency).
+- **Hourly sync** via systemd timer on pico: `mysqldump --single-transaction --databases vaultwarden` from HeatWave Free → convert with `mysql2sqlite` (or equivalent) → swap the pico sqlite file atomically while the container is briefly stopped (`docker stop vaultwarden && mv new.sqlite data/db.sqlite3 && docker start vaultwarden`). Total downtime per sync: ~5 sec on the standby; the primary on OKE isn't touched.
+- **External exposure via Cloudflare Tunnel** (same `cloudflared.service` already running for `hass2.stevegore.au`): new ingress rule `bw2.stevegore.au` → `http://localhost:8081`. Cloudflare DNS gets a CNAME `bw2.stevegore.au` → `<tunnel-id>.cfargotunnel.com`.
+- **Independence from the OKE path entirely.** bw2 doesn't traverse Caddy, doesn't traverse the OCI NLB, doesn't traverse Tailscale. It's a completely separate ingress (Cloudflare → tunnel → pico-local Vaultwarden → pico-local sqlite). So a failure of *any* OKE-side component still leaves bw2 working.
+- **Bitwarden clients**: switch the server URL to `https://bw2.stevegore.au` when needed. Mobile/desktop clients cache the vault locally, so for read-only access during a brief outage the URL swap may not even be needed.
+- **Write conflict handling**: if someone edits a credential on `bw.stevegore.au` (OKE-primary) and then on `bw2.stevegore.au` (pico-standby) during the same outage window, last-write-wins applies after the next sync overwrites pico. For emergency-only use this is acceptable; if it becomes a real concern, pause the sync timer at the start of an outage.
+
+This sync direction is one-way: OKE → pico. The reverse (pico → OKE during recovery) is a manual reconciliation step, not automated.
 
 ### 7.2 Vault — standalone with Object Storage backend
 
@@ -295,7 +309,7 @@ PhotoPrism is being sunset; Immich stays on pico as the only photo service.
 | Vault | ampere (MicroK8s) | **OKE (standalone, bucket-backed)** | n/a — tuned-toleration restart, ~90s gap on node loss | Existing setup, just moved. No PVC. See §7.2 for failure analysis. |
 | ArgoCD | ampere (MicroK8s) | **OKE (HA install)** | implicit | Stateless, git is source of truth. |
 | Caddy | ampere | **OKE (2 replicas)** | implicit | Edge stays at edge. |
-| Vaultwarden | pico | **OKE (active)** + pico (cold standby) | Yes | Move primary to OKE so password access survives home outage. DB backend: **MySQL HeatWave Free** (managed, auto-backed-up). Pico keeps a sqlite-mode standby fed by periodic export from MySQL. |
+| Vaultwarden | pico | **OKE (active, `bw.stevegore.au`)** + pico (warm standby, `bw2.stevegore.au`) | Yes — hourly one-way sync | Primary on OKE with MySQL HeatWave Free backend. Pico keeps a sqlite-mode standby fed by hourly mysqldump+convert, exposed via Cloudflare Tunnel as a completely independent ingress path. See §7.1.1. |
 | Homepage | pico | **OKE (replica)** + pico (replica) | Yes | Config in git; both pull. External users hit OKE one; LAN can hit either. |
 | Uptime Kuma | pico (new) | **OKE** | n/a (moves entirely) | Needs to detect *pico* outages → can't live on pico. |
 | Inter-site mesh | WireGuard (hub on ampere) | **Tailscale** (operator-managed Connector in OKE; tailscaled on pico) | n/a — no central listener | See §5.3. Eliminates UDP exposure, key juggling, and failover ops. |
@@ -406,7 +420,11 @@ No data migration — the new Vault pod uses the same `vault-storage` bucket and
 - [ ] `apps/vaultwarden/` (already committed in Phase 0) becomes effective once the database secret exists: ArgoCD has been waiting in a `Degraded` state for the VSO-managed Secret, which now appears, and Vaultwarden starts.
 - [ ] Verify with one device, then full client roll.
 - [ ] Cutover bw.stevegore.au.
-- [ ] On pico: keep Vaultwarden running in sqlite-mode as a cold standby. Nightly job exports current MySQL data and imports into the sqlite copy. (This job is plain Docker on pico, not k8s — pico's stack isn't ArgoCD-managed.)
+- [ ] On pico: keep the existing Vaultwarden container running in sqlite mode as a **warm standby** (see §7.1.1).
+  - Install hourly sync: systemd timer + service in `~/code/infra/scripts/vw-mysql-to-sqlite.{service,timer}`. Service body: `mysqldump --single-transaction` from HeatWave Free → `mysql2sqlite` → atomic swap of `data/db.sqlite3` with a brief container stop/start.
+  - Add Cloudflare Tunnel ingress rule: `bw2.stevegore.au` → `http://localhost:8081` (alongside the existing `hass2.stevegore.au` route).
+  - Create Cloudflare DNS CNAME: `bw2.stevegore.au` → `<tunnel-id>.cfargotunnel.com`.
+  - Verify external access at `https://bw2.stevegore.au` with a test login.
 
 ### Phase 7 — Decommission ampere-ubuntu (½ day)
 
@@ -451,7 +469,7 @@ No data migration — the new Vault pod uses the same `vault-storage` bucket and
 - **Regional outage**: Sydney goes down → everything cloud-side goes down. Free tier is single-region.
 - **Storage at scale**: photos still live in one place (pico). If pico's NVMe dies between Duplicati runs, you lose up to 24 hours of new photos.
 - **DDoS / public abuse**: Cloudflare proxy helps but isn't bulletproof for the LB IP if attackers find it directly. Origin firewall (Security List) already restricts SSH; consider restricting 443 to Cloudflare IP ranges.
-- **Vaultwarden true HA**: dual-master Vaultwarden is unsolved upstream, and MySQL HeatWave Free is single-node. Best we can do is fast-restore from Oracle's auto-backup (minutes) plus the pico sqlite cold standby. Sessions won't sync across a failover.
+- **Vaultwarden true HA**: dual-master Vaultwarden is unsolved upstream, and MySQL HeatWave Free is single-node. The pico warm-standby at `bw2.stevegore.au` (§7.1.1) covers the case where MySQL/OKE/Caddy go down — it has its own ingress via Cloudflare Tunnel — but writes to bw2 during an outage need manual reconciliation back to the primary, and sessions don't sync across the two instances.
 - **Vault availability on node loss.** Standalone Vault means ~90 sec of UI 503 if the node hosting it dies (see §7.2 timeline). Acceptable for our usage (nothing in the hot path polls Vault), but worth knowing — if Vault ever becomes time-critical for something new, revisit HA raft + paid small block volumes (option B in the storage-strategy debate).
 
 ---
