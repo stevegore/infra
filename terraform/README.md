@@ -21,11 +21,12 @@ edit locally → plan locally → push to GitHub → ORM job applies
 - `terraform apply` runs **only via ORM**, so every change has an audit-trail
   job, an approval workflow, and an automatic state snapshot on the ORM side.
 
-## First-time local setup
+## Local plan workflow
 
 ```bash
-# 1. Source the env wrapper. It pulls the ORM-managed state into a local
-#    cache file and drops a backend_override.tf that points at the cache.
+# 1. Activate local-backend mode. Pulls fresh ORM state into .tfstate-cache/
+#    and renames backend_override.tf.local → backend_override.tf so terraform
+#    auto-loads it.
 source ../scripts/tf-env.sh
 
 # 2. Re-init (the override changes the backend block).
@@ -33,6 +34,10 @@ terraform init -reconfigure
 
 # 3. Plan.
 terraform plan
+
+# 4. When done: rename the override back so it doesn't sit untracked in the
+#    repo. Also wipes the state cache + .terraform working dir.
+bash ../scripts/tf-env-off.sh
 ```
 
 Re-source `tf-env.sh` whenever you want a fresh state snapshot.

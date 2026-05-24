@@ -5,15 +5,14 @@
 config/age-identity.txt
 
 # Terraform local artifacts. State lives in ORM (see terraform/README.md);
-# scripts/tf-env.sh materializes a backend_override.tf pointing at a cached
-# pull of that state for fast local plans — never commit it.
+# scripts/tf-env.sh pulls a snapshot into .tfstate-cache/ for fast local plans.
+# The backend_override.tf is committed as backend_override.tf.local and renamed
+# in/out by scripts/tf-env{,-off}.sh — neither form is gitignored, so a
+# forgotten rename shows up in `git status` instead of going silently missing.
 terraform/.terraform/
+terraform/.tfstate-cache/
 terraform/*.tfstate
 terraform/*.tfstate.*
 terraform/*.tfplan
 terraform/crash.log
 terraform/crash.*.log
-terraform/override.tf
-terraform/override.tf.json
-terraform/*_override.tf
-terraform/*_override.tf.json
