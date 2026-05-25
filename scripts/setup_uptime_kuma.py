@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""Insert monitor + tag records into Uptime Kuma's SQLite DB."""
-import json, sqlite3, sys
+"""Reconcile Uptime Kuma monitors and tags into the live SQLite DB."""
+import sqlite3
 
 DB_PATH = "/app/data/kuma.db"  # path inside container
 USER_ID = 1
@@ -14,60 +14,111 @@ TAGS = {
     "photos":   "#e83e8c",  # pink
 }
 
-# monitors: (name, type, kwargs, [tags])
-# kwargs may include: url, hostname, port, accepted_statuscodes_json, maxredirects,
-#                     interval, retry_interval, maxretries, keyword, timeout
 DEFAULT_INTERVAL = 60
 DEFAULT_TIMEOUT = 16
 DEFAULT_RETRIES = 1
 ACCEPT_OK = '["200-299"]'
 ACCEPT_OK_REDIR = '["200-399"]'
 ACCEPT_302 = '["302"]'
+ACCEPT_VAULT = '["200-299","429","473","501","503"]'
+
+OPTIONAL_FIELDS = [
+    "url",
+    "hostname",
+    "port",
+    "accepted_statuscodes_json",
+    "maxredirects",
+    "keyword",
+]
+
+retired_monitor_names = {
+    "Ping ampere-ubuntu (WG)",
+    "photos.stevegore.au",
+    "PhotoPrism (local)",
+}
 
 monitors = [
-    # === Infrastructure ===
-    ("Ping pico.local",          "ping",    {"hostname": "pico.local"},               ["infra"]),
-    ("Ping ampere-ubuntu (WG)",  "ping",    {"hostname": "10.20.30.2"},               ["infra"]),
-    ("TCP pico SSH",             "port",    {"hostname": "pico.local", "port": 22},   ["infra"]),
+    {"name": "Ping pico", "type": "ping", "kwargs": {"hostname": "pico"}, "tags": ["infra"], "aliases": ["Ping pico.local"]},
+    {"name": "TCP pico SSH", "type": "port", "kwargs": {"hostname": "pico", "port": 22}, "tags": ["infra"]},
 
-    # === Public (Caddy-fronted, open) ===
-    ("stevegore.au (ttyd)",      "http", {"url": "https://stevegore.au/", "maxredirects": 10, "accepted_statuscodes_json": ACCEPT_OK}, ["public"]),
-    ("auth.stevegore.au",        "http", {"url": "https://auth.stevegore.au/", "maxredirects": 10, "accepted_statuscodes_json": ACCEPT_OK}, ["public","infra"]),
-    ("hass.stevegore.au",        "http", {"url": "https://hass.stevegore.au/", "maxredirects": 5,  "accepted_statuscodes_json": ACCEPT_OK_REDIR}, ["public"]),
-    ("immich.stevegore.au",      "http", {"url": "https://immich.stevegore.au/api/server/ping", "maxredirects": 0, "keyword": "pong", "accepted_statuscodes_json": ACCEPT_OK}, ["public","photos"]),
-    ("photos.stevegore.au",      "http", {"url": "https://photos.stevegore.au/api/v1/status", "maxredirects": 0, "accepted_statuscodes_json": ACCEPT_OK}, ["public","photos"]),
-    ("plex.stevegore.au",        "http", {"url": "https://plex.stevegore.au/identity", "maxredirects": 0, "accepted_statuscodes_json": ACCEPT_OK}, ["public","media"]),
-    ("huggin.stevegore.au",      "http", {"url": "https://huggin.stevegore.au/", "maxredirects": 5,  "accepted_statuscodes_json": ACCEPT_OK}, ["public"]),
-    ("port.stevegore.au",        "http", {"url": "https://port.stevegore.au/", "maxredirects": 5,  "accepted_statuscodes_json": ACCEPT_OK}, ["public","infra"]),
-    ("strava.stevegore.au",      "http", {"url": "https://strava.stevegore.au/", "maxredirects": 5, "accepted_statuscodes_json": ACCEPT_OK_REDIR}, ["public"]),
-    ("bw.stevegore.au",          "http", {"url": "https://bw.stevegore.au/alive", "maxredirects": 0, "accepted_statuscodes_json": ACCEPT_OK}, ["public"]),
-    ("pdf.stevegore.au",         "http", {"url": "https://pdf.stevegore.au/", "maxredirects": 0,  "accepted_statuscodes_json": ACCEPT_OK}, ["public"]),
-    ("vault.stevegore.au",       "http", {"url": "https://vault.stevegore.au/v1/sys/health", "maxredirects": 0, "accepted_statuscodes_json": '["200-299","429","473","501","503"]'}, ["public","infra"]),
-    ("argocd.stevegore.au",      "http", {"url": "https://argocd.stevegore.au/", "maxredirects": 5, "accepted_statuscodes_json": ACCEPT_OK}, ["public","infra"]),
+    {"name": "stevegore.au (ttyd)", "type": "http", "kwargs": {"url": "https://stevegore.au/", "maxredirects": 10, "accepted_statuscodes_json": ACCEPT_OK}, "tags": ["public"]},
+    {"name": "auth.stevegore.au", "type": "http", "kwargs": {"url": "https://auth.stevegore.au/", "maxredirects": 10, "accepted_statuscodes_json": ACCEPT_OK}, "tags": ["public", "infra"]},
+    {"name": "hass.stevegore.au", "type": "http", "kwargs": {"url": "https://hass.stevegore.au/", "maxredirects": 5, "accepted_statuscodes_json": ACCEPT_OK_REDIR}, "tags": ["public"]},
+    {"name": "hass2.stevegore.au", "type": "http", "kwargs": {"url": "https://hass2.stevegore.au/", "maxredirects": 5, "accepted_statuscodes_json": ACCEPT_OK_REDIR}, "tags": ["public"]},
+    {"name": "immich.stevegore.au", "type": "http", "kwargs": {"url": "https://immich.stevegore.au/api/server/ping", "maxredirects": 0, "keyword": "pong", "accepted_statuscodes_json": ACCEPT_OK}, "tags": ["public", "photos"]},
+    {"name": "plex.stevegore.au", "type": "http", "kwargs": {"url": "https://plex.stevegore.au/identity", "maxredirects": 0, "accepted_statuscodes_json": ACCEPT_OK}, "tags": ["public", "media"]},
+    {"name": "huggin.stevegore.au", "type": "http", "kwargs": {"url": "https://huggin.stevegore.au/", "maxredirects": 5, "accepted_statuscodes_json": ACCEPT_OK}, "tags": ["public"]},
+    {"name": "port.stevegore.au", "type": "http", "kwargs": {"url": "https://port.stevegore.au/", "maxredirects": 5, "accepted_statuscodes_json": ACCEPT_OK}, "tags": ["public", "infra"]},
+    {"name": "strava.stevegore.au", "type": "http", "kwargs": {"url": "https://strava.stevegore.au/", "maxredirects": 5, "accepted_statuscodes_json": ACCEPT_OK_REDIR}, "tags": ["public"]},
+    {"name": "bw.stevegore.au", "type": "http", "kwargs": {"url": "https://bw.stevegore.au/alive", "maxredirects": 0, "accepted_statuscodes_json": ACCEPT_OK}, "tags": ["public"]},
+    {"name": "bw2.stevegore.au", "type": "http", "kwargs": {"url": "https://bw2.stevegore.au/alive", "maxredirects": 0, "accepted_statuscodes_json": ACCEPT_OK}, "tags": ["public"]},
+    {"name": "pdf.stevegore.au", "type": "http", "kwargs": {"url": "https://pdf.stevegore.au/", "maxredirects": 0, "accepted_statuscodes_json": ACCEPT_OK}, "tags": ["public"]},
+    {"name": "vault.stevegore.au", "type": "http", "kwargs": {"url": "https://vault.stevegore.au/v1/sys/health", "maxredirects": 0, "accepted_statuscodes_json": ACCEPT_VAULT}, "tags": ["public", "infra"]},
+    {"name": "argocd.stevegore.au", "type": "http", "kwargs": {"url": "https://argocd.stevegore.au/", "maxredirects": 5, "accepted_statuscodes_json": ACCEPT_OK}, "tags": ["public", "infra"]},
+    {"name": "homepage.stevegore.au", "type": "http", "kwargs": {"url": "https://homepage.stevegore.au/", "maxredirects": 0, "accepted_statuscodes_json": ACCEPT_302}, "tags": ["public"]},
+    {"name": "desk.stevegore.au", "type": "http", "kwargs": {"url": "https://desk.stevegore.au/", "maxredirects": 0, "accepted_statuscodes_json": ACCEPT_302}, "tags": ["public"]},
+    {"name": "gym.stevegore.au", "type": "http", "kwargs": {"url": "https://gym.stevegore.au/", "maxredirects": 0, "accepted_statuscodes_json": ACCEPT_302}, "tags": ["public"]},
+    {"name": "openclaw.stevegore.au", "type": "http", "kwargs": {"url": "https://openclaw.stevegore.au/", "maxredirects": 5, "accepted_statuscodes_json": ACCEPT_OK}, "tags": ["public"]},
+    {"name": "uptime.stevegore.au", "type": "http", "kwargs": {"url": "https://uptime.stevegore.au/", "maxredirects": 5, "accepted_statuscodes_json": ACCEPT_OK}, "tags": ["public", "infra"]},
 
-    # === Public (Caddy-fronted, GitHub-auth protected) — expect 302 redirect to auth ===
-    ("homepage.stevegore.au",    "http", {"url": "https://homepage.stevegore.au/", "maxredirects": 0, "accepted_statuscodes_json": ACCEPT_302}, ["public"]),
-    ("desk.stevegore.au",        "http", {"url": "https://desk.stevegore.au/",     "maxredirects": 0, "accepted_statuscodes_json": ACCEPT_302}, ["public"]),
-    ("gym.stevegore.au",         "http", {"url": "https://gym.stevegore.au/",      "maxredirects": 0, "accepted_statuscodes_json": ACCEPT_302}, ["public"]),
-
-    # === Internal pico.local services (direct port checks) ===
-    ("Radarr",          "http", {"url": "http://pico.local:7878/", "maxredirects": 5, "accepted_statuscodes_json": ACCEPT_OK}, ["internal","media"]),
-    ("Sonarr",          "http", {"url": "http://pico.local:8989/", "maxredirects": 5, "accepted_statuscodes_json": ACCEPT_OK}, ["internal","media"]),
-    ("Jackett",         "http", {"url": "http://pico.local:9117/UI/Dashboard", "maxredirects": 5, "accepted_statuscodes_json": ACCEPT_OK}, ["internal","media"]),
-    ("Transmission",    "http", {"url": "http://pico.local:9092/transmission/web/", "maxredirects": 5, "accepted_statuscodes_json": ACCEPT_OK_REDIR}, ["internal","media"]),
-    ("FlareSolverr",    "http", {"url": "http://pico.local:8191/", "maxredirects": 0, "accepted_statuscodes_json": ACCEPT_OK}, ["internal","media"]),
-    ("Duplicati",       "http", {"url": "http://pico.local:8200/", "maxredirects": 0, "accepted_statuscodes_json": ACCEPT_OK_REDIR}, ["internal","infra"]),
-    ("Stirling PDF",    "http", {"url": "http://pico.local:8083/", "maxredirects": 5, "accepted_statuscodes_json": ACCEPT_OK}, ["internal"]),
-    ("StravaBot",       "http", {"url": "http://pico.local:8082/", "maxredirects": 0, "accepted_statuscodes_json": ACCEPT_OK_REDIR}, ["internal"]),
-    ("StravaKeeper",    "http", {"url": "http://pico.local:8180/", "maxredirects": 0, "accepted_statuscodes_json": ACCEPT_OK_REDIR}, ["internal"]),
-    ("PhotoPrism (local)","http",{"url": "http://pico.local:2342/api/v1/status", "maxredirects": 0, "accepted_statuscodes_json": ACCEPT_OK}, ["internal","photos"]),
-    ("Immich (local)",  "http", {"url": "http://pico.local:2283/api/server/ping", "maxredirects": 0, "keyword": "pong", "accepted_statuscodes_json": ACCEPT_OK}, ["internal","photos"]),
-    ("Huginn (local)",  "http", {"url": "http://pico.local:3000/", "maxredirects": 5, "accepted_statuscodes_json": ACCEPT_OK}, ["internal"]),
-    ("Homepage (local)","http", {"url": "http://pico.local:8080/", "maxredirects": 0, "accepted_statuscodes_json": ACCEPT_OK}, ["internal","infra"]),
-    ("GymBooking",      "http", {"url": "http://pico.local:8112/", "maxredirects": 5, "accepted_statuscodes_json": ACCEPT_OK_REDIR}, ["internal"]),
-    ("NuraSpace",       "http", {"url": "http://pico.local:8111/", "maxredirects": 5, "accepted_statuscodes_json": ACCEPT_OK_REDIR}, ["internal"]),
-    ("Portainer (local)","http",{"url": "http://pico.local:9000/", "maxredirects": 5, "accepted_statuscodes_json": ACCEPT_OK_REDIR}, ["internal","infra"]),
+    {"name": "Radarr", "type": "http", "kwargs": {"url": "http://pico:7878/", "maxredirects": 5, "accepted_statuscodes_json": ACCEPT_OK}, "tags": ["internal", "media"]},
+    {"name": "Sonarr", "type": "http", "kwargs": {"url": "http://pico:8989/", "maxredirects": 5, "accepted_statuscodes_json": ACCEPT_OK}, "tags": ["internal", "media"]},
+    {"name": "Jackett", "type": "http", "kwargs": {"url": "http://pico:9117/UI/Dashboard", "maxredirects": 5, "accepted_statuscodes_json": ACCEPT_OK}, "tags": ["internal", "media"]},
+    {"name": "Transmission", "type": "http", "kwargs": {"url": "http://pico:9092/transmission/web/", "maxredirects": 5, "accepted_statuscodes_json": ACCEPT_OK_REDIR}, "tags": ["internal", "media"]},
+    {"name": "FlareSolverr", "type": "http", "kwargs": {"url": "http://pico:8191/", "maxredirects": 0, "accepted_statuscodes_json": ACCEPT_OK}, "tags": ["internal", "media"]},
+    {"name": "Duplicati", "type": "http", "kwargs": {"url": "http://pico:8200/", "maxredirects": 0, "accepted_statuscodes_json": ACCEPT_OK_REDIR}, "tags": ["internal", "infra"]},
+    {"name": "Stirling PDF", "type": "http", "kwargs": {"url": "http://pico:8083/", "maxredirects": 5, "accepted_statuscodes_json": ACCEPT_OK}, "tags": ["internal"]},
+    {"name": "StravaBot", "type": "http", "kwargs": {"url": "http://pico:8082/", "maxredirects": 0, "accepted_statuscodes_json": ACCEPT_OK_REDIR}, "tags": ["internal"]},
+    {"name": "StravaKeeper", "type": "http", "kwargs": {"url": "http://pico:8180/", "maxredirects": 0, "accepted_statuscodes_json": ACCEPT_OK_REDIR}, "tags": ["internal"]},
+    {"name": "Immich (direct)", "type": "http", "kwargs": {"url": "http://pico:2283/api/server/ping", "maxredirects": 0, "keyword": "pong", "accepted_statuscodes_json": ACCEPT_OK}, "tags": ["internal", "photos"], "aliases": ["Immich (local)"]},
+    {"name": "Huginn (direct)", "type": "http", "kwargs": {"url": "http://pico:3000/", "maxredirects": 5, "accepted_statuscodes_json": ACCEPT_OK}, "tags": ["internal"], "aliases": ["Huginn (local)"]},
+    {"name": "Homepage (direct)", "type": "http", "kwargs": {"url": "http://pico:8080/", "maxredirects": 0, "accepted_statuscodes_json": ACCEPT_OK}, "tags": ["internal", "infra"], "aliases": ["Homepage (local)"]},
+    {"name": "GymBooking", "type": "http", "kwargs": {"url": "http://pico:8112/", "maxredirects": 5, "accepted_statuscodes_json": ACCEPT_OK_REDIR}, "tags": ["internal"]},
+    {"name": "NuraSpace", "type": "http", "kwargs": {"url": "http://pico:8111/", "maxredirects": 5, "accepted_statuscodes_json": ACCEPT_OK_REDIR}, "tags": ["internal"]},
+    {"name": "Portainer (direct)", "type": "http", "kwargs": {"url": "http://pico:9000/", "maxredirects": 5, "accepted_statuscodes_json": ACCEPT_OK_REDIR}, "tags": ["internal", "infra"], "aliases": ["Portainer (local)"]},
+    {"name": "phpMyAdmin", "type": "http", "kwargs": {"url": "http://pico:3011/", "maxredirects": 5, "accepted_statuscodes_json": ACCEPT_OK_REDIR}, "tags": ["internal", "infra"]},
 ]
+
+
+def fetch_monitor_id(names):
+    placeholders = ",".join("?" for _ in names)
+    cur.execute(f"SELECT id, name FROM monitor WHERE name IN ({placeholders}) ORDER BY CASE WHEN name=? THEN 0 ELSE 1 END, id LIMIT 1", (*names, names[0]))
+    return cur.fetchone()
+
+
+def reconcile_monitor(spec):
+    desired_name = spec["name"]
+    aliases = spec.get("aliases", [])
+    existing = fetch_monitor_id([desired_name, *aliases])
+
+    fields = {
+        "name": desired_name,
+        "type": spec["type"],
+        "user_id": USER_ID,
+        "active": 1,
+        "interval": spec["kwargs"].get("interval", DEFAULT_INTERVAL),
+        "retry_interval": spec["kwargs"].get("retry_interval", 60),
+        "maxretries": spec["kwargs"].get("maxretries", DEFAULT_RETRIES),
+        "timeout": spec["kwargs"].get("timeout", DEFAULT_TIMEOUT),
+    }
+    for field in OPTIONAL_FIELDS:
+        fields[field] = spec["kwargs"].get(field)
+
+    if existing:
+        monitor_id, _ = existing
+        assignments = ", ".join(f"{column}=?" for column in fields)
+        cur.execute(f"UPDATE monitor SET {assignments} WHERE id=?", (*fields.values(), monitor_id))
+        cur.execute("DELETE FROM monitor_tag WHERE monitor_id=?", (monitor_id,))
+    else:
+        columns = list(fields.keys())
+        placeholders = ",".join("?" for _ in columns)
+        cur.execute(f"INSERT INTO monitor ({','.join(columns)}) VALUES ({placeholders})", tuple(fields[column] for column in columns))
+        monitor_id = cur.lastrowid
+
+    for tag_name in spec["tags"]:
+        cur.execute("INSERT INTO monitor_tag (monitor_id, tag_id) VALUES (?, ?)", (monitor_id, tag_ids[tag_name]))
+
+    return monitor_id
 
 conn = sqlite3.connect(DB_PATH)
 cur = conn.cursor()
@@ -83,27 +134,19 @@ for name, color in TAGS.items():
         cur.execute("INSERT INTO tag (name, color, created_date) VALUES (?, ?, DATETIME('now'))", (name, color))
         tag_ids[name] = cur.lastrowid
 
-inserted = 0
-for name, mtype, kwargs, tags in monitors:
-    cur.execute("SELECT id FROM monitor WHERE name=?", (name,))
-    if cur.fetchone():
-        continue
-    cols = ["name","type","user_id","active","interval","retry_interval","maxretries","timeout"]
-    vals = [name, mtype, USER_ID, 1, kwargs.pop("interval", DEFAULT_INTERVAL),
-            kwargs.pop("retry_interval", 60), kwargs.pop("maxretries", DEFAULT_RETRIES),
-            kwargs.pop("timeout", DEFAULT_TIMEOUT)]
-    for k, v in kwargs.items():
-        cols.append(k); vals.append(v)
-    placeholders = ",".join("?" for _ in cols)
-    cur.execute(f"INSERT INTO monitor ({','.join(cols)}) VALUES ({placeholders})", vals)
-    monitor_id = cur.lastrowid
-    for tg in tags:
-        cur.execute("INSERT INTO monitor_tag (monitor_id, tag_id) VALUES (?, ?)", (monitor_id, tag_ids[tg]))
-    inserted += 1
+managed_names = set()
+for monitor in monitors:
+    reconcile_monitor(monitor)
+    managed_names.add(monitor["name"])
+    managed_names.update(monitor.get("aliases", []))
+
+for retired_name in retired_monitor_names:
+    cur.execute("UPDATE monitor SET active=0 WHERE name=?", (retired_name,))
 
 conn.commit()
 print(f"Tags ready: {list(tag_ids.keys())}")
-print(f"Monitors inserted: {inserted} (skipped if already present)")
+print(f"Managed monitors: {len(monitors)}")
+print(f"Retired monitors deactivated: {sorted(retired_monitor_names)}")
 cur.execute("SELECT COUNT(*) FROM monitor")
 print(f"Total monitors in DB: {cur.fetchone()[0]}")
 conn.close()
