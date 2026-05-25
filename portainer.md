@@ -1443,33 +1443,22 @@ docker start uptime-kuma
 
 ---
 
-### Bitwarden (Vaultwarden)
+### Bitwarden (Vaultwarden) — warm standby
 
 **Container:** bitwarden  
 **Image:** vaultwarden/server:1.35.7-alpine  
-**Status:** Running (Up 2 weeks, healthy)  
+**Status:** Running (warm standby — primary is OKE `vaultwarden` namespace)  
 **Network:** bridge  
 **Ports:** 8081 -> 80 (web UI), 3012 -> 3012 (WebSocket notifications)  
 **Command:** `/start.sh`  
 **Restart Policy:** always  
 **Healthcheck:** `/healthcheck.sh` (interval 60s, timeout 10s)  
 **Mounts:** `/usr/share/bitwarden` bind -> `/data`  
-**Domain:** <https://bw.stevegore.io>  
-**Environment:**
+**Domain:** <https://bw2.stevegore.au> (Cloudflare Tunnel; standby only — primary is `bw.stevegore.au` on OKE)
 
-```text
-ADMIN_TOKEN=x3lS42JV7pymWtPk14z+plBbbsIH74PL8GVYDT7s7Uxg1hOJU8aFAgki1R9SpzFJ
-DOMAIN=<https://bw.stevegore.io>
-ROCKET_ADDRESS=0.0.0.0
-ROCKET_ENV=staging
-ROCKET_PORT=80
-ROCKET_PROFILE=release
-ROCKET_WORKERS=10
-SIGNUPS_ALLOWED=false
-WEBSOCKET_ENABLED=true
-```
+**Sync:** Hourly systemd timer (`vw-mysql-to-sqlite.timer`) pulls MySQL HeatWave → `/usr/share/bitwarden/db.sqlite3` via `~/.local/bin/vw-mysql-to-sqlite.sh` (Python/pymysql). MySQL reachable at `10.0.1.51:3306` via Tailscale (oke-connector advertises `10.0.1.0/24`). Password in `~/.vw-mysql-sync.pass`.
 
-**Purpose:** Password manager (Vaultwarden - lightweight Bitwarden-compatible server). Signups are disabled; WebSocket notifications enabled for live sync.
+**Purpose:** Failover replica for `bw.stevegore.au`. Completely independent ingress path (Cloudflare Tunnel → pico-local sqlite) — survives any OKE or OCI NLB failure. Clients re-auth on failover (separate RSA keys).
 
 ---
 
@@ -1698,8 +1687,8 @@ This Portainer instance manages a comprehensive home infrastructure on pico:
 
 ### Security & Access
 
-- **Vaultwarden** - Password manager (healthy)  
-- **Vault** - HashiCorp secrets management (moved to MicroK8s on ampere-ubuntu)  
+- **Vaultwarden** - Warm standby at `bw2.stevegore.au`; primary is OKE (`bw.stevegore.au`). Hourly sync from MySQL HeatWave via `vw-mysql-to-sqlite.timer`.
+- **Vault** - HashiCorp secrets management (moved to OKE)  
 - **Homepage** - Application dashboard at `homepage.stevegore.au` (port 8080, GitHub OAuth)
 
 ### Automation & Utilities
