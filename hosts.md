@@ -157,7 +157,7 @@ See `scripts/STATS_SERVER.md` for detailed setup and troubleshooting.
 | argocd             | ArgoCD                          | `--insecure` mode (Caddy terminates TLS); Git source: `stevegore/infra` |
 | vault              | HashiCorp Vault                 | OCI KMS auto-unseal; VSO syncs secrets to k8s |
 | vault-secrets-operator | VSO                        | Syncs Vault secrets → k8s Secrets          |
-| vaultwarden        | Vaultwarden                     | Password manager                           |
+| vaultwarden        | Vaultwarden 1.35.7              | Primary at `bw.stevegore.au`; MySQL HeatWave Free backend (`/data` is `emptyDir`) |
 | homepage           | Homepage dashboard              | Protected by caddy-security `adminonly`    |
 | openclaw           | OpenClaw                        |                                            |
 | tailscale          | Tailscale operator              | Manages Egress Service for pico reachability |
