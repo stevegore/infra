@@ -17,8 +17,8 @@ This breaks:
 
 Need to update a ConfigMap, Helm value, or Kubernetes resource?
 
-- **ConfigMap/Secret** → Find the Helm template: `apps-oke/<app>/templates/`
-- **Deployment spec** → Find the Helm values: `apps-oke/<app>/values.yaml` or `apps-oke/<app>/Chart.yaml`
+- **ConfigMap/Secret** → Find the Helm template: `apps/<app>/templates/`
+- **Deployment spec** → Find the Helm values: `apps/<app>/values.yaml` or `apps/<app>/Chart.yaml`
 - **New service** → Add to ArgoCD Application manifest or Helm chart
 
 ### 2. Edit the Repo
@@ -27,16 +27,16 @@ Modify the **repo files**, not the cluster:
 
 ```bash
 # Example: Update Caddy ConfigMap
-vim apps-oke/caddy/templates/configmap.yaml
+vim apps/caddy/templates/configmap.yaml
 
 # Example: Update Homepage values
-vim apps-oke/homepage/values.yaml
+vim apps/homepage/values.yaml
 ```
 
 ### 3. Commit & Push
 
 ```bash
-git add apps-oke/caddy/templates/configmap.yaml
+git add apps/caddy/templates/configmap.yaml
 git commit -m "Update Caddy ConfigMap: add stats.stevegore.au route"
 git push origin main
 ```
@@ -70,11 +70,11 @@ kubectl rollout status deployment/<name> -n <namespace>
 
 ```bash
 # 1. Edit the ConfigMap template
-vim apps-oke/caddy/templates/configmap.yaml
+vim apps/caddy/templates/configmap.yaml
 # → Add new reverse_proxy block for stats.stevegore.au
 
 # 2. Commit
-git add apps-oke/caddy/templates/configmap.yaml
+git add apps/caddy/templates/configmap.yaml
 git commit -m "Add stats route to Caddy"
 git push origin main
 
@@ -91,11 +91,11 @@ curl https://stats.stevegore.au/
 
 ```bash
 # 1. Edit the ConfigMap template
-vim apps-oke/homepage/templates/configmap.yaml
+vim apps/homepage/templates/configmap.yaml
 # → Update services.yaml or widgets.yaml sections
 
 # 2. Commit
-git add apps-oke/homepage/templates/configmap.yaml
+git add apps/homepage/templates/configmap.yaml
 git commit -m "Add stats iframe widget to homepage"
 git push origin main
 
@@ -143,6 +143,6 @@ https://argocd.stevegore.au
 ## Related Files
 
 - ArgoCD apps: `argocd/*.yaml`
-- Caddy Helm: `apps-oke/caddy/`
-- Homepage Helm: `apps-oke/homepage/`
-- Other apps: `apps-oke/*/`
+- Caddy Helm: `apps/caddy/`
+- Homepage Helm: `apps/homepage/`
+- Other apps: `apps/*/`

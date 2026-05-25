@@ -90,7 +90,7 @@ This was fixed on the now-terminated ampere-ubuntu instance by manually installi
 | Uptime Kuma | 2.3.2 | — | SQLite backend on 50GB OCI block volume; monitors pico+external services |
 | Homepage | 0.10.9 | — | Service dashboard |
 
-All Helm charts are defined in `apps-oke/` and synced via ArgoCD. See `argocd/applicationset-oke.yaml` for the ApplicationSet.
+All Helm charts are defined in `apps/` and synced via ArgoCD. See `argocd/applicationset.yaml` for the ApplicationSet (`infra-apps`).
 
 ---
 
