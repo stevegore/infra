@@ -6,9 +6,12 @@
 **Trigger:** Single-host outage on 2026-05-23 (ampere-ubuntu hit a 20-min Oracle maintenance window; all externally-accessible services down for the duration)
 
 **Progress (2026-05-25):**
-- Terraform pipeline live: ORM Stack `homelab-tf` (`github.com/stevegore/infra` `terraform/`) owns OCI state. Local CLI plans via `scripts/tf-env.sh` (pulls ORM state snapshot, renames `backend_override.tf.local` → `.tf`); apply goes through ORM jobs only. 30 existing resources under TF (VCN/subnets/SLs/NSGs/gateways, ampere instance, KMS vault+key, vault-storage bucket, vault-instances DG + policy). See `terraform/README.md`.
+- Terraform pipeline live: ORM Stack `homelab-tf` (`github.com/stevegore/infra` `terraform/`) owns OCI state. Local CLI plans via `scripts/tf-env.sh` (pulls ORM state snapshot, renames `backend_override.tf.local` → `.tf`); apply goes through ORM jobs only. See `terraform/README.md`.
 - All OCI infrastructure changes go through this pipeline from now on — no console edits. See §10's "Terraform invariant" alongside the existing GitOps invariant.
-- `kv/oci/` is the canonical namespace for OCI secrets: `kv/oci/api-key` (the local CLI API key), `kv/oci/ocir` (registry token).
+- `kv/oci/` is the canonical namespace for OCI secrets: `kv/oci/api-key` (the local CLI API key), `kv/oci/ocir` (registry token), `kv/mysql/heatwave-admin` (MySQL admin + DATABASE_URL).
+- **Phase 0 → done** (caddy-acme bucket, broadened vault-instances DG, policy extension all applied via TF). Phase 0 still has one open item: minting the Customer Secret Key for the Caddy ACME bucket (TF would leak the secret into state, so it's deferred to a `scripts/provision-caddy-acme-creds.sh` we still need to write — needed before Caddy can actually start on OKE).
+- **Phase 1 → done.** OKE Enhanced cluster `homelab` (v1.35.2) ACTIVE in `main` compartment. Two A1.Flex 2 OCPU / 12 GB workers spread across FD-1 + FD-2 in Private Subnet-nebula. Public API endpoint on a new 10.0.2.0/28 subnet, NSG-restricted to home IP 159.196.97.38/32. Kubeconfig at `~/.kube/oke-homelab.config` (auto-exported via `~/.zshrc`); `kubectl get nodes` works from home.
+- **Phase 2 → partial.** MySQL HeatWave Free (`heatwave`, MySQL 9.7.0, MySQL.Free) ACTIVE at `heatwave.sub02040931041.nebula.oraclevcn.com:3306` (10.0.1.51). Admin creds + formatted Vaultwarden `DATABASE_URL` published to `kv/mysql/heatwave-admin` by `scripts/publish-mysql-creds.sh`. **Gotcha:** attaching any `nsg_ids` to a `MySQL.Free` DB at create time fails with `AuthorizationFailed` even with the OCI-documented `manage virtual-network-family` policy (reproduced via direct CLI). Worked around by allowing 3306 + 33060 on the existing `nebula-private` SL from `10.0.1.0/24` (workers + DB share the Private Subnet anyway, so isolation is preserved). The standalone `mysql-heatwave` NSG resource is still in TF as a leave-behind. Still pending in Phase 2: ArgoCD + ApplicationSet bootstrap on OKE.
 
 **Progress (2026-05-24):**
 - All five OKE chart scaffolds committed under `apps-oke/` (`caddy`, `vaultwarden`, `uptime-kuma`, `tailscale-operator`, `homepage`) — separated from `apps/` so the live ampere `infra-apps` ApplicationSet doesn't try to reconcile them. Charts lint + render clean.
@@ -383,20 +386,20 @@ The TF resource matrix (current + planned):
 | (pre-migration) | `vault-instances` dynamic group + `vault-kms-objectstorage-policy` | ✅ under TF |
 | (pre-migration) | `ampere-ubuntu` instance + private IP attachment | ✅ under TF (will `terraform destroy` in Phase 7) |
 | 3 | New RESERVED public IP for NLB (current `publicip20230914115348` is ephemeral on ampere's VNIC and can't be in-place promoted) | ⬜ create fresh in Phase 3; update Cloudflare DNS to the new value (TTL 60s 24h before cutover) |
-| 0 | `caddy-acme` bucket | ⬜ create via TF |
-| 0 | Broaden `vault-instances` DG → match by compartment (covers future OKE workers) | ⬜ update via TF |
-| 0 | Extend policy to allow `manage objects … target.bucket.name='caddy-acme'` | ⬜ update via TF |
-| 1 | OKE Enhanced cluster + node pool (2 × A1.Flex 2OCPU/12GB across FD-1 + FD-2) | ⬜ create via TF |
-| 1 | OKE control-plane endpoint security (home-IP allowlist NSG) | ⬜ create via TF |
-| 1 | OCIR repos (`caddy`, plus others as needed) | ⬜ create via TF |
-| 2 | MySQL HeatWave Free DB system | ⬜ create via TF |
-| 3 | Reattach reserved IP to NLB | ⬜ via CCM annotation on the K8s Service (declarative from day 1) |
+| 0 | `caddy-acme` bucket | ✅ under TF |
+| 0 | Broaden `vault-instances` DG → match by compartment (covers future OKE workers) | ✅ under TF (rule now `instance.compartment.id = <main>`) |
+| 0 | Extend policy to allow `manage objects … target.bucket.name='caddy-acme'` | ✅ under TF |
+| 1 | OKE Enhanced cluster + node pool (2 × A1.Flex 2OCPU/12GB across FD-1 + FD-2) | ✅ under TF (`homelab` cluster, k8s v1.35.2, 2 workers ACTIVE) |
+| 1 | OKE control-plane endpoint security (home-IP allowlist NSG) | ✅ under TF (new 10.0.2.0/28 subnet + `oke-api-endpoint` NSG) |
+| 1 | OCIR repos (`caddy`, plus others as needed) | ⬜ implicit — repos auto-created on first push from `scripts/build-push-caddy.sh`; bring under TF if/when we want lifecycle policies |
+| 2 | MySQL HeatWave Free DB system | ✅ under TF (`heatwave`, MySQL 9.7.0, endpoint `heatwave.sub02040931041.nebula.oraclevcn.com:3306`). NSG attach unsupported by OCI for MySQL.Free — see notes |
+| 3 | New RESERVED public IP for NLB (current `publicip20230914115348` is ephemeral on ampere's VNIC and can't be in-place promoted) | ⬜ create fresh in Phase 3; update Cloudflare DNS to the new value (TTL 60s 24h before cutover) |
 
 ### Phase 0 — Prep (½ day, no risk)
 
 - [x] Snapshot ampere boot volume — backup `ocid1.bootvolumebackup.oc1.ap-sydney-1.abzxsljr2zcj7cxywe7ccngd2yhvtjutj6ir7jsqhz2vsltgaihdeacfmvua` (`pre-oke-migration-2026-05-24`, FULL, 47 GB, `free-tier-retained`). Initiated 2026-05-24 via OCI CLI; runs async (~30 min to AVAILABLE).
 - [x] Out-of-band copy of `vault-storage` bucket → `~/Backups/vault-storage-2026-05-24/` on the Mac. 103/103 objects, 412 KB. Contents are Vault-encrypted on disk so the local copy is safe unwrapped.
-- [ ] Create OCI Object Storage bucket `caddy-acme` (private, no versioning needed — Caddy manages cert lifecycle). Grant the `vault-instances` dynamic group `manage objects in compartment main where target.bucket.name='caddy-acme'`. **Via TF** (`terraform/caddy-acme.tf` + extend `identity.tf` policy statement).
+- [x] Create OCI Object Storage bucket `caddy-acme` (private, no versioning needed — Caddy manages cert lifecycle). Grant the `vault-instances` dynamic group `manage objects in compartment main where target.bucket.name='caddy-acme'`. Both in `terraform/object_storage.tf` + `terraform/identity.tf`; applied 2026-05-25.
 - [ ] Mint Customer Secret Key for the Caddy ACME bucket (separate from the OCIR + tf-state ones); push to Vault at `kv/oci/caddy-acme` so VSO can mount it into the Caddy pod for the certmagic-s3 plugin. **Via script** (TF would store the secret in state); add `scripts/provision-caddy-acme-creds.sh` mirroring `provision-ocir-creds.sh`.
 - [x] Add the new app directories under `apps-oke/` (kept out of `apps/` so the live ampere ApplicationSet doesn't try to reconcile them). Each is a small Helm chart with `values.yaml`; secrets via VSO.
   - [x] `apps-oke/caddy/` (Caddy + caddy-security + certmagic-s3, 2 replicas, custom OCIR image — `Dockerfile` colocated)
@@ -407,20 +410,20 @@ The TF resource matrix (current + planned):
   - [x] `apps/vault/values.yaml` tolerations from §7.2 (live — will roll vault-0 on ampere on next ArgoCD reconcile).
 - [x] Add `argocd/applicationset-oke.yaml` — applied during Phase 2 on the new cluster to drive the `apps-oke/*` reconciliation.
 - [x] Create Tailscale OAuth client; stash creds at `kv/tailscale/operator_oauth` in Vault. (For the OKE operator only — pico is already on the tailnet so no separate pico auth key needed.)
-- [ ] Extend `vault-instances` dynamic group to include the *new* OKE workers (change matching rule from `instance.id = <ampere>` to `instance.compartment.id = <main>` — covers ampere today and any future compute). **Via TF** (`terraform/identity.tf`).
+- [x] Extend `vault-instances` dynamic group to include the *new* OKE workers — matching rule now `instance.compartment.id = <main>`. Applied 2026-05-25 via `terraform/identity.tf`. Also dropped the discovery-placeholder/`ignore_changes` hack the auto-import had introduced.
 - [x] Confirm Duplicati→B2 photo backup is producing fresh filesets — verified 2026-05-24: all 4 jobs (Docker Volumes, Home Assistant, Bitwarden, Photos) have successful filesets within 24h; Photos shows two successful runs today (12:03 + 19:43) with `dlist/dindex/dblock` PUTs to B2 confirmed in the per-job `RemoteOperation` table. See §7.3 caveat — the sidecar race that caused the original silent failure is *not* fixed; it recurred at the scheduled 02:00 run today and only the manual `Recreate`-then-run path is producing successful filesets.
 - [x] Provision OCIR auth token + push to `kv/oci/ocir` (`bash scripts/provision-ocir-creds.sh` from the Mac).
 - [x] Build and push the custom Caddy image to OCIR (`bash scripts/build-push-caddy.sh` — runs on either pico or Mac).
 
-### Phase 1 — Provision OKE (½ day)
+### Phase 1 — Provision OKE (½ day) — done 2026-05-25
 
-All provisioning **via TF** (`terraform/oke.tf` + `terraform/oke-iam.tf`). Single ORM apply spins up cluster + node pool + endpoint NSG + worker NSG together.
+All provisioning via TF (`terraform/oke-networking.tf`, `terraform/oke-cluster.tf`, `terraform/oke-iam.tf`). Single ORM apply spun up cluster + node pool + endpoint NSG + worker NSG together.
 
-- [ ] OKE Enhanced cluster in `main` compartment, Sydney AD-1, public API endpoint, k8s 1.30 (free).
-- [ ] API endpoint NSG — TCP 6443 from home IP (`159.196.97.38/32`) only.
-- [ ] Node pool — A1.Flex 2 OCPU / 12 GB, **2 private nodes**, spread FD-1 + FD-2, in `Private Subnet-nebula` with no public IPs.
-- [ ] Briefly you'll have 8 OCPU in use — within paid tier. Confirm in console that Always Free A1 quota isn't blocked before the apply.
-- [ ] Local kubeconfig: `oci ce cluster create-kubeconfig --cluster-id <ocid> ...`. `kubectl` from pico uses this kubeconfig to reach the public OKE API endpoint directly; it does not depend on Tailscale.
+- [x] OKE Enhanced cluster `homelab` in `main` compartment, Sydney AD-1, public API endpoint, k8s **v1.35.2** (the 1.30 target in the original plan was out of support by the time we provisioned; v1.35.2 is the current stable).
+- [x] API endpoint NSG — TCP 6443 from home IP (`159.196.97.38/32`) only. Bumped the NSG rule's CIDR if/when home IP changes (see `terraform/oke-networking.tf`).
+- [x] Node pool `homelab-arm` — A1.Flex 2 OCPU / 12 GB, 2 private nodes, one in FD-1 (10.0.1.146) and one in FD-2 (10.0.1.138), in `Private Subnet-nebula` with no public IPs.
+- [x] OCPU usage during the migration — 4 OCPU OKE + 4 OCPU ampere = 8 total (4 over free). Acceptable per §11.
+- [x] Local kubeconfig: `~/.kube/oke-homelab.config` (auto-exported by `~/.zshrc`); `kubectl get nodes` from the Mac works. Regen recipe documented in `oracle-cloud.md` § Kubernetes (OKE).
 
 ### Phase 2 — Cluster baseline (1 day)
 
@@ -428,7 +431,7 @@ All provisioning **via TF** (`terraform/oke.tf` + `terraform/oke-iam.tf`). Singl
 - [ ] `kubectl apply -f argocd/applicationset.yaml` (ampere-shared apps: vault, vault-secrets-operator, argocd, openclaw) and `kubectl apply -f argocd/applicationset-oke.yaml` (OKE-only apps under `apps-oke/`). Both ApplicationSet generators walk their directory globs and create an Application per directory.
 - [ ] Watch ArgoCD sync: `apps/argocd/` reconciles ArgoCD itself, `apps/vault-secrets-operator/` brings VSO, `apps/vault/` brings Vault (standalone, pointing at the existing `vault-storage` bucket — secrets appear without a data migration), etc.
 - [ ] Verify private-node egress before layering apps on top: test image pulls, OCI Object Storage access, OCI KMS access, and outbound package/API reachability through the NAT Gateway from a debug pod.
-- [ ] Provision **MySQL HeatWave Free** in Sydney AD-1 (`MySQL.Free` shape), in a private subnet of the existing `nebula` VCN, with NSG opened only to OKE worker CIDR. Admin password generated and stored in Vault at `kv/mysql/heatwave-admin`. **Via TF** (`terraform/mysql.tf`).
+- [x] **MySQL HeatWave Free** in Sydney AD-1 (`MySQL.Free`, MySQL 9.7.0), in `Private Subnet-nebula`. Admin password generated by `random_password` and published to Vault at `kv/mysql/heatwave-admin` (incl. formatted Vaultwarden DATABASE_URL) via `scripts/publish-mysql-creds.sh`. Endpoint: `heatwave.sub02040931041.nebula.oraclevcn.com:3306` (10.0.1.51). **Gotcha:** attaching any `nsg_ids` triggers `AuthorizationFailed` (reproduced with direct CLI, OCI bug or undocumented permission — see `terraform/mysql.tf` notes). Worked around by allowing 3306 + 33060 from `10.0.1.0/24` on the `nebula-private` SL.
 - [ ] Verify: Vault auto-unseals via OCI KMS, VSO authenticates against the new Vault, MySQL endpoint resolvable from a debug pod.
 
 ### Phase 3 — Edge stack (1 day)
