@@ -31,9 +31,9 @@ service:
   type: LoadBalancer
   annotations:
     oci.oraclecloud.com/load-balancer-type: "nlb"
-    # Detach this reserved IP from the ampere VNIC out-of-band before the NLB
-    # provisions, then the CCM picks it up via this annotation.
-    service.beta.kubernetes.io/oci-load-balancer-reserved-ip: "publicip20230914115348"
+    # Reserved IP minted in terraform/nlb.tf — survives NLB recreation and
+    # is what Cloudflare DNS will point at in Phase 5. Address: 159.13.44.68.
+    service.beta.kubernetes.io/oci-load-balancer-reserved-ip: "ocid1.publicip.oc1.ap-sydney-1.amaaaaaaxbp2yoqayek5n77p4evctmvmty3oasdorcdoubjq3ryc4z3recla"
     # Preserve client source IPs at L4 (NLB pass-through) and stop kube-proxy
     # SNAT so caddy-security's IP-based rules see the real client.
     oci.oraclecloud.com/oci-network-load-balancer-external-traffic-policy: "Local"
