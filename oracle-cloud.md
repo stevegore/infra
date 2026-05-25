@@ -57,10 +57,9 @@ package and without `/etc/logrotate.conf`. Anything not self-rotated (notably
 eviction threshold and started evicting pods — including `argocd-dex-server`,
 which broke GitHub SSO login to ArgoCD.
 
-`bootstrap/install.sh` (step 1b) now installs `logrotate`, writes
-`/etc/logrotate.d/{btmp,wtmp}`, enables `logrotate.timer`, and caps journald at
-500 MiB via `/etc/systemd/journald.conf.d/00-size.conf`. If you bootstrap a
-fresh ampere host, those will be set automatically.
+This was fixed on the now-terminated ampere-ubuntu instance by manually installing
+`logrotate`, writing `/etc/logrotate.d/{btmp,wtmp}`, and capping journald at 500 MiB.
+**Not applicable to OKE** — node log rotation is managed by OKE's managed node pool.
 
 ## OKE Cluster Health & Capacity (homelab)
 
@@ -135,12 +134,11 @@ All Helm charts are defined in `apps-oke/` and synced via ArgoCD. See `argocd/ap
 
 | Name             | Purpose              | VNICs                         |
 | ---------------- | -------------------- | ----------------------------- |
-| allow-wireguard  | WireGuard VPN access | 0 (ampere TERMINATED)         |
-| allow-all-egress | Outbound traffic     | 0 (ampere TERMINATED)         |
-| allow-ssh        | SSH access           | 0 (ampere TERMINATED)         |
-| allow-http-https | Web traffic          | 0 (ampere TERMINATED)         |
+| mysql-heatwave   | MySQL HeatWave NSG   | OKE private subnet nodes      |
+| oke-workers      | OKE worker nodes     | OKE node pool                 |
+| oke-api-endpoint | OKE API endpoint     | OKE API endpoint VNIC         |
 
-Note: these NSGs can be deleted; they are no longer attached to any VNIC.
+Note: `allow-wireguard`, `allow-all-egress`, `allow-ssh`, and `allow-http-https` were deleted 2026-05-26 (all were attached to ampere-ubuntu which was terminated).
 
 ### Gateways
 
@@ -241,8 +239,8 @@ records).
 | Property      | Value                                                                                                         |
 | ------------- | ------------------------------------------------------------------------------------------------------------- |
 | OCID          | `ocid1.dynamicgroup.oc1..aaaaaaaareb5w5qct2kihtaah6nq6tj5uo4fbeg36df6tmfxk3na44oxrvbq`                        |
-| Matching Rule | `instance.id = 'ocid1.instance.oc1.ap-sydney-1.anzxsljrxbp2yoqcuh4ka3eoi4novuompif6tkoiqij57zi7fxmh24b5q53a'` |
-| Purpose       | **Stale** — matched ampere-ubuntu (now TERMINATED). Vault runs on OKE; KMS auto-unseal uses OKE workload identity. This dynamic group no longer matches any instance and can be deleted. |
+| Matching Rule | `instance.compartment.id = 'ocid1.compartment.oc1..aaaaaaaays62ka24mqjmg7ej5khoswujbqjhwwlvalkjbfm7lz5pkmqugwba'` |
+| Purpose       | Instance principal auth for Vault auto-unseal (OCI KMS + Object Storage). Broadened from ampere instance OCID to compartment-match so OKE worker nodes inherit the same auth. |
 
 ### Policy: vault-kms-objectstorage-policy
 
