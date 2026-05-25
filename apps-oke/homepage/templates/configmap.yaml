@@ -16,17 +16,81 @@ data:
       Infra:
         style: row
         columns: 4
+      Media:
+        style: row
+        columns: 4
+      Home:
+        style: row
+        columns: 4
+      Tools:
+        style: row
+        columns: 4
   services.yaml: |
     - Infra:
         - Vault:
             href: https://vault.stevegore.au
-            description: HashiCorp Vault
+            description: HashiCorp Vault secrets
+            icon: vault
         - ArgoCD:
             href: https://argocd.stevegore.au
-            description: GitOps
+            description: GitOps continuous delivery
+            icon: argocd
         - Vaultwarden:
             href: https://bw.stevegore.au
             description: Password manager
+            icon: bitwarden
+        - Portainer:
+            href: https://port.stevegore.au
+            description: Docker container management
+            icon: portainer
+        - Auth:
+            href: https://auth.stevegore.au
+            description: GitHub OAuth portal
+            icon: authelia
+    - Media:
+        - Plex:
+            href: https://plex.stevegore.au
+            description: Media streaming server
+            icon: plex
+        - Immich:
+            href: https://immich.stevegore.au
+            description: Self-hosted photo library
+            icon: immich
+    - Home:
+        - Home Assistant:
+            href: https://hass.stevegore.au
+            description: Home automation
+            icon: home-assistant
+        - Huginn:
+            href: https://huginn.stevegore.au
+            description: Automation agent workflows
+            icon: huginn
+        - Strava:
+            href: https://strava.stevegore.au
+            description: Strava activity proxy
+            icon: strava
+    - Tools:
+        - Terminal:
+            href: https://stevegore.au
+            description: ttyd web terminal
+            icon: terminal
+        - Stirling PDF:
+            href: https://pdf.stevegore.au
+            description: PDF tools
+            icon: stirling-pdf
+        - OpenClaw:
+            href: https://openclaw.stevegore.au
+            description: OpenClaw service
+        - Desktop:
+            href: https://desk.stevegore.au
+            description: Remote desktop
+            icon: desktop
+        - Gym:
+            href: https://gym.stevegore.au
+            description: Gym tracker
+        - Health Check:
+            href: https://healthz.stevegore.au
+            description: Infrastructure health endpoint
   widgets.yaml: |
     - resources:
         cpu: true
