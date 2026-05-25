@@ -4,7 +4,7 @@ image:
   # Built from apps/caddy/Dockerfile, pushed to OCI Container Registry (Always Free, 5 GB).
   # Bump the tag suffix when xcaddy plugins or upstream Caddy change.
   repository: syd.ocir.io/sdajdczqv0qo/caddy
-  tag: "2.11.2-stevegore.1"
+  tag: "2.11.2-stevegore.2"
   pullPolicy: IfNotPresent
 
 # OCI Container Registry requires auth — create the secret out of band:

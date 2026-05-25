@@ -9,6 +9,11 @@ data:
     {
       email {{ .Values.acmeEmail }}
 
+      # DNS-01 challenge via Cloudflare — bypasses the need for ACME validators
+      # to reach port 80/443 on the OCI NLB (which has multi-perspective
+      # validation timeouts from some geographic vantage points).
+      acme_dns cloudflare {env.CF_API_TOKEN}
+
       # Shared ACME state across both replicas — OCI Object Storage via the
       # S3-compat endpoint. Without this, each replica would race for ACME
       # certs and burn Let's Encrypt rate limits.

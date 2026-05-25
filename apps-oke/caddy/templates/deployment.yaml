@@ -76,6 +76,12 @@ spec:
                 secretKeyRef:
                   name: {{ .Values.vault.config.secretName }}
                   key: github_client_secret
+            # Cloudflare DNS-01 challenge token (kv/caddy/config → caddy-config).
+            - name: CF_API_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.vault.config.secretName }}
+                  key: cf_api_token
             # certmagic-s3 storage backend (Object Storage S3-compat endpoint).
             # S3 creds come from kv/oci/caddy-acme (mounted as caddy-acme-s3),
             # provisioned by scripts/provision-caddy-acme-creds.sh.
