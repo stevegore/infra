@@ -1,0 +1,14 @@
+[Unit]
+Description=Homelab Stats Server
+After=network.target
+
+[Service]
+Type=simple
+User=steve
+WorkingDirectory=/home/steve/code/infra/scripts
+ExecStart=/usr/bin/python3 /home/steve/code/infra/scripts/stats-server.py
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

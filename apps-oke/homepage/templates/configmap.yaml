@@ -206,6 +206,9 @@ data:
     - search:
         provider: google
         target: _blank
+
+    - iframe:
+        url: https://stats.stevegore.au
   bookmarks.yaml: |
     - Domains:
         - stevegore.au:
