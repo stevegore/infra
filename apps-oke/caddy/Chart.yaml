@@ -3,4 +3,4 @@ name: caddy
 description: Caddy reverse proxy with caddy-security (GitHub OAuth) and certmagic-s3 (OCI Object Storage ACME backend)
 type: application
 version: 1.0.0
-appVersion: "2.11.2"
+appVersion: "2.11.3"
