@@ -76,6 +76,11 @@ data:
             check: http
 
     - Photos:
+        - PhotoPrism:
+            href: https://photos.stevegore.au
+            description: The Gore's Photos — AI-powered
+            icon: photoprism.png
+            check: https
         - Immich:
             href: https://immich.stevegore.au
             description: Photo & Video Backup
