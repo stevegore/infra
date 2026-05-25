@@ -193,7 +193,7 @@ data:
             widget:
               type: iframe
               src: https://stats.stevegore.au
-              classes: "h-96"
+              classes: "h-screen"
   widgets.yaml: |
     - datetime:
         text_size: xl
