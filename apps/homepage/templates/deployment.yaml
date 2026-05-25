@@ -20,11 +20,12 @@ spec:
       initContainers:
         - name: copy-config
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
-          command: ['sh', '-c', 'cp -r /config-source/* /app/config/ 2>/dev/null; true']
+          command: ['sh', '-c', 'mkdir -p /app/config && cp -r /config-source/* /app/config/ 2>/dev/null; true']
           volumeMounts:
             - name: config-source
               mountPath: /config-source
-            - name: config
+              readOnly: true
+            - name: config-work
               mountPath: /app/config
       containers:
         - name: homepage
@@ -38,7 +39,7 @@ spec:
             - name: HOMEPAGE_ALLOWED_HOSTS
               value: {{ join "," .Values.allowedHosts | quote }}
           volumeMounts:
-            - name: config
+            - name: config-work
               mountPath: /app/config
             - name: logs
               mountPath: /app/config/logs
@@ -60,7 +61,7 @@ spec:
         - name: config-source
           configMap:
             name: {{ include "homepage.fullname" . }}-config
-        - name: config
+        - name: config-work
           emptyDir: {}
         - name: logs
           emptyDir: {}
