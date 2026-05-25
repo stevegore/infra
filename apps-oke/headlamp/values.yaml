@@ -1,0 +1,33 @@
+headlamp:
+  replicaCount: 1
+
+  image:
+    # Chart appVersion omits the 'v' but GHCR tags have it
+    tag: "v0.42.0"
+    pullPolicy: IfNotPresent
+
+  serviceAccount:
+    create: true
+    unsafeUseServiceAccountToken: true
+
+  service:
+    type: ClusterIP
+    port: 80
+    targetPort: 8080
+
+  resources:
+    requests:
+      memory: 128Mi
+      cpu: 100m
+    limits:
+      memory: 512Mi
+      cpu: 500m
+
+  livenessProbe:
+    initialDelaySeconds: 30
+    periodSeconds: 30
+
+  readinessProbe:
+    initialDelaySeconds: 10
+    periodSeconds: 10
+
