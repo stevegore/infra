@@ -55,6 +55,15 @@
   - Subnet routes: `10.20.30.0/24` + `192.168.4.0/24` can be advertised if needed for OKE access to home LAN devices (currently not required)
 - **Cloudflare Tunnel** — `cloudflared.service`, exposes HA at `hass2.stevegore.au`
 - **Docker services** — managed via Portainer (`port.stevegore.au`)
+- **Stats Server** — Python HTTP server (systemd `stats-server.service`)
+  - Port: 8001 (HTTP)
+  - Endpoints:
+    - `/` — HTML dashboard with real-time resource metrics (pico disk, memory, CPU)
+    - `/api/stats` — JSON API returning pico + OKE cluster stats
+  - Public access: `https://stats.stevegore.au` (via Caddy reverse proxy)
+  - Dashboard integration: embedded as iframe widget in `https://homepage.stevegore.au`
+  - Deployment: `~/code/infra/scripts/stats-server.py` + systemd service
+  - See `scripts/STATS_SERVER.md` for setup and troubleshooting
 
 **Network:**
 
@@ -78,6 +87,24 @@
 - Unused volumes: `docker volume prune`
 - Duplicati backups: check `/var/lib/docker/volumes/` size
 - Home Assistant DB: `~/.local/share/hassio/homeassistant/home-assistant_v2.db` — ~2-3 GB
+
+**Monitoring & Observability:**
+
+| Component | Purpose | Access | Status |
+|-----------|---------|--------|--------|
+| Stats Server | Real-time resource metrics (disk, memory, CPU) | `https://stats.stevegore.au` | ✅ Running on pico:8001 |
+| Homepage Dashboard | Live stats widget (embedded iframe) | `https://homepage.stevegore.au` | ✅ Integrated via Caddy |
+| Uptime Kuma | Service health monitoring | `https://uptime.stevegore.au` | ✅ OKE cluster |
+| Home Assistant | Smart home platform + history | `https://hass.stevegore.au` | ✅ pico:8123 |
+
+**Stats Server Details:**
+- Deployed as: systemd service (`stats-server.service`) on pico
+- Metrics provided: root disk (`/`), media disk (`/media/m2`), RAM, CPU cores
+- JSON endpoint: `/api/stats` (for API integrations)
+- HTML dashboard: `/` (styled with color-coded resource alerts)
+- Color coding: ⚠️ orange >70%, 🔴 red >85%
+- Refresh: real-time (no caching, queries on each request)
+- OKE cluster stats: optional (requires kubeconfig copied from this machine to `~/.kube/oke-homelab.config` on pico)
 
 ---
 
