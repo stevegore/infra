@@ -187,6 +187,13 @@ data:
         - GoldenBoards:
             description: Golden Boards (Go, no UI)
             icon: mdi-trophy
+
+    - Monitoring:
+        - Stats:
+            widget:
+              type: iframe
+              url: https://stats.stevegore.au
+              classes: "h-96"
   widgets.yaml: |
     - datetime:
         text_size: xl
@@ -206,9 +213,6 @@ data:
     - search:
         provider: google
         target: _blank
-
-    - iframe:
-        url: https://stats.stevegore.au
   bookmarks.yaml: |
     - Domains:
         - stevegore.au:
