@@ -36,7 +36,7 @@ Real-time resource monitoring for pico and OKE cluster, exposed at https://stats
 
 - **HTML Dashboard**: https://stats.stevegore.au
 - **JSON API**: `https://stats.stevegore.au/api/stats`
-- **Local (pico)**: `http://localhost:8000/`
+- **Local (pico)**: `http://localhost:8001/` or `http://pico.local:8001/`
 
 ## Metrics Provided
 
@@ -69,12 +69,25 @@ Check firewall and ensure port 8000 is accessible:
 sudo ss -tlnp | grep 8000
 ```
 
-### kubectl timeouts
+### OKE Cluster Stats (Optional Setup)
+
 The `get_oke_stats()` function requires:
-- KUBECONFIG set to `~/.kube/oke-homelab.config`
+- `kubectl` binary installed on pico (already done)
+- KUBECONFIG at `~/.kube/oke-homelab.config` (requires manual setup)
 - Cluster API accessible from pico (via Tailscale)
 
-If stats show "unreachable", check OKE cluster status:
+To enable OKE monitoring, copy the kubeconfig from this machine:
+```bash
+scp ~/.kube/oke-homelab.config steve@pico.local:~/.kube/
+ssh steve@pico.local "chmod 600 ~/.kube/oke-homelab.config"
+```
+
+Then verify:
+```bash
+ssh steve@pico.local "~/.kube/oke-homelab.config kubectl get nodes"
+```
+
+If OKE stats show "unavailable", check:
 ```bash
 export KUBECONFIG=~/.kube/oke-homelab.config
 kubectl get nodes
