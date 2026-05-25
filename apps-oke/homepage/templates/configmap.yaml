@@ -192,7 +192,7 @@ data:
         - Stats:
             widget:
               type: iframe
-              url: https://stats.stevegore.au
+              src: https://stats.stevegore.au
               classes: "h-96"
   widgets.yaml: |
     - datetime:
