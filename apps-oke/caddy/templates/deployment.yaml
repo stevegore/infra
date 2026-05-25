@@ -7,12 +7,13 @@ metadata:
 spec:
   replicas: {{ .Values.replicaCount }}
   strategy:
-    # RollingUpdate is the default but worth being explicit: one replica must
-    # stay live so the NLB always has a healthy backend during upgrades.
+    # maxUnavailable=1, maxSurge=0: terminate an old pod before creating a new
+    # one. Required because the pod anti-affinity below is "required", and with
+    # 2 nodes + 2 replicas a surge pod would always be Pending (no free node).
     type: RollingUpdate
     rollingUpdate:
-      maxUnavailable: 0
-      maxSurge: 1
+      maxUnavailable: 1
+      maxSurge: 0
   selector:
     matchLabels:
       {{- include "caddy.selectorLabels" . | nindent 6 }}
