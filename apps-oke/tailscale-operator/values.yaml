@@ -34,11 +34,14 @@ tailscale-operator:
 
 # Subnet router Connector — advertises k8s pod/service CIDRs onto the tailnet
 # so pico (or anything else on the tailnet) can reach in-cluster services by
-# their ClusterIP if needed. Keep empty by default; opt in when needed.
+# their ClusterIP if needed. Disabled in Phase 2 — the operator alone is
+# enough for Egress Services (the pico backend reach). Flip `enabled: true`
+# + set `advertiseRoutes` to a non-empty list when we actually need it.
+# (The Connector CRD rejects empty subnetRouter.advertiseRoutes outright.)
 connector:
-  enabled: true
+  enabled: false
   hostname: oke-connector
-  # Routes to ADVERTISE outward onto the tailnet. Empty = no advertisement.
+  # Routes to ADVERTISE outward onto the tailnet. Required when enabled=true.
   advertiseRoutes: []
   # Tags applied to the connector device — must be permitted in Tailscale ACLs.
   tags:
