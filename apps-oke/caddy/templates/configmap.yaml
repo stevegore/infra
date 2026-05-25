@@ -141,6 +141,12 @@ data:
       import defaults
     }
 
+    uptime.stevegore.au {
+      authorize with adminonly
+      reverse_proxy uptime-kuma.uptime-kuma.svc.cluster.local:3001
+      import defaults
+    }
+
     openclaw.stevegore.au {
       reverse_proxy openclaw.openclaw.svc.cluster.local:18789
       import defaults
