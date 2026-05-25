@@ -2,60 +2,81 @@
 # Vaultwarden warm-standby sync: MySQL HeatWave → pico sqlite
 # See architecture-proposal.md §7.1.1
 #
-# Requires:
-#   - mysql-client (for mysqldump)
-#   - mysql2sqlite (https://github.com/dumblob/mysql2sqlite — place in PATH)
-#   - sqlite3
-#
-# MySQL endpoint reachable via Tailscale (10.0.1.0/24 advertised by oke-connector).
-# Use IP directly to avoid OCI VCN DNS resolution.
+# Uses Python (pymysql + sqlite3) to handle BLOB columns correctly.
+# MySQL endpoint reachable via Tailscale (10.0.1.0/24 via oke-connector).
 
 set -euo pipefail
 
-MYSQL_HOST="10.0.1.51"
-MYSQL_PORT="3306"
-MYSQL_USER="vaultwarden"
-MYSQL_PASS_FILE="/etc/vw-mysql-sync.pass"   # contains just the password, mode 0600
-MYSQL_DB="vaultwarden"
-
+PASS_FILE="/home/steve/.vw-mysql-sync.pass"
 DATA_DIR="/usr/share/bitwarden"
 SQLITE_DB="${DATA_DIR}/db.sqlite3"
 CONTAINER_NAME="bitwarden"
-
-TMP_DUMP=$(mktemp /tmp/vw-mysql-dump.XXXXXX.sql)
 TMP_SQLITE=$(mktemp /tmp/vw-sqlite.XXXXXX.db)
-trap 'rm -f "$TMP_DUMP" "$TMP_SQLITE"' EXIT
+trap 'rm -f "$TMP_SQLITE"' EXIT
 
-# Read password from file (avoids shell history / env leak)
-MYSQL_PASS=$(cat "$MYSQL_PASS_FILE")
+python3 -W ignore::DeprecationWarning - "$TMP_SQLITE" "$PASS_FILE" << 'PYEOF'
+import sys, pymysql, sqlite3, pathlib
 
-# 1. Dump MySQL
-mysqldump \
-  --single-transaction \
-  --skip-add-drop-table \
-  --skip-add-locks \
-  --skip-comments \
-  --skip-set-charset \
-  -h "$MYSQL_HOST" -P "$MYSQL_PORT" \
-  -u "$MYSQL_USER" -p"${MYSQL_PASS}" \
-  "$MYSQL_DB" > "$TMP_DUMP"
+dest_path, pass_file = sys.argv[1], sys.argv[2]
+password = pathlib.Path(pass_file).read_text().strip()
 
-# 2. Convert to sqlite
-mysql2sqlite "$TMP_DUMP" | sqlite3 "$TMP_SQLITE"
+src = pymysql.connect(
+    host="10.0.1.51", port=3306,
+    user="vaultwarden", password=password,
+    database="vaultwarden",
+    cursorclass=pymysql.cursors.DictCursor,
+)
+dst = sqlite3.connect(dest_path)
 
-# 3. Verify the converted DB has users (sanity check before overwriting live DB)
-USER_COUNT=$(sqlite3 "$TMP_SQLITE" "SELECT COUNT(*) FROM users;" 2>/dev/null || echo 0)
+with src, dst:
+    src_cur = src.cursor()
+
+    # Recreate schema from MySQL SHOW CREATE TABLE → SQLite-compatible DDL
+    src_cur.execute("SHOW TABLES")
+    tables = [row["Tables_in_vaultwarden"] for row in src_cur.fetchall()]
+
+    dst.execute("PRAGMA foreign_keys = OFF")
+    dst.execute("BEGIN")
+
+    for table in tables:
+        src_cur.execute(f"SELECT * FROM `{table}`")
+        rows = src_cur.fetchall()
+        if not rows:
+            continue
+
+        cols = [d[0] for d in src_cur.description]
+        placeholders = ",".join("?" * len(cols))
+        col_list = ",".join(f'"{c}"' for c in cols)
+
+        # Create table if absent (minimal: all TEXT, let SQLite be flexible)
+        col_defs = ", ".join(f'"{c}" TEXT' for c in cols)
+        dst.execute(f'CREATE TABLE IF NOT EXISTS "{table}" ({col_defs})')
+        dst.execute(f'DELETE FROM "{table}"')
+
+        for row in rows:
+            dst.execute(
+                f'INSERT INTO "{table}" ({col_list}) VALUES ({placeholders})',
+                [row[c] for c in cols],
+            )
+
+    dst.execute("COMMIT")
+    dst.execute("PRAGMA foreign_keys = ON")
+
+print(f"Synced {len(tables)} tables to {dest_path}")
+PYEOF
+
+# Sanity check
+USER_COUNT=$(python3 -c "import sqlite3; c=sqlite3.connect('$TMP_SQLITE'); print(c.execute('SELECT COUNT(*) FROM users').fetchone()[0])" 2>/dev/null || echo 0)
 if [ "$USER_COUNT" -lt 1 ]; then
   echo "ERROR: converted sqlite has 0 users — aborting swap" >&2
   exit 1
 fi
 
-# 4. Atomic swap: brief container stop, replace sqlite, restart
+# Atomic swap with brief container stop
 docker stop "$CONTAINER_NAME"
 cp "$TMP_SQLITE" "${SQLITE_DB}.new"
-chown root:root "${SQLITE_DB}.new"
 chmod 644 "${SQLITE_DB}.new"
 mv "${SQLITE_DB}.new" "$SQLITE_DB"
 docker start "$CONTAINER_NAME"
 
-echo "vaultwarden sync complete: ${USER_COUNT} users, sqlite at ${SQLITE_DB}"
+echo "vaultwarden sync complete: ${USER_COUNT} users"
