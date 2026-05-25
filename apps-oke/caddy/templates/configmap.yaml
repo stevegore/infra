@@ -209,6 +209,16 @@ data:
       reverse_proxy pico:8180
     }
 
+    stats.stevegore.au {
+      reverse_proxy pico:8000
+      import defaults
+    }
+
+    photos.stevegore.au {
+      reverse_proxy pico:2342
+      import defaults
+    }
+
     stevegore.au {
       respond /health "I'm doing ok, thanks for asking :)"
       respond /healthz "I'm doing ok, thanks for asking :)"
