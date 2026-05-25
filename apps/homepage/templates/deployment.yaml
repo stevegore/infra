@@ -20,7 +20,7 @@ spec:
       initContainers:
         - name: copy-config
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
-          command: ['sh', '-c', 'mkdir -p /app/config && cp -r /config-source/* /app/config/ 2>/dev/null; true']
+          command: ['sh', '-c', 'mkdir -p /app/config && cp -rL /config-source/. /app/config/']
           volumeMounts:
             - name: config-source
               mountPath: /config-source
