@@ -1,0 +1,10 @@
+[Unit]
+Description=Hourly Vaultwarden warm-standby sync
+
+[Timer]
+OnBootSec=10min
+OnUnitActiveSec=1h
+Unit=vw-mysql-to-sqlite.service
+
+[Install]
+WantedBy=timers.target
