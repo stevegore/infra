@@ -10,7 +10,13 @@ vault:
 
   server:
     enabled: true
-    
+
+    # FQ image name required by cri-o on OKE workers (short names rejected).
+    # Pin the tag too so we don't drift on each chart reload.
+    image:
+      repository: "docker.io/hashicorp/vault"
+      tag: "1.18.1"
+
     # Resource limits for Ampere A1
     resources:
       requests:
