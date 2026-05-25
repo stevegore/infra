@@ -13,9 +13,10 @@ GROUPS = [
     ("Public Services",   ["%.stevegore.au"]),
     ("Internal",          ["Radarr","Sonarr","Jackett","Transmission","FlareSolverr",
                            "Duplicati","Stirling PDF","StravaBot","StravaKeeper",
-                           "PhotoPrism (local)","Immich (local)","Huginn (local)",
-                           "Homepage (local)","GymBooking","NuraSpace","Portainer (local)"]),
-    ("Infrastructure",    ["Ping pico.local","Ping ampere-ubuntu (WG)","TCP pico SSH"]),
+                           "Immich (direct)","Huginn (direct)","Homepage (direct)",
+                           "GymBooking","NuraSpace","Portainer (direct)","phpMyAdmin"]),
+    ("Infrastructure",    ["Ping pico","TCP pico SSH","auth.stevegore.au",
+                           "vault.stevegore.au","argocd.stevegore.au","uptime.stevegore.au"]),
 ]
 
 conn = sqlite3.connect(DB)
@@ -58,4 +59,4 @@ for gname, patterns in GROUPS:
 
 conn.commit()
 conn.close()
-print(f"\nStatus page URL: http://pico.local:3001/status/{SLUG}")
+print(f"\nStatus page URL: https://uptime.stevegore.au/status/{SLUG}")
