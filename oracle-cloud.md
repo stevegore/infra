@@ -82,13 +82,13 @@ fresh ampere host, those will be set automatically.
 
 | Application | Version | Repository | Status |
 |-------------|---------|-----------|--------|
-| ArgoCD | — | — | Installed (manages this cluster) |
-| Vault | — | HashiCorp | Unsealed with auto-unseal |
-| Caddy | — | — | 2 replicas, TLS termination for `*.stevegore.au` |
+| ArgoCD | v3.4.2 | ArgoCD | Manages this cluster |
+| Vault | 1.18.1 | HashiCorp | Unsealed with auto-unseal |
+| Caddy | 2.11.3 | Custom build | 2 replicas, TLS termination for `*.stevegore.au` |
 | Tailscale Operator | 1.98.3 | Tailscale | Manages k8s cluster membership on tailnet |
-| Vaultwarden | — | — | MySQL backend on OCI via HeatWave |
-| Uptime Kuma | — | — | SQLite backend |
-| Homepage | — | — | Service dashboard |
+| Vaultwarden | 1.36.0 | — | MySQL backend on OCI via HeatWave; security fixes (SSO CSRF, enumeration) |
+| Uptime Kuma | 1.23.16 | — | SQLite backend |
+| Homepage | 0.10.9 | — | Service dashboard |
 
 All Helm charts are defined in `apps-oke/` and synced via ArgoCD. See `argocd/applicationset-oke.yaml` for the ApplicationSet.
 
