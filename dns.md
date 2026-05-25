@@ -189,7 +189,7 @@ All services proxied through Caddy on OKE (NLB → 159.13.44.68).
 | bw.stevegore.au          | vaultwarden.vaultwarden:80 / :3012        | —        | Vaultwarden + WebSocket hub      |
 | homepage.stevegore.au    | homepage.homepage:3000                    | adminonly| Homepage dashboard               |
 | uptime.stevegore.au      | uptime-kuma.uptime-kuma:3001             | Uptime Kuma | Full UI + status page         |
-| headlamp.stevegore.au    | headlamp.headlamp:80                      | —        | Kubernetes web dashboard         |
+| headlamp.stevegore.au    | headlamp.headlamp:80                      | adminonly| Kubernetes web dashboard         |
 | openclaw.stevegore.au    | openclaw.openclaw:18789                   | —        |                                  |
 | oke-test.stevegore.au    | —                                         | —        | Smoke-test stub — remove post-migration |
 

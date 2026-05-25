@@ -6,9 +6,14 @@ headlamp:
     tag: "v0.42.0"
     pullPolicy: IfNotPresent
 
+  config:
+    # Skip token login screen — pod uses its own SA token to talk to the k8s API.
+    # Gate access via Caddy adminonly instead of relying on this for security.
+    extraArgs:
+      - "--unsafe-use-serviceaccount-token"
+
   serviceAccount:
     create: true
-    unsafeUseServiceAccountToken: true
 
   service:
     type: ClusterIP

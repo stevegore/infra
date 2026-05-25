@@ -147,6 +147,7 @@ data:
     }
 
     headlamp.stevegore.au {
+      authorize with adminonly
       reverse_proxy headlamp.headlamp.svc.cluster.local:80
       import defaults
     }
