@@ -43,10 +43,13 @@ tailscale-operator:
 # + set `advertiseRoutes` to a non-empty list when we actually need it.
 # (The Connector CRD rejects empty subnetRouter.advertiseRoutes outright.)
 connector:
-  enabled: false
+  enabled: true
   hostname: oke-connector
-  # Routes to ADVERTISE outward onto the tailnet. Required when enabled=true.
-  advertiseRoutes: []
+  # OCI private subnet — lets pico reach MySQL HeatWave at 10.0.1.51 for the
+  # vaultwarden warm-standby sync (§7.1.1). Needs route approval in Tailscale
+  # admin console (or an autoApprovers ACL entry for tag:k8s-operator).
+  advertiseRoutes:
+    - "10.0.1.0/24"
   # Tags applied to the connector device — must be permitted in Tailscale ACLs.
   tags:
     - tag:k8s-operator

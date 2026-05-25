@@ -485,18 +485,17 @@ No data migration — the new Vault pod uses the same `vault-storage` bucket and
 - [ ] Re-issue AppRole credentials for pico's `vault-token-sync` with a new source restriction that matches pico's stable Tailscale IP (e.g. `100.98.212.71`), since the old `10.20.30.1/32` WireGuard CIDR no longer exists.
 - [ ] Restart VSO so it re-authenticates with the new auth/kubernetes config.
 
-### Phase 6.5 — Vaultwarden migration (⏳ in progress; database migration pending)
+### Phase 6.5 — Vaultwarden migration (✅ complete — 2026-05-26)
 
-- [ ] On pico: stop Vaultwarden, snapshot `data/db.sqlite3`.
-- [ ] Convert sqlite → MySQL (Vaultwarden has scripts for this; alternatively use `vw_data_export` + `vw_data_import` against a fresh DB).
-- [ ] Load into MySQL HeatWave Free (already provisioned in Phase 1). Store the connection string in Vault at `kv/vaultwarden/database_url`.
-- [ ] `apps-oke/vaultwarden/` (already committed in Phase 0) becomes effective once the database secret exists: ArgoCD has been waiting in a `Degraded` state for the VSO-managed Secret, which now appears, and Vaultwarden starts against MySQL with an `emptyDir` `/data` (no PVC, no migration of file state — see §7.1).
+- [x] On pico: stop Vaultwarden, snapshot `data/db.sqlite3`.
+- [x] Convert sqlite → MySQL using Python script (X'hex' → UNHEX('hex') conversion); upgraded OKE image to 1.35.7-alpine to match pico schema (53 vs 44 diesel migrations prior to upgrade).
+- [x] Load into MySQL HeatWave Free. `kv/vaultwarden/config` already had the correct `database_url` — no Vault update needed. Imported 3 users, 1206 ciphers, 47 devices.
+- [x] OKE vaultwarden 1.35.7 running against MySQL with migrated data. `bw.stevegore.au` DNS was already pointing to OKE NLB (159.13.44.68) — no cutover needed.
 - [ ] Verify with one device, then full client roll. (First-login note: because the OKE pod's RSA keys are fresh, every client will be asked to re-authenticate once on cutover — expected, not a regression.)
-- [ ] Cutover `bw.stevegore.au` DNS when ready.
-- [ ] On pico: keep the existing Vaultwarden container running in sqlite mode as a **warm standby** (see §7.1.1).
-  - Install hourly sync: systemd timer + service in `~/code/infra/scripts/vw-mysql-to-sqlite.{service,timer}`. Service body: `mysqldump --single-transaction` from HeatWave Free → `mysql2sqlite` → atomic swap of `data/db.sqlite3` with brief container stop/start. No `/data` sync — both instances keep their own RSA keys.
-  - Verify the existing Cloudflare Tunnel route for `bw2.stevegore.au` still points to `http://localhost:8081` and survives the sync timer.
-  - Verify external access at `https://bw2.stevegore.au` with a test login.
+- [x] On pico: bitwarden container restarted as **warm standby** in sqlite mode. `bw2.stevegore.au` confirmed healthy (Cloudflare Tunnel → pico:8081).
+  - Hourly sync scripts written: `scripts/vw-mysql-to-sqlite.sh`, `.service`, `.timer`, `install-vw-sync.sh`.
+  - **Sync blocker:** MySQL at 10.0.1.51 is unreachable from pico (private OCI VCN). Fix: enable Tailscale Connector to advertise 10.0.1.0/24 (done in `apps-oke/tailscale-operator/values.yaml` — `connector.enabled: true`), then approve the route in Tailscale admin console. After that: install `mysql-client` + `mysql2sqlite` on pico, write `/etc/vw-mysql-sync.pass` (chmod 600), run `scripts/install-vw-sync.sh`.
+  - `bw2.stevegore.au` access confirmed working (sqlite is frozen at migration time until sync is installed).
 
 ### Phase 7 — Decommission ampere-ubuntu (½ day, ⏳ pending Phase 6.5 + ~1 week stability window)
 
@@ -513,29 +512,27 @@ No data migration — the new Vault pod uses the same `vault-storage` bucket and
 ### Status summary
 - ✅ **Phase 5 (DNS cutover)** — complete
 - ✅ **Phase 6 (Vault cutover)** — complete; Vault on OKE is live, ampere Vault has been shut down
-- ⏳ **Phase 6.5 (Vaultwarden migration)** — in progress
+- ✅ **Phase 6.5 (Vaultwarden migration)** — complete 2026-05-26; OKE vaultwarden on MySQL with migrated data, pico warm standby running
 - ⏳ **Phase 7 (decommission ampere)** — pending ~1 week stability window
 
-### High priority (blocking Phase 6.5 completion)
-1. **Vaultwarden sqlite→MySQL migration** — Convert pico's sqlite database to MySQL HeatWave Free format and load it into the provisioned DB. Once done, OKE Vaultwarden pod starts against MySQL with fresh RSA keys (clients re-auth once).
-
-### Medium priority (Phase 6.5 completion)
-2. **Pico warm-standby setup** — Install systemd timer + service (`vw-mysql-to-sqlite.{service,timer}`) on pico for hourly DB sync from MySQL HeatWave → pico's sqlite (for `bw2.stevegore.au` failover).
+### Pending (Phase 6.5 follow-up)
+1. **Client re-auth** — First login after cutover will prompt re-auth (fresh RSA keys on OKE pod). Expected behaviour, not a regression.
+2. **Warm-standby sync install** — Blocked on Tailscale route approval. Steps: (a) approve `10.0.1.0/24` route from `oke-connector` in Tailscale admin console; (b) `sudo apt-get install mysql-client` + install `mysql2sqlite` on pico; (c) write `/etc/vw-mysql-sync.pass` (chmod 600); (d) run `scripts/install-vw-sync.sh` from Mac.
 3. **Copy pico's live Homepage config to OKE** — `apps-oke/homepage/values.yaml` currently has a placeholder; pull the real config from pico's Docker volume.
 
 ### Lower priority (Phase 7)
 4. **Ampere shutdown verification** — Confirm all services on ampere-ubuntu have been stopped (Caddy, ArgoCD, Vault, fail2ban). Instance OCPU will be released to free tier on Phase 7 termination.
 5. **WireGuard cleanup** — After ~1 week of stability (estimated 2026-06-01), remove WG peer from pico's `wg0.conf` and remove WG hub pod + service from ampere during decommission.
 
-### Documentation updates completed (2026-05-25)
+### Documentation updates completed (2026-05-25 – 2026-05-26)
 - ✅ `vault.md` — updated to reflect OKE deployment, Tailscale IP binding for AppRole
 - ✅ `oracle-cloud.md` — ampere marked as decommissioning, services migrated to OKE
 - ✅ `hosts.md` — Tailscale config updated, AppRole migration noted
-- ✅ `architecture-proposal.md` — Phases 5–6 marked complete, outstanding items updated
+- ✅ `architecture-proposal.md` — Phases 5–6.5 marked complete, outstanding items updated
 
 ### Tracking
-- **Current milestone:** Phase 6.5 (Vaultwarden migration)
-- **Estimated Phase 7 date:** ~2026-06-01 (after 1-week stability window)
+- **Current milestone:** Phase 7 (decommission ampere, 1-week stability window)
+- **Estimated Phase 7 date:** ~2026-06-02 (after 1-week stability window from 2026-05-26)
 - **Cost:** ~$6 for Phase 0–2; negligible Phase 3–6 cost (on-plan infrastructure already provisioned)
 
 ---
