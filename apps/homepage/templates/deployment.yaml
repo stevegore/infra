@@ -17,6 +17,15 @@ spec:
         checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
     spec:
       serviceAccountName: {{ include "homepage.fullname" . }}
+      initContainers:
+        - name: copy-config
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          command: ['sh', '-c', 'cp -r /config-source/* /app/config/ 2>/dev/null; true']
+          volumeMounts:
+            - name: config-source
+              mountPath: /config-source
+            - name: config
+              mountPath: /app/config
       containers:
         - name: homepage
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
@@ -48,8 +57,10 @@ spec:
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
       volumes:
-        - name: config
+        - name: config-source
           configMap:
             name: {{ include "homepage.fullname" . }}-config
+        - name: config
+          emptyDir: {}
         - name: logs
           emptyDir: {}
