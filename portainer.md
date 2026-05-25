@@ -485,7 +485,7 @@ services:
 **Project Path:** `/data/compose/29`  
 **Compose Version:** v2  
 **Public:** Yes (Portainer resource control set to public)  
-**Last Updated:** 2025-12-09  
+**Last Updated:** 2026-05-25  
 **Created:** 2023-07-06
 
 **Containers:**
@@ -503,6 +503,9 @@ services:
     image: stevegore/ttyd
     labels:
       - ttyd
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - "touch /home/visitor/.zshrc && exec /usr/bin/tini -- ttyd --writable -t fontSize=16 -t 'fontFamily=Consolas, Monaco, Courier New, monospace' -p 8788 zsh"
     volumes:
       - homedir:/home/visitor
       - tmpdir:/tmp
@@ -545,12 +548,12 @@ volumes:
 
 **Purpose:** Web-based terminal (ttyd) with automatic restart management for public access  
 **Ports:** 8788 (terminal web UI)  
-**Command:** `ttyd --writable -t fontSize=14 -t 'fontFamily=Consolas, Monaco, Courier New, monospace' -p 8788 zsh`  
 **Resource Limits:** 0.5 CPU cores, 250M memory, 250 max processes, 500 file descriptors  
 **Storage:** All tmpfs-backed (ephemeral) - homedir 500M (uid/gid 222), tmpdir 500M  
 **Restarter:** Sidecar container restarts ttyd every 30 minutes via Docker socket  
 **Volumes:** `stevegore-au_homedir` (tmpfs), `stevegore-au_tmpdir` (tmpfs)  
-**Note:** ttyd uses `restart: always` (not `unless-stopped`) because on 2026-05-24 the host rebooted while ttyd was in an `exited` state — `unless-stopped` skips containers exited at daemon shutdown, leaving the public site 502 for ~14h until the container was manually started.
+**Note:** ttyd uses `restart: always` (not `unless-stopped`) because on 2026-05-24 the host rebooted while ttyd was in an `exited` state — `unless-stopped` skips containers exited at daemon shutdown, leaving the public site 502 for ~14h until the container was manually started.  
+**Note:** The entrypoint runs `touch /home/visitor/.zshrc` before launching ttyd. Without this, the tmpfs homedir starts empty on every container start and zsh triggers the `zsh-newuser-install` wizard instead of launching a shell.
 
 ---
 

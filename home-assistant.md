@@ -4,8 +4,19 @@ Supervised install on `pico` (192.168.4.120). Container: `homeassistant` (Docker
 
 External access:
 
-- `hass.stevegore.au` — via WireGuard tunnel → Caddy on ampere-ubuntu → pico:8123
+- `hass.stevegore.au` — OKE NLB → Caddy → Tailscale Egress Service (`pico` svc) → pico:8123
 - `hass2.stevegore.au` — via Cloudflare Tunnel directly from pico
+
+**`trusted_proxies` requirement:** HASS rejects proxied requests unless the forwarding host is trusted. `/config/configuration.yaml` must include the OKE pod CIDR so Caddy pods pass X-Forwarded-For correctly:
+```yaml
+http:
+  use_x_forwarded_for: true
+  trusted_proxies:
+    - 10.20.30.2    # ampere-ubuntu WireGuard
+    - 10.20.30.3    # laptop WireGuard
+    - 127.0.0.1
+    - 10.244.0.0/16 # OKE pod CIDR (Caddy pods)
+```
 
 Long-lived access token: `~/code/infra/home-assistant.token` (gitignored via `*.token`).
 

@@ -1,8 +1,8 @@
-# HashiCorp Vault on ampere-ubuntu
+# HashiCorp Vault on OKE
 
 ## Overview
 
-HashiCorp Vault deployment on MicroK8s with:
+HashiCorp Vault deployment on Oracle Kubernetes Engine with:
 - OCI KMS auto-unseal (HSM-protected AES-256)
 - OCI Object Storage backend (versioned)
 - Vault Secrets Operator (VSO) for Kubernetes secret sync
@@ -18,16 +18,16 @@ HashiCorp Vault deployment on MicroK8s with:
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                        ampere-ubuntu                             │
+│                      OKE Cluster (homelab)                       │
+│                        (Kubernetes 1.35)                         │
 │  ┌─────────────────┐      ┌─────────────────────────────────┐  │
-│  │  Caddy (TLS)    │      │         MicroK8s Cluster        │  │
-│  │                 │      │  ┌─────────────────────────────┐│  │
-│  │ vault.stevegore │──────│▶ │      vault namespace        ││  │
-│  │ .au:443         │      │  │  ┌───────────────────────┐  ││  │
-│  │                 │      │  │  │   Vault Server        │  ││  │
-│  │ (GitHub OAuth)  │      │  │  │   NodePort: 30820     │  ││  │
-│  └─────────────────┘      │  │  └───────────────────────┘  ││  │
-│                           │  └─────────────────────────────┘│  │
+│  │  Caddy (TLS)    │      │      vault namespace            │  │
+│  │                 │      │  ┌───────────────────────────┐  │  │
+│  │ vault.stevegore │──────│▶ │   Vault StatefulSet (1 pod) │  │
+│  │ .au:443         │      │  │   Storage: OCI Object Store │  │
+│  │                 │      │  │   Unseal: OCI KMS          │  │
+│  │ (Caddy proxy)   │      │  └───────────────────────────┘  │  │
+│  └─────────────────┘      │                                  │  │
 │                           │  ┌─────────────────────────────┐│  │
 │                           │  │ vault-secrets-operator ns   ││  │
 │                           │  │  ┌───────────────────────┐  ││  │
@@ -64,13 +64,13 @@ Used by Vault Secrets Operator and application pods to authenticate.
 
 ### 2. AppRole (for pico → kv/homelab/* token sync)
 
-Used by pico to push `*.token` files in `~/code/infra/` into Vault. Bound to pico's WireGuard IP so leaked credentials are useless from anywhere else.
+Used by pico to push `*.token` files in `~/code/infra/` into Vault. Bound to pico's Tailscale node IP so leaked credentials are useless from anywhere else.
 
 | Role | CIDR (secret_id + token) | Policies | Token TTL |
 |------|---------------------------|----------|-----------|
-| pico-token-sync | 10.20.30.1/32 | pico-token-sync | 10m / 30m max |
+| pico-token-sync | 100.98.212.71/32 | pico-token-sync | 10m / 30m max |
 
-**Path:** Pico hits Vault directly over WireGuard at `http://10.20.30.2:30820` (NodePort, plaintext over the encrypted WG tunnel). The Service runs `externalTrafficPolicy: Local` so kube-proxy doesn't SNAT — Vault sees the real source IP. The listener also trusts `X-Forwarded-For` from Caddy (`127.0.0.0/8`, `10.0.0.0/8`) so the public path through `vault.stevegore.au` produces accurate source IPs too.
+**Path:** Pico hits Vault over Tailscale at `http://10.96.0.1:8200` (Vault service internal IP) through the Tailscale mesh. The service-to-Vault path is encrypted end-to-end via Tailscale. Pico's stable Tailscale IP (`100.98.212.71`, MagicDNS: `pico.chipmunk-fir.ts.net`) replaces the old `10.20.30.1/32` WireGuard address, aligning with the post-WireGuard target architecture.
 
 **Bootstrap (run once with the root token on pico):**
 ```bash
@@ -167,7 +167,7 @@ path "kv/metadata/openclaw" {
 VSO syncs Vault secrets to native Kubernetes Secrets, eliminating the need for sidecar injection.
 
 **Namespace:** vault-secrets-operator
-**Helm Chart:** hashicorp/vault-secrets-operator v0.9.0
+**Helm Chart:** hashicorp/vault-secrets-operator (current version, deployed on OKE)
 
 ### Configuration
 
@@ -179,6 +179,8 @@ vault-secrets-operator:
     address: "http://vault.vault.svc.cluster.local:8200"
     skipTLSVerify: true
 ```
+
+Vault is deployed as a StatefulSet in the `vault` namespace and auto-unseals via OCI KMS. VSO in the `vault-secrets-operator` namespace authenticates via Kubernetes service account and syncs `VaultStaticSecret` CRDs into native k8s Secrets across all namespaces.
 
 ### CRDs
 
@@ -218,14 +220,21 @@ spec:
 ### Verifying VSO Status
 
 ```bash
+# Set kubeconfig for OKE
+export KUBECONFIG=~/.kube/oke-homelab.config
+
 # Check VSO pods
-microk8s kubectl get pods -n vault-secrets-operator
+kubectl get pods -n vault-secrets-operator
+
+# Check Vault pod is unsealed and healthy
+kubectl get pods -n vault
+kubectl logs -n vault vault-0 | tail -20
 
 # Check VaultStaticSecret status
-microk8s kubectl get vaultstaticsecret -A
+kubectl get vaultstaticsecret -A
 
 # Check synced K8s secret
-microk8s kubectl get secret <secret-name> -n <namespace> -o yaml
+kubectl get secret <secret-name> -n <namespace> -o yaml
 ```
 
 ---
