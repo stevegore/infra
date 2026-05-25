@@ -89,17 +89,49 @@ def get_pico_stats():
 def get_oke_stats():
     """Get OKE cluster stats."""
     try:
+        # Try to find kubectl in PATH or home directory
+        kubectl_paths = [
+            'kubectl',
+            '/home/steve/kubectl',
+            '/usr/local/bin/kubectl',
+            '/snap/bin/kubectl',
+        ]
+        kubectl_cmd = None
+        for path in kubectl_paths:
+            try:
+                # Check if the file exists and is executable
+                if os.path.isfile(path) and os.access(path, os.X_OK):
+                    kubectl_cmd = path
+                    break
+            except (OSError, subprocess.TimeoutExpired):
+                continue
+
+        if not kubectl_cmd:
+            return {
+                'cluster': 'homelab',
+                'status': 'unavailable',
+                'message': 'kubectl not installed'
+            }
+
+        kubeconfig_path = os.path.expanduser('~/.kube/oke-homelab.config')
+        if not os.path.exists(kubeconfig_path):
+            return {
+                'cluster': 'homelab',
+                'status': 'unavailable',
+                'message': 'kubeconfig not found on pico'
+            }
+
         # Try to get node info from kubeconfig
         result = subprocess.run(
-            ['kubectl', '--kubeconfig=/home/steve/.kube/oke-homelab.config',
+            [kubectl_cmd, f'--kubeconfig={kubeconfig_path}',
              'get', 'nodes', '-o', 'json'],
             capture_output=True, text=True, timeout=5
         )
         if result.returncode != 0:
             return {
                 'cluster': 'homelab',
-                'status': 'unreachable',
-                'message': 'kubeconfig not available'
+                'status': 'unavailable',
+                'message': 'kubeconfig not accessible'
             }
 
         data = json.loads(result.stdout)
@@ -273,6 +305,6 @@ def render_html(stats):
     return html
 
 if __name__ == '__main__':
-    server = HTTPServer(('0.0.0.0', 8000), StatsHandler)
-    print('Stats server running on port 8000')
+    server = HTTPServer(('0.0.0.0', 8001), StatsHandler)
+    print('Stats server running on port 8001')
     server.serve_forever()

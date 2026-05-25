@@ -210,7 +210,7 @@ data:
     }
 
     stats.stevegore.au {
-      reverse_proxy pico:8000
+      reverse_proxy pico:8001
       import defaults
     }
 
