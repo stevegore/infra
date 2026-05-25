@@ -1446,7 +1446,7 @@ docker start uptime-kuma
 ### Bitwarden (Vaultwarden) — warm standby
 
 **Container:** bitwarden  
-**Image:** vaultwarden/server:1.35.7-alpine  
+**Image:** vaultwarden/server:1.36.0-alpine  
 **Status:** Running (warm standby — primary is OKE `vaultwarden` namespace)  
 **Network:** bridge  
 **Ports:** 8081 -> 80 (web UI), 3012 -> 3012 (WebSocket notifications)  
