@@ -31,6 +31,15 @@ OPTIONAL_FIELDS = [
     "keyword",
 ]
 
+OPTIONAL_DEFAULTS = {
+    "url": None,
+    "hostname": None,
+    "port": None,
+    "accepted_statuscodes_json": ACCEPT_OK,
+    "maxredirects": 0,
+    "keyword": None,
+}
+
 retired_monitor_names = {
     "Ping ampere-ubuntu (WG)",
     "photos.stevegore.au",
@@ -63,12 +72,12 @@ monitors = [
 
     {"name": "Radarr", "type": "http", "kwargs": {"url": "http://pico:7878/", "maxredirects": 5, "accepted_statuscodes_json": ACCEPT_OK}, "tags": ["internal", "media"]},
     {"name": "Sonarr", "type": "http", "kwargs": {"url": "http://pico:8989/", "maxredirects": 5, "accepted_statuscodes_json": ACCEPT_OK}, "tags": ["internal", "media"]},
-    {"name": "Jackett", "type": "http", "kwargs": {"url": "http://pico:9117/UI/Dashboard", "maxredirects": 5, "accepted_statuscodes_json": ACCEPT_OK}, "tags": ["internal", "media"]},
+    {"name": "Jackett", "type": "http", "kwargs": {"url": "http://pico:9117/UI/Dashboard", "maxredirects": 0, "accepted_statuscodes_json": ACCEPT_302}, "tags": ["internal", "media"]},
     {"name": "Transmission", "type": "http", "kwargs": {"url": "http://pico:9092/transmission/web/", "maxredirects": 5, "accepted_statuscodes_json": ACCEPT_OK_REDIR}, "tags": ["internal", "media"]},
     {"name": "FlareSolverr", "type": "http", "kwargs": {"url": "http://pico:8191/", "maxredirects": 0, "accepted_statuscodes_json": ACCEPT_OK}, "tags": ["internal", "media"]},
     {"name": "Duplicati", "type": "http", "kwargs": {"url": "http://pico:8200/", "maxredirects": 0, "accepted_statuscodes_json": ACCEPT_OK_REDIR}, "tags": ["internal", "infra"]},
     {"name": "Stirling PDF", "type": "http", "kwargs": {"url": "http://pico:8083/", "maxredirects": 5, "accepted_statuscodes_json": ACCEPT_OK}, "tags": ["internal"]},
-    {"name": "StravaBot", "type": "http", "kwargs": {"url": "http://pico:8082/", "maxredirects": 0, "accepted_statuscodes_json": ACCEPT_OK_REDIR}, "tags": ["internal"]},
+    {"name": "StravaBot", "type": "port", "kwargs": {"hostname": "pico", "port": 8082}, "tags": ["internal"]},
     {"name": "StravaKeeper", "type": "http", "kwargs": {"url": "http://pico:8180/", "maxredirects": 0, "accepted_statuscodes_json": ACCEPT_OK_REDIR}, "tags": ["internal"]},
     {"name": "Immich (direct)", "type": "http", "kwargs": {"url": "http://pico:2283/api/server/ping", "maxredirects": 0, "keyword": "pong", "accepted_statuscodes_json": ACCEPT_OK}, "tags": ["internal", "photos"], "aliases": ["Immich (local)"]},
     {"name": "Huginn (direct)", "type": "http", "kwargs": {"url": "http://pico:3000/", "maxredirects": 5, "accepted_statuscodes_json": ACCEPT_OK}, "tags": ["internal"], "aliases": ["Huginn (local)"]},
@@ -102,7 +111,7 @@ def reconcile_monitor(spec):
         "timeout": spec["kwargs"].get("timeout", DEFAULT_TIMEOUT),
     }
     for field in OPTIONAL_FIELDS:
-        fields[field] = spec["kwargs"].get(field)
+        fields[field] = spec["kwargs"].get(field, OPTIONAL_DEFAULTS[field])
 
     if existing:
         monitor_id, _ = existing
