@@ -48,6 +48,8 @@ data:
           crypto default token lifetime 3600
           crypto key sign-verify from file /etc/caddy/keys/jwt-private.pem
           cookie domain stevegore.au
+          cookie samesite lax
+          cookie secure
           enable identity provider github
           ui {
             links {
@@ -67,6 +69,7 @@ data:
           crypto key verify from file /etc/caddy/keys/jwt-public.pem
           allow roles authp/admin authp/user
           validate bearer header
+          validate cookie
           inject headers with claims
         }
 
