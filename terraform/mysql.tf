@@ -84,7 +84,14 @@ resource "oci_mysql_mysql_db_system" "heatwave" {
   data_storage_size_in_gb = 50
   is_highly_available     = false
 
-  nsg_ids = [oci_core_network_security_group.mysql.id]
+  # nsg_ids INTENTIONALLY OMITTED: attaching any NSG at create time triggers
+  # an undocumented "AuthorizationFailed" failure from the MySQL service even
+  # with the OCI-documented `manage virtual-network-family` grant. Access
+  # control is handled via security list rules on Private Subnet-nebula
+  # (3306 + 33060 from 10.0.1.0/24) which is functionally equivalent because
+  # the subnet only holds OKE workers + this DB. The standalone mysql-heatwave
+  # NSG resource is kept for now in case OCI fixes this (or we want to attach
+  # via update post-create); remove if it's still gathering dust at next pass.
 
   # backup_policy intentionally omitted — OCI rejects it at create time
   # for MySQL.Free DB systems ("Cannot specify backup policy with

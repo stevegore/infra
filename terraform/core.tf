@@ -230,6 +230,35 @@ resource oci_core_security_list export_nebula-private {
     #tcp_options = <<Optional value not found in discovery>>
     #udp_options = <<Optional value not found in discovery>>
   }
+  # MySQL HeatWave Free DB endpoint — workers in the same Private Subnet
+  # connect on 3306 (classic) and 33060 (X protocol). NSG-based isolation
+  # would be tighter but the OCI MySQL service rejects any nsg_ids attached
+  # at create time with "AuthorizationFailed", even with the documented
+  # `manage virtual-network-family` policy. SL-based allow from the Private
+  # Subnet CIDR (10.0.1.0/24) is functionally equivalent here since the
+  # subnet only holds OKE workers.
+  ingress_security_rules {
+    description = "MySQL classic protocol from Private Subnet"
+    protocol    = "6"
+    source      = "10.0.1.0/24"
+    source_type = "CIDR_BLOCK"
+    stateless   = "false"
+    tcp_options {
+      min = "3306"
+      max = "3306"
+    }
+  }
+  ingress_security_rules {
+    description = "MySQL X protocol from Private Subnet"
+    protocol    = "6"
+    source      = "10.0.1.0/24"
+    source_type = "CIDR_BLOCK"
+    stateless   = "false"
+    tcp_options {
+      min = "33060"
+      max = "33060"
+    }
+  }
   vcn_id = oci_core_vcn.export_nebula.id
 }
 
