@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Push every *.token file in TOKEN_DIR to Vault under kv/homelab/<basename>.
-# Authenticates via AppRole over WireGuard (Vault sees source IP 10.20.30.1).
+# Authenticates via AppRole; Vault sees pico's Tailscale IP (100.98.212.71).
 set -euo pipefail
 
-export VAULT_ADDR="${VAULT_ADDR:-http://10.20.30.2:30820}"
+export VAULT_ADDR="${VAULT_ADDR:-http://vault-oke:8200}"
 CRED_DIR="${CRED_DIR:-$HOME/.config/vault-token-sync}"
 TOKEN_DIR="${TOKEN_DIR:-$HOME/code/infra}"
 # Don't sync the bootstrap credential into the thing it bootstraps.

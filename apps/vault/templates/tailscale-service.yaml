@@ -1,0 +1,24 @@
+# Exposes Vault port 8200 on the Tailscale network as "vault-oke".
+# pico's vault-token-sync uses VAULT_ADDR=http://vault-oke:8200 so the
+# AppRole CIDR check sees pico's Tailscale IP (100.98.212.71) rather than
+# its public internet IP.
+apiVersion: v1
+kind: Service
+metadata:
+  name: vault-tailscale
+  namespace: vault
+  annotations:
+    tailscale.com/hostname: "vault-oke"
+  labels:
+    app.kubernetes.io/name: vault-tailscale
+spec:
+  type: LoadBalancer
+  loadBalancerClass: tailscale
+  selector:
+    app.kubernetes.io/name: vault
+    component: server
+  ports:
+    - name: http
+      port: 8200
+      targetPort: 8200
+      protocol: TCP
