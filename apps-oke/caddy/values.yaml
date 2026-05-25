@@ -36,6 +36,10 @@ service:
     # Preserve client source IPs at L4 (NLB pass-through) and stop kube-proxy
     # SNAT so caddy-security's IP-based rules see the real client.
     oci.oraclecloud.com/oci-network-load-balancer-external-traffic-policy: "Local"
+    # Tell the OCI CCM to manage security list rules on both the NLB subnet
+    # (frontend) and the worker node subnet (backend NodePorts). Without this the
+    # CCM defaults to None and NodePort rules must be added manually.
+    oci-network-load-balancer.oraclecloud.com/security-list-management-mode: "All"
   # externalTrafficPolicy=Local pairs with the NLB pass-through above.
   externalTrafficPolicy: Local
   # Reserved public IP minted in terraform/nlb.tf — survives NLB recreation.
