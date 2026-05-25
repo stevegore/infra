@@ -15,7 +15,7 @@ TMP_SQLITE=$(mktemp /tmp/vw-sqlite.XXXXXX.db)
 trap 'rm -f "$TMP_SQLITE"' EXIT
 
 python3 -W ignore::DeprecationWarning - "$TMP_SQLITE" "$PASS_FILE" << 'PYEOF'
-import sys, pymysql, sqlite3, pathlib
+import sys, pymysql, sqlite3, re, pathlib
 
 dest_path, pass_file = sys.argv[1], sys.argv[2]
 password = pathlib.Path(pass_file).read_text().strip()
@@ -28,10 +28,26 @@ src = pymysql.connect(
 )
 dst = sqlite3.connect(dest_path)
 
+def mysql_to_sqlite_type(mysql_type):
+    """Convert MySQL type to SQLite type."""
+    mysql_type = mysql_type.upper().split('(')[0].split()[0]
+    type_map = {
+        'INT': 'INTEGER',
+        'INTEGER': 'INTEGER',
+        'BIGINT': 'INTEGER',
+        'TINYINT': 'INTEGER',
+        'SMALLINT': 'INTEGER',
+        'DECIMAL': 'REAL',
+        'FLOAT': 'REAL',
+        'DOUBLE': 'REAL',
+        'BLOB': 'BLOB',
+        'LONGBLOB': 'BLOB',
+    }
+    return type_map.get(mysql_type, 'TEXT')
+
 with src, dst:
     src_cur = src.cursor()
 
-    # Recreate schema from MySQL SHOW CREATE TABLE → SQLite-compatible DDL
     src_cur.execute("SHOW TABLES")
     tables = [row["Tables_in_vaultwarden"] for row in src_cur.fetchall()]
 
@@ -39,25 +55,38 @@ with src, dst:
     dst.execute("BEGIN")
 
     for table in tables:
-        src_cur.execute(f"SELECT * FROM `{table}`")
-        rows = src_cur.fetchall()
-        if not rows:
+        # Get column info from MySQL INFORMATION_SCHEMA
+        src_cur.execute(f"SELECT COLUMN_NAME, COLUMN_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='{table}' AND TABLE_SCHEMA='vaultwarden' ORDER BY ORDINAL_POSITION")
+        columns = src_cur.fetchall()
+
+        if not columns:
             continue
 
+        col_defs_sqlite = []
+        for col_info in columns:
+            col_name = col_info['COLUMN_NAME']
+            col_type = col_info['COLUMN_TYPE']
+            sqlite_type = mysql_to_sqlite_type(col_type)
+            col_defs_sqlite.append(f'"{col_name}" {sqlite_type}')
+
+        ddl = f'CREATE TABLE IF NOT EXISTS "{table}" ({", ".join(col_defs_sqlite)})'
+        dst.execute(ddl)
+
+        # Now sync data
+        src_cur.execute(f"SELECT * FROM `{table}`")
+        rows = src_cur.fetchall()
         cols = [d[0] for d in src_cur.description]
-        placeholders = ",".join("?" * len(cols))
-        col_list = ",".join(f'"{c}"' for c in cols)
 
-        # Create table if absent (minimal: all TEXT, let SQLite be flexible)
-        col_defs = ", ".join(f'"{c}" TEXT' for c in cols)
-        dst.execute(f'CREATE TABLE IF NOT EXISTS "{table}" ({col_defs})')
-        dst.execute(f'DELETE FROM "{table}"')
+        if rows and cols:
+            dst.execute(f'DELETE FROM "{table}"')
+            placeholders = ",".join("?" * len(cols))
+            col_list = ",".join(f'"{c}"' for c in cols)
 
-        for row in rows:
-            dst.execute(
-                f'INSERT INTO "{table}" ({col_list}) VALUES ({placeholders})',
-                [row[c] for c in cols],
-            )
+            for row in rows:
+                dst.execute(
+                    f'INSERT INTO "{table}" ({col_list}) VALUES ({placeholders})',
+                    [row[c] for c in cols],
+                )
 
     dst.execute("COMMIT")
     dst.execute("PRAGMA foreign_keys = ON")
