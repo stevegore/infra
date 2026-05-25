@@ -57,19 +57,21 @@ spec:
               containerPort: 443
               protocol: UDP
           env:
-            # Sourced from VSO-managed Secret. caddy-security reads these via
+            # Sourced from VSO-managed Secrets. caddy-security reads these via
             # {env.*} placeholders in the Caddyfile.
             - name: GITHUB_CLIENT_ID
               valueFrom:
                 secretKeyRef:
-                  name: {{ .Values.vault.secretName }}
+                  name: {{ .Values.vault.config.secretName }}
                   key: github_client_id
             - name: GITHUB_CLIENT_SECRET
               valueFrom:
                 secretKeyRef:
-                  name: {{ .Values.vault.secretName }}
+                  name: {{ .Values.vault.config.secretName }}
                   key: github_client_secret
             # certmagic-s3 storage backend (Object Storage S3-compat endpoint).
+            # S3 creds come from kv/oci/caddy-acme (mounted as caddy-acme-s3),
+            # provisioned by scripts/provision-caddy-acme-creds.sh.
             - name: S3_HOST
               value: {{ .Values.s3.host | quote }}
             - name: S3_BUCKET
@@ -79,13 +81,13 @@ spec:
             - name: AWS_ACCESS_KEY_ID
               valueFrom:
                 secretKeyRef:
-                  name: {{ .Values.vault.secretName }}
-                  key: s3_access_key
+                  name: {{ .Values.vault.s3.secretName }}
+                  key: access_key
             - name: AWS_SECRET_ACCESS_KEY
               valueFrom:
                 secretKeyRef:
-                  name: {{ .Values.vault.secretName }}
-                  key: s3_secret_key
+                  name: {{ .Values.vault.s3.secretName }}
+                  key: secret_key
           volumeMounts:
             - name: caddyfile
               mountPath: /etc/caddy/Caddyfile
@@ -120,7 +122,7 @@ spec:
             name: {{ include "caddy.fullname" . }}-config
         - name: jwt-keys
           secret:
-            secretName: {{ .Values.vault.secretName }}
+            secretName: {{ .Values.vault.config.secretName }}
             items:
               - key: jwt_private_key
                 path: jwt-private.pem

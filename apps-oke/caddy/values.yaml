@@ -64,23 +64,26 @@ s3:
 # Email used for Let's Encrypt registration.
 acmeEmail: steve.j.gore@gmail.com
 
-# VSO config — pulls a single secret with all sensitive values.
-# Expected fields at kv/caddy/config:
-#   github_client_id        — caddy-security OAuth app client ID
-#   github_client_secret    — caddy-security OAuth app secret
-#   jwt_private_key         — RSA private key PEM (signs JWTs at auth.stevegore.au)
-#   jwt_public_key          — RSA public key PEM (verifies JWTs across services)
-#   s3_access_key           — OCI Customer Secret Key access ID for caddy-acme bucket
-#   s3_secret_key           — OCI Customer Secret Key secret for caddy-acme bucket
+# VSO config — pulls TWO Vault secrets:
+#   config:  kv/caddy/config — app-specific creds (github oauth + JWT keys)
+#       fields: github_client_id, github_client_secret,
+#               jwt_private_key, jwt_public_key
+#   s3:      kv/oci/caddy-acme — OCI Customer Secret Key for the S3 bucket
+#       fields: access_key, secret_key  (plus metadata ignored here)
+# Split because the S3 key lives in kv/oci/* (canonical OCI namespace,
+# minted by scripts/provision-caddy-acme-creds.sh) while config is per-app.
 vault:
   enabled: true
   mount: kv
-  path: caddy/config
   refreshAfter: 1h
   # Existing VSO ClusterRoleBinding role from bootstrap.
   authRole: vault-secrets-operator
-  # Name of the Kubernetes Secret VSO produces.
-  secretName: caddy-config
+  config:
+    path: caddy/config
+    secretName: caddy-config
+  s3:
+    path: oci/caddy-acme
+    secretName: caddy-acme-s3
 
 # Pod-level placement.
 podAntiAffinity:
