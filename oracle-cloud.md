@@ -44,7 +44,8 @@ materializes both `~/.oci/config` and `~/oci.pem`.
 | Private IP          | 10.0.0.127                                                                                    |
 | Public IP           | 158.178.136.162                                                                               |
 | Instance OCID       | `ocid1.instance.oc1.ap-sydney-1.anzxsljrxbp2yoqcuh4ka3eoi4novuompif6tkoiqij57zi7fxmh24b5q53a` |
-| Services            | WireGuard VPN hub, Caddy reverse proxy, MicroK8s (ArgoCD, Vault)                              |
+| Services            | **Decommissioning** — WireGuard hub only (Phase 7 teardown pending). Caddy, ArgoCD, Vault migrated to OKE. |
+| Status              | **Shut down** (Phase 6 complete) — MicroK8s services stopped, instance being preserved for backup.                                    |
 
 #### Gotcha: Oracle's Ubuntu image has no logrotate
 

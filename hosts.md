@@ -41,7 +41,8 @@
 - **Home Assistant** — supervised install via Hassio
   - Config: `/usr/share/hassio/homeassistant/`
   - DB: MariaDB addon (`core-mariadb`)
-  - External access: `hass2.stevegore.au` (Cloudflare Tunnel, direct) and `hass.stevegore.au` (via WireGuard → Caddy)
+  - External access: `hass2.stevegore.au` (Cloudflare Tunnel, direct) and `hass.stevegore.au` (via Tailscale egress in OKE → Caddy → pico:8123)
+  - `trusted_proxies` includes `10.244.0.0/16` (OKE pod CIDR) so Caddy pods are trusted for X-Forwarded-For
   - Custom components: `tuya_local`, `eero` (new), `eero_tracker` (legacy — kept for now, `interval_seconds: 30` set to avoid scan overrun)
 - **WireGuard** — 10.20.30.1/32, managed by `wg-quick@wg0.service`
   - Config: `/etc/wireguard/wg0.conf`
@@ -49,9 +50,9 @@
   - No ListenPort set — uses ephemeral port (seen by ampere as 159.196.97.38:PORT)
   - Being replaced by Tailscale (below) per [architecture-proposal.md](architecture-proposal.md) §5.3
 - **Tailscale** — `tailscaled.service`, joined 2026-05-24
-  - Tailnet IP: `100.98.212.71` (also `fd7a:115c:a1e0::f039:d447`)
+  - Tailnet IP: `100.98.212.71` (also `fd7a:115c:a1e0::f039:d447`), MagicDNS `pico.chipmunk-fir.ts.net`
   - Hostname in admin: `pico`
-  - Subnet routes: not yet advertised (will add `10.20.30.0/24` + `192.168.4.0/24` during the OKE migration; see proposal §10 Phase 4)
+  - Subnet routes: `10.20.30.0/24` + `192.168.4.0/24` can be advertised if needed for OKE access to home LAN devices (currently not required)
 - **Cloudflare Tunnel** — `cloudflared.service`, exposes HA at `hass2.stevegore.au`
 - **Docker services** — managed via Portainer (`port.stevegore.au`)
 
@@ -67,73 +68,55 @@
 
 ### ampere-ubuntu (158.178.136.162)
 
-**Purpose:** ARM-based server running WireGuard VPN hub, Caddy reverse proxy, and MicroK8s (ArgoCD)
+**Purpose:** ARM-based server retained as WireGuard VPN hub. Caddy and ArgoCD have moved to OKE. Being decommissioned per the OKE migration plan.
 
-**Key Services:**
+**Key Services (remaining):**
 
 - **WireGuard VPN** - Network hub (10.20.30.2)
   - Config: `/etc/wireguard/wg0.conf`
   - Peers: 10.20.30.1 (pico), 10.20.30.3 (laptop)
   - Public key: `h8oS9EjhkNFq5hgX5MFYS9a9ZyhwlKgrWpidFsqZzRs=`
-- **Caddy** - Reverse proxy with HTTPS & GitHub OAuth authentication
-  - Config: `/etc/caddy/Caddyfile`
-  - Env file: `/etc/caddy/caddy.env`
-  - Log: `/var/lib/caddy/caddy.log`
-  - Built with `xcaddy` + `caddy-security` plugin
-- **MicroK8s** - Single-node Kubernetes cluster
-  - Addons: (core addons only, ingress/metallb/cert-manager removed)
-  - kubelite process handles all k8s components
-- **ArgoCD** - GitOps continuous delivery
-  - Namespace: `argocd`
-  - UI: <https://argocd.stevegore.au> (proxied by Caddy → NodePort 32392)
-  - gRPC: grpc.argocd.stevegore.au (proxied by Caddy → NodePort 30481)
-  - CLI: `/usr/local/bin/argo`
-- **Calico** - Container networking
 - **fail2ban** - SSH brute-force protection
   - Config: `/etc/fail2ban/jail.local`
-  - SSH jail enabled with escalating bans (1h → up to 1w for repeat offenders)
   - `sudo fail2ban-client status sshd` to check banned IPs
 
-**Domains proxied (via Caddy → 10.20.30.1 pico):**
+**Migrated to OKE (no longer on ampere-ubuntu):**
+- Caddy → OKE `caddy` namespace (NLB IP 159.13.44.68)
+- ArgoCD → OKE `argocd` namespace
+- Vault → OKE `vault` namespace
+- Vaultwarden → OKE `vaultwarden` namespace
 
-| Domain                 | Backend     | Description                   |
-| ---------------------- | ----------- | ----------------------------- |
-| auth.stevegore.au      | -           | GitHub OAuth portal           |
-| hass.stevegore.au      | :8123       | Home Assistant                |
-| desk.stevegore.au      | :8111       | (protected)                   |
-| gym.stevegore.au       | :8112       | (protected)                   |
-| plex.stevegore.au      | :32400      | Plex Media Server             |
-| photos.stevegore.au    | :2342       | PhotoPrism                    |
-| immich.stevegore.au    | :2283       | Immich                        |
-| homepage.stevegore.au  | :8080       | Homepage (protected)          |
-| port.stevegore.au      | :9000       | Portainer                     |
-| huggin.stevegore.au    | :3000       | Huginn                        |
-| ~~vault.stevegore.au~~ | ~~:8202~~   | ~~Vault~~ (moved to MicroK8s) |
-| pdf.stevegore.au       | :8083       | Stirling PDF                  |
-| strava.stevegore.au    | :8180       | Stravakeeper                  |
-| bw.stevegore.au        | :8081/:3012 | Bitwarden/Vaultwarden         |
-| stevegore.au           | :8788       | Main site                     |
+---
 
-**Domains proxied (local to ampere-ubuntu):**
+### OKE Cluster `homelab`
 
-| Domain                   | Backend         | Description                           |
-| ------------------------ | --------------- | ------------------------------------- |
-| argocd.stevegore.au      | localhost:32392 | ArgoCD UI                             |
-| grpc.argocd.stevegore.au | localhost:30481 | ArgoCD gRPC                           |
-| vault.stevegore.au       | localhost:30820 | HashiCorp Vault (OCI KMS auto-unseal) |
-| healthz.stevegore.au     | -               | Health check                          |
+**KUBECONFIG:** `~/.kube/oke-homelab.config`  
+**Access:** `export KUBECONFIG=~/.kube/oke-homelab.config` (or set per-command)  
+**Nodes:** 2× ARM workers across 2 fault domains (AD-1 FD-1, AD-1 FD-2)  
+**NLB public IP:** `159.13.44.68` (reserved, survives NLB recreation, defined in `terraform/nlb.tf`)
 
-**MicroK8s Namespaces:**
+**Namespaces and key workloads:**
 
-- kube-system, kube-public, kube-node-lease, default
-- argocd
-- vault
+| Namespace          | Workload                        | Notes                                      |
+| ------------------ | ------------------------------- | ------------------------------------------ |
+| caddy              | Caddy (2 replicas)              | NLB → Caddy; DNS-01 ACME via Cloudflare; certmagic-s3 on OCI Object Storage |
+| argocd             | ArgoCD                          | `--insecure` mode (Caddy terminates TLS); Git source: `stevegore/infra` |
+| vault              | HashiCorp Vault                 | OCI KMS auto-unseal; VSO syncs secrets to k8s |
+| vault-secrets-operator | VSO                        | Syncs Vault secrets → k8s Secrets          |
+| vaultwarden        | Vaultwarden                     | Password manager                           |
+| homepage           | Homepage dashboard              | Protected by caddy-security `adminonly`    |
+| openclaw           | OpenClaw                        |                                            |
+| tailscale          | Tailscale operator              | Manages Egress Service for pico reachability |
 
-**Useful Commands:**
+**Useful commands:**
 
 ```bash
-alias k='microk8s kubectl'
-microk8s status          # Check cluster status
-k get pods -n argocd     # ArgoCD pods
-k get svc -n argocd      # ArgoCD services (NodePort)
+export KUBECONFIG=~/.kube/oke-homelab.config
+kubectl get nodes
+kubectl get pods -A
+kubectl get pods -n caddy
+kubectl logs -n caddy -l app.kubernetes.io/name=caddy -f
+# Force VSO secret resync:
+kubectl annotate -n caddy vaultstaticsecret caddy-config \
+  vault.hashicorp.com/requestID=$(date +%s) --overwrite
 ```

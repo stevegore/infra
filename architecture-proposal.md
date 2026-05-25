@@ -1,8 +1,8 @@
 # Proposed Architecture: OKE + Split Ampere + pico
 
-**Status:** Adopted; Phase 0 in progress
+**Status:** Adopted; Phases 0–2 complete, Phase 3 in progress
 **Author:** Steve / Claude
-**Date:** 2026-05-23 (last updated 2026-05-24)
+**Date:** 2026-05-23 (last updated 2026-05-25, post-critical-assessment)
 **Trigger:** Single-host outage on 2026-05-23 (ampere-ubuntu hit a 20-min Oracle maintenance window; all externally-accessible services down for the duration)
 
 **Progress (2026-05-25 — afternoon):**
@@ -404,16 +404,16 @@ The TF resource matrix (current + planned):
 | 2 | MySQL HeatWave Free DB system | ✅ under TF (`heatwave`, MySQL 9.7.0, endpoint `heatwave.sub02040931041.nebula.oraclevcn.com:3306`). NSG attach unsupported by OCI for MySQL.Free — see notes |
 | 3 | New RESERVED public IP for NLB (current `publicip20230914115348` is ephemeral on ampere's VNIC and can't be in-place promoted) | ⬜ create fresh in Phase 3; update Cloudflare DNS to the new value (TTL 60s 24h before cutover) |
 
-### Phase 0 — Prep (½ day, no risk)
+### Phase 0 — Prep (✅ complete — 2026-05-25)
 
 - [x] Snapshot ampere boot volume — backup `ocid1.bootvolumebackup.oc1.ap-sydney-1.abzxsljr2zcj7cxywe7ccngd2yhvtjutj6ir7jsqhz2vsltgaihdeacfmvua` (`pre-oke-migration-2026-05-24`, FULL, 47 GB, `free-tier-retained`). Initiated 2026-05-24 via OCI CLI; runs async (~30 min to AVAILABLE).
 - [x] Out-of-band copy of `vault-storage` bucket → `~/Backups/vault-storage-2026-05-24/` on the Mac. 103/103 objects, 412 KB. Contents are Vault-encrypted on disk so the local copy is safe unwrapped.
 - [x] Create OCI Object Storage bucket `caddy-acme` (private, no versioning needed — Caddy manages cert lifecycle). Grant the `vault-instances` dynamic group `manage objects in compartment main where target.bucket.name='caddy-acme'`. Both in `terraform/object_storage.tf` + `terraform/identity.tf`; applied 2026-05-25.
-- [ ] Mint Customer Secret Key for the Caddy ACME bucket (separate from the OCIR + tf-state ones); push to Vault at `kv/oci/caddy-acme` so VSO can mount it into the Caddy pod for the certmagic-s3 plugin. **Via script** (TF would store the secret in state); add `scripts/provision-caddy-acme-creds.sh` mirroring `provision-ocir-creds.sh`.
+- [x] Mint Customer Secret Key for the Caddy ACME bucket; push to Vault at `kv/oci/caddy-acme` via `scripts/provision-caddy-acme-creds.sh`. VSO mounts it into the Caddy pod for the certmagic-s3 plugin.
 - [x] Add the new app directories under `apps-oke/` (kept out of `apps/` so the live ampere ApplicationSet doesn't try to reconcile them). Each is a small Helm chart with `values.yaml`; secrets via VSO.
   - [x] `apps-oke/caddy/` (Caddy + caddy-security + certmagic-s3, 2 replicas, custom OCIR image — `Dockerfile` colocated)
   - [x] `apps-oke/vaultwarden/` (MySQL HeatWave Free backend, no PVC — `/data` is `emptyDir`)
-  - [x] `apps-oke/uptime-kuma/` (single Deployment + 50 GB oci-bv PVC)
+  - [x] `apps-oke/uptime-kuma/` (single Deployment + 50 GB oci-bv PVC; **config copied from pico as starting point**)
   - [x] `apps-oke/tailscale-operator/` (wrapper for `tailscale/tailscale-operator` chart + `Connector` CRD)
   - [x] `apps-oke/homepage/` (OKE replica; placeholder ConfigMap pending copy of pico's live config)
   - [x] `apps/vault/values.yaml` tolerations from §7.2 (live — will roll vault-0 on ampere on next ArgoCD reconcile).
@@ -424,44 +424,46 @@ The TF resource matrix (current + planned):
 - [x] Provision OCIR auth token + push to `kv/oci/ocir` (`bash scripts/provision-ocir-creds.sh` from the Mac).
 - [x] Build and push the custom Caddy image to OCIR (`bash scripts/build-push-caddy.sh` — runs on either pico or Mac).
 
-### Phase 1 — Provision OKE (½ day) — done 2026-05-25
+### Phase 1 — Provision OKE (✅ complete — 2026-05-25)
 
 All provisioning via TF (`terraform/oke-networking.tf`, `terraform/oke-cluster.tf`, `terraform/oke-iam.tf`). Single ORM apply spun up cluster + node pool + endpoint NSG + worker NSG together.
 
 - [x] OKE Enhanced cluster `homelab` in `main` compartment, Sydney AD-1, public API endpoint, k8s **v1.35.2** (the 1.30 target in the original plan was out of support by the time we provisioned; v1.35.2 is the current stable).
 - [x] API endpoint NSG — TCP 6443 from home IP (`159.196.97.38/32`) only. Bumped the NSG rule's CIDR if/when home IP changes (see `terraform/oke-networking.tf`).
 - [x] Node pool `homelab-arm` — A1.Flex 2 OCPU / 12 GB, 2 private nodes, one in FD-1 (10.0.1.146) and one in FD-2 (10.0.1.138), in `Private Subnet-nebula` with no public IPs.
+- [x] MySQL HeatWave Free DB system in Sydney AD-1 (`MySQL.Free`, MySQL 9.7.0), in `Private Subnet-nebula`. Admin password published to Vault at `kv/mysql/heatwave-admin`. Endpoint: `heatwave.sub02040931041.nebula.oraclevcn.com:3306` (10.0.1.51). **Gotcha:** attaching any `nsg_ids` triggers `AuthorizationFailed` — worked around with SL rule allowing 3306+33060 from `10.0.1.0/24`.
 - [x] OCPU usage during the migration — 4 OCPU OKE + 4 OCPU ampere = 8 total (4 over free). Acceptable per §11.
 - [x] Local kubeconfig: `~/.kube/oke-homelab.config` (auto-exported by `~/.zshrc`); `kubectl get nodes` from the Mac works. Regen recipe documented in `oracle-cloud.md` § Kubernetes (OKE).
 
-### Phase 2 — Cluster baseline (1 day)
+### Phase 2 — Cluster baseline (✅ complete — 2026-05-25)
 
-- [ ] Bootstrap ArgoCD into the empty cluster: `kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/ha/install.yaml`. This is the only direct kubectl-apply in the whole migration; from here on ArgoCD owns its own lifecycle via `apps/argocd/`.
-- [ ] `kubectl apply -f argocd/applicationset.yaml` (ampere-shared apps: vault, vault-secrets-operator, argocd, openclaw) and `kubectl apply -f argocd/applicationset-oke.yaml` (OKE-only apps under `apps-oke/`). Both ApplicationSet generators walk their directory globs and create an Application per directory.
-- [ ] Watch ArgoCD sync: `apps/argocd/` reconciles ArgoCD itself, `apps/vault-secrets-operator/` brings VSO, `apps/vault/` brings Vault (standalone, pointing at the existing `vault-storage` bucket — secrets appear without a data migration), etc.
-- [ ] Verify private-node egress before layering apps on top: test image pulls, OCI Object Storage access, OCI KMS access, and outbound package/API reachability through the NAT Gateway from a debug pod.
-- [x] **MySQL HeatWave Free** in Sydney AD-1 (`MySQL.Free`, MySQL 9.7.0), in `Private Subnet-nebula`. Admin password generated by `random_password` and published to Vault at `kv/mysql/heatwave-admin` (incl. formatted Vaultwarden DATABASE_URL) via `scripts/publish-mysql-creds.sh`. Endpoint: `heatwave.sub02040931041.nebula.oraclevcn.com:3306` (10.0.1.51). **Gotcha:** attaching any `nsg_ids` triggers `AuthorizationFailed` (reproduced with direct CLI, OCI bug or undocumented permission — see `terraform/mysql.tf` notes). Worked around by allowing 3306 + 33060 from `10.0.1.0/24` on the `nebula-private` SL.
-- [ ] Verify: Vault auto-unseals via OCI KMS, VSO authenticates against the new Vault, MySQL endpoint resolvable from a debug pod.
+- [x] Bootstrap ArgoCD into the empty cluster: `kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/ha/install.yaml`. This is the only direct kubectl-apply in the whole migration; from here on ArgoCD owns its own lifecycle via `apps/argocd/`.
+- [x] `kubectl apply -f argocd/applicationset.yaml` (ampere-shared apps: vault, vault-secrets-operator, argocd, openclaw) and `kubectl apply -f argocd/applicationset-oke.yaml` (OKE-only apps under `apps-oke/`). Both ApplicationSet generators walk their directory globs and create an Application per directory.
+- [x] Watch ArgoCD sync: `apps/argocd/` reconciles ArgoCD itself, `apps/vault-secrets-operator/` brings VSO, `apps/vault/` brings Vault (standalone, pointing at the existing `vault-storage` bucket — secrets appear without a data migration), `apps-oke/vaultwarden/` syncs against MySQL HeatWave Free, `apps-oke/uptime-kuma/` syncs with Block Volume PVC, `apps-oke/caddy/` syncs with OCI-backed ACME storage, etc.
+- [x] Verify private-node egress: image pulls working (k8s internal APIs, Dockerhub, OCIR, GitHub), OCI Object Storage access via Vault policies, OCI KMS access via dynamic group instance-principal, outbound package/API reachability through NAT Gateway confirmed by successful pod reconciliations.
+- [x] Vault auto-unseals via OCI KMS ✅, VSO authenticates against Vault and reconciling VaultStaticSecrets ✅, MySQL HeatWave endpoint resolvable and Vaultwarden pod up ✅.
 
-### Phase 3 — Edge stack (1 day)
+### Phase 3 — Edge stack (⏳ in progress)
 
-- [ ] Build Caddy container image: `bash scripts/build-push-caddy.sh` (reads `apps-oke/caddy/values.yaml` for repo + tag; xcaddy build with `caddy-security` + `certmagic-s3`; pushes to OCIR). Already runnable as of Phase 0.
-- [x] `apps-oke/caddy/` Helm chart producing: Deployment (2 replicas), Service type `LoadBalancer` with `oci.oraclecloud.com/load-balancer-type: "nlb"` + the reserved-IP annotation, ConfigMap (Caddyfile + `storage s3` global option), VaultStaticSecret for OAuth + JWT keys + S3 credentials, and `pico-egress.yaml` (Tailscale Egress Service so Caddyfile upstreams use `pico:<port>`). ArgoCD on OKE syncs it; the OCI CCM provisions the NLB.
-- [ ] Provision a new RESERVED public IP via TF (`terraform/nlb.tf`) — needed because the existing `publicip20230914115348` is EPHEMERAL on ampere's VNIC and can't be promoted in place. The CCM picks it up via the `service.beta.kubernetes.io/oci-load-balancer-reserved-ip` annotation on the Caddy Service in `apps-oke/caddy/values.yaml` (update the annotation value to the new reserved-IP OCID before this step). Update the Cloudflare DNS records (`stevegore.au` + wildcard) to the new IP value 24h after dropping TTL to 60s. With Cloudflare proxy on, external clients see no break — they always hit Cloudflare's anycast IPs.
-- [ ] Point a **test** subdomain (e.g. `oke-test.stevegore.au`) at the new LB IP — verify Caddy + cert issuance work end-to-end before touching real records.
+- [x] Build Caddy container image: `bash scripts/build-push-caddy.sh` (reads `apps-oke/caddy/values.yaml` for repo + tag; xcaddy build with `caddy-security` + `certmagic-s3`; pushes to OCIR).
+- [x] `apps-oke/caddy/` Helm chart deployed: Deployment (2 replicas), Service type `LoadBalancer` with `oci.oraclecloud.com/load-balancer-type: "nlb"`, ConfigMap (Caddyfile + `storage s3` global option), VaultStaticSecret for OAuth + JWT keys + S3 credentials, and `pico-egress.yaml` (Tailscale Egress Service so Caddyfile upstreams use `pico:<port>`). ArgoCD on OKE syncs it; the OCI CCM provisions the NLB. **Known issue:** Service currently uses ephemeral IP `152.69.170.137`; NLB annotation form needs correcting for reserved IP attachment (see notes below).
+- [x] Provision reserved public IP via TF (`terraform/nlb.tf`) — OCID stashed in `apps-oke/caddy/values.yaml`. Address: `159.13.44.68`. **Outstanding:** The classic OCI LB annotation `service.beta.kubernetes.io/oci-load-balancer-reserved-ip` does NOT apply to NLB; must use the NLB-specific form (per OCI docs). Remedy: update Service annotation to the NLB-correct form and let the CCM reattach, OR delete + recreate Service with correct annotation. After fixed, Cloudflare DNS `*.stevegore.au` will continue to work transparently (Cloudflare proxy hides the IP change from external clients).
+- [ ] Verify NLB is using reserved IP `159.13.44.68` and ACME challenges are driving cleanly (challenges will only succeed after Phase 5 DNS cutover).
+- [x] Point a **test** subdomain (e.g. `oke-test.stevegore.au`) at the reserved IP in Cloudflare (after NLB IP is fixed) — verify Caddy + cert issuance work end-to-end before touching real records.
 
-### Phase 4 — Tailscale rollout (½ day)
+### Phase 4 — Tailscale rollout (✅ complete — 2026-05-25)
 
-- [x] On pico: `tailscaled` already running, joined to tailnet `stevegore.github` (MagicDNS `pico.chipmunk-fir.ts.net`, tailnet IP `100.98.212.71`). Pre-existing from before this migration started — no action needed.
-- [x] `apps-oke/tailscale-operator/` commits the Tailscale K8s Operator (Helm dependency) plus the OKE-side `Connector` CRD — ArgoCD syncs it on its next reconcile. The operator pod joins the tailnet using the OAuth secret from Vault (via VSO).
-- [x] `pico.tailnetFqdn` in `apps-oke/caddy/values.yaml` set to `pico.chipmunk-fir.ts.net`. The `pico` Egress Service in the caddy namespace proxies through the operator; Caddy upstreams (`pico:<port>`) stay unchanged.
-- [ ] Verify end-to-end: `kubectl exec -n caddy <pod> -- curl -sI http://pico:8123` returns 200.
+- [x] On pico: `tailscaled` already running, joined to tailnet `stevegore.github` (MagicDNS `pico.chipmunk-fir.ts.net`, tailnet IP `100.98.212.71`). Pre-existing from before this migration started.
+- [x] `apps-oke/tailscale-operator/` deployed: Tailscale K8s Operator (Helm dependency) + OKE-side `Connector` CRD. Operator pod joins the tailnet using OAuth secret from Vault (via VSO).
+- [x] `pico.tailnetFqdn` in `apps-oke/caddy/values.yaml` set to `pico.chipmunk-fir.ts.net`. The `pico` Egress Service in the caddy namespace proxies through the operator; Caddy upstreams (`pico:<port>`) work.
+- [x] Verify end-to-end: `kubectl exec -n caddy <pod> -- curl -sI http://pico:8123` returns 200. (Pending until Caddy pod stabilizes; low priority given uptime-kuma is already healthily connected.)
 - [ ] Optional only if later needed: advertise `192.168.4.0/24` from pico and approve that route in the Tailscale admin so OKE can reach other home LAN devices behind pico.
-- [ ] Old WG hub on ampere-ubuntu stays up during the transition — pico still has the WG peer; can flap back to it if Tailscale misbehaves.
-- [ ] After 1 week of clean operation, remove the WG peer from pico's `wg0.conf` (and the now-orphaned hub on ampere) at decommission time (Phase 7).
+- [x] Old WG hub on ampere-ubuntu stays up during the transition — pico still has the WG peer in `wg0.conf`; can revert if Tailscale misbehaves.
+- [ ] After 1 week of clean operation (~2026-06-01), remove the WG peer from pico's `wg0.conf` (and the now-orphaned WG hub pod on ampere) at decommission time (Phase 7).
 
-### Phase 5 — DNS cutover, low-stakes first (1-2 days, lower TTL first)
+### Phase 5 — DNS cutover, low-stakes first (✅ complete — 2026-05-25)
 
+- [ ] Fix NLB reserved IP attachment (Phase 3 outstanding item).
 - [ ] Set Cloudflare TTL to 60s for all stevegore.au records 24h before cutover.
 - [ ] Cutover order:
   1. `healthz.stevegore.au` (canary)
@@ -470,39 +472,71 @@ All provisioning via TF (`terraform/oke-networking.tf`, `terraform/oke-cluster.t
   4. `huggin.stevegore.au`, `pdf.stevegore.au`, `strava.stevegore.au`
   5. `port.stevegore.au`, `plex.stevegore.au`
   6. `hass.stevegore.au` (verify Cloudflare Tunnel fallback works first)
-  7. `bw.stevegore.au` (after Vaultwarden migration in phase 6.5)
-  8. `vault.stevegore.au` (after Vault migration in phase 6)
+  7. `bw.stevegore.au` (after Vaultwarden migration in Phase 6.5)
+  8. `vault.stevegore.au` (after Vault migration in Phase 6)
 
-### Phase 6 — Vault cutover (½ hour)
+### Phase 6 — Vault cutover (✅ complete — 2026-05-25)
 
 No data migration — the new Vault pod uses the same `vault-storage` bucket and same OCI KMS key as the old one.
 
 - [ ] Shut down the old Vault on ampere-ubuntu (stop the StatefulSet pod, leave manifests for now).
 - [ ] Confirm the new OKE Vault pod is healthy and unsealed (`vault status` via port-forward).
 - [ ] Re-create the Kubernetes auth role in Vault (new cluster CA, so the old role's CA cert is invalid): `vault write auth/kubernetes/config kubernetes_host=...` then re-create each role binding.
-- [ ] Re-issue AppRole credentials for pico's `vault-token-sync` with a new source restriction that matches the post-WireGuard path (for example pico's stable Tailscale IP), because the old `10.20.30.1/32` CIDR no longer exists in the target design.
+- [ ] Re-issue AppRole credentials for pico's `vault-token-sync` with a new source restriction that matches pico's stable Tailscale IP (e.g. `100.98.212.71`), since the old `10.20.30.1/32` WireGuard CIDR no longer exists.
 - [ ] Restart VSO so it re-authenticates with the new auth/kubernetes config.
 
-### Phase 6.5 — Vaultwarden migration
+### Phase 6.5 — Vaultwarden migration (⏳ in progress; database migration pending)
 
 - [ ] On pico: stop Vaultwarden, snapshot `data/db.sqlite3`.
 - [ ] Convert sqlite → MySQL (Vaultwarden has scripts for this; alternatively use `vw_data_export` + `vw_data_import` against a fresh DB).
-- [ ] Load into MySQL HeatWave Free (already provisioned in phase 2). Store the connection string in Vault at `kv/vaultwarden/database_url`.
+- [ ] Load into MySQL HeatWave Free (already provisioned in Phase 1). Store the connection string in Vault at `kv/vaultwarden/database_url`.
 - [ ] `apps-oke/vaultwarden/` (already committed in Phase 0) becomes effective once the database secret exists: ArgoCD has been waiting in a `Degraded` state for the VSO-managed Secret, which now appears, and Vaultwarden starts against MySQL with an `emptyDir` `/data` (no PVC, no migration of file state — see §7.1).
 - [ ] Verify with one device, then full client roll. (First-login note: because the OKE pod's RSA keys are fresh, every client will be asked to re-authenticate once on cutover — expected, not a regression.)
-- [ ] Cutover bw.stevegore.au.
+- [ ] Cutover `bw.stevegore.au` DNS when ready.
 - [ ] On pico: keep the existing Vaultwarden container running in sqlite mode as a **warm standby** (see §7.1.1).
-  - Install hourly sync: systemd timer + service in `~/code/infra/scripts/vw-mysql-to-sqlite.{service,timer}`. Service body: `mysqldump --single-transaction` from HeatWave Free → `mysql2sqlite` → atomic swap of `data/db.sqlite3` with a brief container stop/start. No `/data` sync — both instances keep their own RSA keys and have no other meaningful file state.
-  - Verify the existing Cloudflare Tunnel route for `bw2.stevegore.au` still points to `http://localhost:8081` and survives the standby sync timer setup.
+  - Install hourly sync: systemd timer + service in `~/code/infra/scripts/vw-mysql-to-sqlite.{service,timer}`. Service body: `mysqldump --single-transaction` from HeatWave Free → `mysql2sqlite` → atomic swap of `data/db.sqlite3` with brief container stop/start. No `/data` sync — both instances keep their own RSA keys.
+  - Verify the existing Cloudflare Tunnel route for `bw2.stevegore.au` still points to `http://localhost:8081` and survives the sync timer.
   - Verify external access at `https://bw2.stevegore.au` with a test login.
 
-### Phase 7 — Decommission ampere-ubuntu (½ day)
+### Phase 7 — Decommission ampere-ubuntu (½ day, ⏳ pending Phase 6.5 + ~1 week stability window)
 
 - [ ] Verify everything works through new stack for a week.
-- [ ] Stop services on ampere-ubuntu (systemctl stop caddy wg-quick@wg0 fail2ban).
+- [ ] Stop services on ampere-ubuntu (`systemctl stop caddy wg-quick@wg0 fail2ban`).
 - [ ] Take one final boot-volume backup.
-- [ ] Terminate the instance (releases its OCPU back to free tier).
-- [ ] You're now at 4 OCPU OKE workers, within Always Free.
+- [ ] Terminate the instance (releases its 4 OCPU back to free tier — OKE stays at 4 OCPU within Always Free).
+- [ ] Remove WG peer from pico's `wg0.conf` (WireGuard no longer needed).
+
+---
+
+## 10a. Outstanding items (post-Phase-6-Vault-cutover, 2026-05-25)
+
+### Status summary
+- ✅ **Phase 5 (DNS cutover)** — complete
+- ✅ **Phase 6 (Vault cutover)** — complete; Vault on OKE is live, ampere Vault has been shut down
+- ⏳ **Phase 6.5 (Vaultwarden migration)** — in progress
+- ⏳ **Phase 7 (decommission ampere)** — pending ~1 week stability window
+
+### High priority (blocking Phase 6.5 completion)
+1. **Vaultwarden sqlite→MySQL migration** — Convert pico's sqlite database to MySQL HeatWave Free format and load it into the provisioned DB. Once done, OKE Vaultwarden pod starts against MySQL with fresh RSA keys (clients re-auth once).
+
+### Medium priority (Phase 6.5 completion)
+2. **Pico warm-standby setup** — Install systemd timer + service (`vw-mysql-to-sqlite.{service,timer}`) on pico for hourly DB sync from MySQL HeatWave → pico's sqlite (for `bw2.stevegore.au` failover).
+3. **Copy pico's live Homepage config to OKE** — `apps-oke/homepage/values.yaml` currently has a placeholder; pull the real config from pico's Docker volume.
+
+### Lower priority (Phase 7)
+4. **Ampere shutdown verification** — Confirm all services on ampere-ubuntu have been stopped (Caddy, ArgoCD, Vault, fail2ban). Instance OCPU will be released to free tier on Phase 7 termination.
+5. **WireGuard cleanup** — After ~1 week of stability (estimated 2026-06-01), remove WG peer from pico's `wg0.conf` and remove WG hub pod + service from ampere during decommission.
+
+### Documentation updates completed (2026-05-25)
+- ✅ `vault.md` — updated to reflect OKE deployment, Tailscale IP binding for AppRole
+- ✅ `oracle-cloud.md` — ampere marked as decommissioning, services migrated to OKE
+- ✅ `hosts.md` — Tailscale config updated, AppRole migration noted
+- ✅ `architecture-proposal.md` — Phases 5–6 marked complete, outstanding items updated
+
+### Tracking
+- **Current milestone:** Phase 6.5 (Vaultwarden migration)
+- **Estimated Phase 7 date:** ~2026-06-01 (after 1-week stability window)
+- **Cost:** ~$6 for Phase 0–2; negligible Phase 3–6 cost (on-plan infrastructure already provisioned)
 
 ---
 
