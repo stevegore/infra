@@ -37,15 +37,16 @@ materializes both `~/.oci/config` and `~/oci.pem`.
 | OCPUs               | 4                                                                                             |
 | Memory              | 24 GB                                                                                         |
 | Processor           | 3.0 GHz Ampere® Altra™                                                                        |
-| State               | RUNNING                                                                                       |
+| State               | **TERMINATED** (2026-05-26)                                                                   |
 | Availability Domain | AP-SYDNEY-1-AD-1 (CLI form: `tbGS:AP-SYDNEY-1-AD-1` — tenancy-aliased)                        |
 | Fault Domain        | FAULT-DOMAIN-2                                                                                |
 | Created             | 2023-09-14                                                                                    |
-| Private IP          | 10.0.0.127                                                                                    |
-| Public IP           | 158.178.136.162                                                                               |
+| Terminated          | 2026-05-26                                                                                    |
+| Private IP          | 10.0.0.127 (was)                                                                              |
+| Public IP           | 158.178.136.162 (was — now detached; see Reserved IPs below)                                  |
 | Instance OCID       | `ocid1.instance.oc1.ap-sydney-1.anzxsljrxbp2yoqcuh4ka3eoi4novuompif6tkoiqij57zi7fxmh24b5q53a` |
-| Services            | **Decommissioning** — WireGuard hub only (Phase 7 teardown pending). Caddy, ArgoCD, Vault migrated to OKE. |
-| Status              | **Shut down** (Phase 6 complete) — MicroK8s services stopped, instance being preserved for backup.                                    |
+| Services            | **TERMINATED** — all services migrated to OKE. WireGuard replaced by Tailscale.              |
+| Boot volume         | Preserved (`--preserve-boot-volume true`); backup taken 2026-05-26.                           |
 
 #### Gotcha: Oracle's Ubuntu image has no logrotate
 
@@ -120,7 +121,6 @@ All Helm charts are defined in `apps-oke/` and synced via ArgoCD. See `argocd/ap
 | TCP      | 80            | 0.0.0.0/0        | HTTP               |
 | TCP      | 443           | 0.0.0.0/0        | HTTPS              |
 | TCP      | 32400         | 0.0.0.0/0        | Plex               |
-| UDP      | 51820         | 0.0.0.0/0        | WireGuard          |
 | ICMP     | type 3 code 4 | 0.0.0.0/0        | Path MTU Discovery |
 | ICMP     | all           | 10.0.0.0/16      | Ping (VCN only)    |
 
@@ -133,12 +133,14 @@ All Helm charts are defined in `apps-oke/` and synced via ArgoCD. See `argocd/ap
 
 ### Network Security Groups
 
-| Name             | Purpose              | VNICs             |
-| ---------------- | -------------------- | ----------------- |
-| allow-wireguard  | WireGuard VPN access | 1 (ampere-ubuntu) |
-| allow-all-egress | Outbound traffic     | 1 (ampere-ubuntu) |
-| allow-ssh        | SSH access           | 1 (ampere-ubuntu) |
-| allow-http-https | Web traffic          | 1 (ampere-ubuntu) |
+| Name             | Purpose              | VNICs                         |
+| ---------------- | -------------------- | ----------------------------- |
+| allow-wireguard  | WireGuard VPN access | 0 (ampere TERMINATED)         |
+| allow-all-egress | Outbound traffic     | 0 (ampere TERMINATED)         |
+| allow-ssh        | SSH access           | 0 (ampere TERMINATED)         |
+| allow-http-https | Web traffic          | 0 (ampere TERMINATED)         |
+
+Note: these NSGs can be deleted; they are no longer attached to any VNIC.
 
 ### Gateways
 
@@ -154,7 +156,7 @@ All Helm charts are defined in `apps-oke/` and synced via ArgoCD. See `argocd/ap
 
 | Name                   | IP              | Lifetime  | Attached to                          | State    |
 | ---------------------- | --------------- | --------- | ------------------------------------ | -------- |
-| publicip20230914115348 | 158.178.136.162 | EPHEMERAL | ampere private IP 10.0.0.127         | ASSIGNED |
+| publicip20230914115348 | 158.178.136.162 | EPHEMERAL | (none — detached when ampere terminated 2026-05-26) | UNASSIGNED |
 | (NAT gateway IP)       | 168.138.106.64  | EPHEMERAL | NAT-Gateway-nebula                   | ASSIGNED |
 
 `publicip20230914115348` is misleadingly named — the digits look like a date but
@@ -168,7 +170,7 @@ records).
 
 | Name                        | State     |
 | --------------------------- | --------- |
-| ampere-ubuntu (Boot Volume) | AVAILABLE |
+| ampere-ubuntu (Boot Volume) | AVAILABLE (preserved; backup taken 2026-05-26) |
 
 ### Logging
 
@@ -240,7 +242,7 @@ records).
 | ------------- | ------------------------------------------------------------------------------------------------------------- |
 | OCID          | `ocid1.dynamicgroup.oc1..aaaaaaaareb5w5qct2kihtaah6nq6tj5uo4fbeg36df6tmfxk3na44oxrvbq`                        |
 | Matching Rule | `instance.id = 'ocid1.instance.oc1.ap-sydney-1.anzxsljrxbp2yoqcuh4ka3eoi4novuompif6tkoiqij57zi7fxmh24b5q53a'` |
-| Purpose       | Instance principal auth for Vault on ampere-ubuntu                                                            |
+| Purpose       | **Stale** — matched ampere-ubuntu (now TERMINATED). Vault runs on OKE; KMS auto-unseal uses OKE workload identity. This dynamic group no longer matches any instance and can be deleted. |
 
 ### Policy: vault-kms-objectstorage-policy
 
