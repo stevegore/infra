@@ -49,7 +49,6 @@ data:
           crypto key sign-verify from file /etc/caddy/keys/jwt-private.pem
           cookie domain stevegore.au
           cookie samesite lax
-          cookie secure
           enable identity provider github
           ui {
             links {
