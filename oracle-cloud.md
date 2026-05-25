@@ -87,7 +87,7 @@ fresh ampere host, those will be set automatically.
 | Caddy | 2.11.3 | Custom build | 2 replicas, TLS termination for `*.stevegore.au` |
 | Tailscale Operator | 1.98.3 | Tailscale | Manages k8s cluster membership on tailnet |
 | Vaultwarden | 1.36.0 | — | MySQL backend on OCI via HeatWave; security fixes (SSO CSRF, enumeration) |
-| Uptime Kuma | 1.23.16 | — | SQLite backend |
+| Uptime Kuma | 2.3.2 | — | SQLite backend on 50GB OCI block volume; monitors pico+external services |
 | Homepage | 0.10.9 | — | Service dashboard |
 
 All Helm charts are defined in `apps-oke/` and synced via ArgoCD. See `argocd/applicationset-oke.yaml` for the ApplicationSet.
