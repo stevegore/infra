@@ -272,6 +272,8 @@ OCI users are capped at 2 active Customer Secret Keys. List + delete via
 
 ### Kubeconfig
 
+#### Local (Mac)
+
 | Path                                | Notes                                                                              |
 | ----------------------------------- | ---------------------------------------------------------------------------------- |
 | `~/.kube/oke-homelab.config`        | Generated locally on the Mac; uses OCI CLI auth (your `~/.oci/config` API key).    |
@@ -296,9 +298,39 @@ kubectl get nodes
 
 Or per-command: `KUBECONFIG=~/.kube/oke-homelab.config kubectl ...`.
 
-Access is allowed only from the home IP (`159.196.97.38/32`); from anywhere else
-you'll get a TCP timeout on 6443. If the home IP changes, update the NSG ingress
-rule in `terraform/oke-networking.tf` (`oke_api_kubectl_home`).
+#### On Pico (for Stats Server)
+
+Pico has kubeconfig for the stats server to monitor OKE cluster metrics:
+
+| Component | Location | Setup |
+|-----------|----------|-------|
+| OCI CLI | `~/.local/bin/oci` | Installed via `pipx install oci-cli` |
+| OCI credentials | `~/.oci/config`, `~/oci.pem` | Copied from Mac via `scp` |
+| Kubeconfig | `~/.kube/oke-homelab.config` | Generated via `oci ce cluster create-kubeconfig` |
+| Kubectl | `/home/steve/kubectl` | Pre-downloaded binary |
+| Kubectl wrapper | `~/code/infra/scripts/kubectl-wrapper.sh` | Custom script providing PATH for oci plugin |
+
+**Setup on pico (automated):**
+```bash
+bash ~/code/infra/scripts/setup-pico-stats.sh
+```
+
+**Setup on pico (manual):**
+1. Copy OCI credentials from Mac: `scp ~/.oci/config ~/oci.pem steve@pico.local:~/`
+2. Install OCI CLI: `pipx install oci-cli`
+3. Generate kubeconfig:
+   ```bash
+   oci ce cluster create-kubeconfig \
+     --cluster-id ocid1.cluster.oc1.ap-sydney-1.aaaaaaaaok3ygaxxoaf3vlwoytcnift4yxrmr4dmd75be53iocfghlpevogq \
+     --file ~/.kube/oke-homelab.config \
+     --region ap-sydney-1 \
+     --token-version 2.0.0 \
+     --kube-endpoint PUBLIC_ENDPOINT
+   ```
+4. Verify: `export KUBECONFIG=~/.kube/oke-homelab.config && /home/steve/kubectl get nodes`
+
+**Access restrictions:**
+Access is allowed only from the home IP (`159.196.97.38/32`); from anywhere else you'll get a TCP timeout on 6443. If the home IP changes, update the NSG ingress rule in `terraform/oke-networking.tf` (`oke_api_kubectl_home`).
 
 ---
 

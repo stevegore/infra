@@ -92,19 +92,31 @@
 
 | Component | Purpose | Access | Status |
 |-----------|---------|--------|--------|
-| Stats Server | Real-time resource metrics (disk, memory, CPU) | `https://stats.stevegore.au` | ✅ Running on pico:8001 |
+| Stats Server | Real-time resource metrics (disk, memory, CPU, OKE cluster) | `https://stats.stevegore.au` | ✅ Running on pico:8001 |
 | Homepage Dashboard | Live stats widget (embedded iframe) | `https://homepage.stevegore.au` | ✅ Integrated via Caddy |
 | Uptime Kuma | Service health monitoring | `https://uptime.stevegore.au` | ✅ OKE cluster |
 | Home Assistant | Smart home platform + history | `https://hass.stevegore.au` | ✅ pico:8123 |
 
 **Stats Server Details:**
 - Deployed as: systemd service (`stats-server.service`) on pico
-- Metrics provided: root disk (`/`), media disk (`/media/m2`), RAM, CPU cores
+- Port: 8001 (HTTP)
+- Metrics provided:
+  - **Pico**: root disk (`/`), media disk (`/media/m2`), RAM, CPU cores
+  - **OKE cluster**: node status, capacity (OCPU/GB), version
 - JSON endpoint: `/api/stats` (for API integrations)
 - HTML dashboard: `/` (styled with color-coded resource alerts)
 - Color coding: ⚠️ orange >70%, 🔴 red >85%
 - Refresh: real-time (no caching, queries on each request)
-- OKE cluster stats: optional (requires kubeconfig copied from this machine to `~/.kube/oke-homelab.config` on pico)
+- Public access: via Caddy reverse proxy at `https://stats.stevegore.au`
+
+**OCI CLI & Kubeconfig Setup (on pico):**
+- **OCI CLI**: installed via pipx (available at `~/.local/bin/oci`)
+- **OCI credentials**: copied from local machine (`~/.oci/config`, `~/oci.pem`)
+- **Kubeconfig**: generated via `oci ce cluster create-kubeconfig` command
+- **Kubectl wrapper**: custom shell script (`~/code/infra/scripts/kubectl-wrapper.sh`) that provides PATH for oci credential plugin
+- **Setup**: automated via `bash ~/code/infra/scripts/setup-pico-stats.sh`
+
+See `scripts/STATS_SERVER.md` for detailed setup and troubleshooting.
 
 ---
 
