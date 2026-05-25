@@ -91,6 +91,12 @@ data:
       respond "OK"
     }
 
+    # ----- OKE migration smoke-test -----
+    # Remove after Phase 5 DNS cutover.
+    oke-test.stevegore.au {
+      respond "OKE OK"
+    }
+
     # ----- In-cluster services -----
 
     vault.stevegore.au {
