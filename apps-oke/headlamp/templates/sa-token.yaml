@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: headlamp-admin-token
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    # Kubernetes populates .data.token with a non-expiring token for this SA
+    kubernetes.io/service-account.name: headlamp
+type: kubernetes.io/service-account-token
