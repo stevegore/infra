@@ -6,7 +6,7 @@ replicaCount: 1  # Vaultwarden has no native HA; one writer.
 image:
   # FQ image name required by cri-o on OKE workers (short names rejected).
   repository: docker.io/vaultwarden/server
-  tag: "1.32.5-alpine"
+  tag: "1.35.7-alpine"
   pullPolicy: IfNotPresent
 
 resources:
