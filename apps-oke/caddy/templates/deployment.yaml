@@ -41,6 +41,12 @@ spec:
         - name: caddy
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          # Explicit command — the upstream caddy:2.11-alpine ENTRYPOINT isn't
+          # guaranteed to be /usr/bin/caddy across rebuilds, and cri-o errors
+          # with "exec: run: executable file not found" when args[0] is "run"
+          # without an ENTRYPOINT to prepend. Set both to be safe.
+          command:
+            - /usr/bin/caddy
           args:
             - run
             - --config
