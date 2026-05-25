@@ -36,7 +36,12 @@ resource "oci_identity_policy" "mysql_service" {
   description    = "Allow the MySQL service to provision and manage DB systems in main."
 
   statements = [
-    "Allow service mysql to use virtual-network-family in compartment main",
+    # `manage` (not `use`) because the service must attach VNICs to the
+    # NSG we provide via nsg_ids — that requires manage-level on
+    # network-security-groups, which falls under virtual-network-family.
+    # With only `use`, CreateDbSystem fails with the unhelpful
+    # AuthorizationFailed even though the basic VNIC create itself works.
+    "Allow service mysql to manage virtual-network-family in compartment main",
     "Allow service mysql to read instance-family in compartment main",
     "Allow service mysql to manage object-family in compartment main",
     "Allow service mysql to {KEY_READ, KEY_VERSION_READ, KMS_CONFIG_READ, KMS_KEY_USE} in compartment main",
