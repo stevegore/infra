@@ -64,13 +64,13 @@ Used by Vault Secrets Operator and application pods to authenticate.
 
 ### 2. AppRole (for pico → kv/homelab/* token sync)
 
-Used by pico to push `*.token` files in `~/code/infra/` into Vault. Bound to pico's Tailscale node IP so leaked credentials are useless from anywhere else.
+Used by pico to push `*.token` files in `~/code/infra/` into Vault. No CIDR binding — the Tailscale proxy terminates TCP before Vault, so source-IP restrictions are not enforceable here. Security relies on the role_id + secret_id credentials and the narrow `pico-token-sync` policy scope.
 
-| Role | CIDR (secret_id + token) | Policies | Token TTL |
-|------|---------------------------|----------|-----------|
-| pico-token-sync | 100.98.212.71/32 | pico-token-sync | 10m / 30m max |
+| Role | CIDR | Policies | Token TTL |
+|------|------|----------|-----------|
+| pico-token-sync | none | pico-token-sync | 10m / 30m max |
 
-**Path:** Pico hits Vault over Tailscale at `http://10.96.0.1:8200` (Vault service internal IP) through the Tailscale mesh. The service-to-Vault path is encrypted end-to-end via Tailscale. Pico's stable Tailscale IP (`100.98.212.71`, MagicDNS: `pico.chipmunk-fir.ts.net`) replaces the old `10.20.30.1/32` WireGuard address, aligning with the post-WireGuard target architecture.
+**Path:** Pico hits Vault via `http://vault-oke:8200` (Tailscale MagicDNS — `vault-oke.chipmunk-fir.ts.net`). The `vault-tailscale` LoadBalancer Service in the `vault` namespace exposes port 8200 via the Tailscale operator. Traffic stays on the tailnet; does not traverse the public OKE NLB or Caddy.
 
 **Bootstrap (run once with the root token on pico):**
 ```bash
