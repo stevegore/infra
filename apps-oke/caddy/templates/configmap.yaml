@@ -111,11 +111,8 @@ data:
     }
 
     argocd.stevegore.au {
-      reverse_proxy https://argocd-server.argocd.svc.cluster.local:443 {
-        transport http {
-          tls_insecure_skip_verify
-        }
-      }
+      # ArgoCD runs in --insecure mode (plain HTTP) — Caddy handles TLS termination
+      reverse_proxy http://argocd-server.argocd.svc.cluster.local:80
     }
 
     grpc.argocd.stevegore.au {
