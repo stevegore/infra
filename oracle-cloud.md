@@ -78,6 +78,20 @@ fresh ampere host, those will be set automatically.
 
 **Metrics:** Metrics-server not yet installed; CPU/memory tracking via pod logs and `kubectl top` when available.
 
+### Deployed Applications (Helm Charts)
+
+| Application | Version | Repository | Status |
+|-------------|---------|-----------|--------|
+| ArgoCD | — | — | Installed (manages this cluster) |
+| Vault | — | HashiCorp | Unsealed with auto-unseal |
+| Caddy | — | — | 2 replicas, TLS termination for `*.stevegore.au` |
+| Tailscale Operator | 1.98.3 | Tailscale | Manages k8s cluster membership on tailnet |
+| Vaultwarden | — | — | MySQL backend on OCI via HeatWave |
+| Uptime Kuma | — | — | SQLite backend |
+| Homepage | — | — | Service dashboard |
+
+All Helm charts are defined in `apps-oke/` and synced via ArgoCD. See `argocd/applicationset-oke.yaml` for the ApplicationSet.
+
 ---
 
 ## Networking
