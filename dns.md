@@ -14,12 +14,16 @@
 
 ### A Records
 
-| Name                     | Value           | Proxied | Notes                                 |
-| ------------------------ | --------------- | ------- | ------------------------------------- |
-| stevegore.au             | 158.178.136.162 | No      | Root domain → ampere-ubuntu           |
-| *.stevegore.au           | 158.178.136.162 | No      | Wildcard → ampere-ubuntu (Caddy)      |
-| argocd.stevegore.au      | 158.178.136.162 | No      | → ampere-ubuntu (Caddy → MicroK8s)    |
-| grpc.argocd.stevegore.au | 158.178.136.162 | No      | → ampere-ubuntu (Caddy → ArgoCD gRPC) |
+| Name                     | Value         | Proxied | Notes                                       |
+| ------------------------ | ------------- | ------- | ------------------------------------------- |
+| stevegore.au             | 159.13.44.68  | No      | Root domain → OKE NLB (Caddy)               |
+| *.stevegore.au           | 159.13.44.68  | No      | Wildcard → OKE NLB (Caddy)                  |
+| argocd.stevegore.au      | 159.13.44.68  | No      | → OKE NLB (Caddy → ArgoCD in-cluster)       |
+| grpc.argocd.stevegore.au | 159.13.44.68  | No      | → OKE NLB (Caddy → ArgoCD gRPC in-cluster)  |
+
+`uptime.stevegore.au` is covered by the wildcard `*.stevegore.au` A record, so no separate Cloudflare DNS record is required unless we later want host-specific proxy or TTL settings.
+
+**Reserved IP:** `159.13.44.68` — OCI NLB reserved public IP (OCID in `terraform/nlb.tf`). Survives NLB recreation.
 
 ### CNAME Records
 
@@ -46,23 +50,34 @@
 ```text
 Internet
     │
-    ├─── *.stevegore.au ──────────► 158.178.136.162 (ampere-ubuntu)
+    ├─── *.stevegore.au ──────────► 159.13.44.68 (OCI NLB, reserved IP)
     │                                    │
-    │                                    ├─► Caddy reverse proxy
-    │                                    │       │
-    │                                    │       ├─► WireGuard 10.20.30.2
-    │                                    │       │       │
-    │                                    │       │       └─► 10.20.30.1 (pico)
-    │                                    │       │               └─► Docker services
-    │                                    │       │
-    │                                    │       └─► ArgoCD (localhost NodePort)
-    │                                    │
-    │                                    └─► MicroK8s (ArgoCD pods)
+    │                                    └─► Caddy (OKE Deployment, 2 replicas)
+    │                                            │
+    │                                            ├─► In-cluster services (ClusterIP)
+    │                                            │       ├─► argocd-server.argocd:80
+    │                                            │       ├─► vault.vault:8200
+    │                                            │       ├─► vaultwarden.vaultwarden:80
+    │                                            │       ├─► homepage.homepage:3000
+    │                                            │       ├─► uptime-kuma.uptime-kuma:3001
+    │                                            │       ├─► headlamp.headlamp:80
+    │                                            │       └─► openclaw.openclaw:18789
+    │                                            │
+    │                                            └─► pico (via Tailscale Egress Service)
+    │                                                    │  (Tailscale operator proxy pod
+    │                                                    │   `pico` ExternalName svc → tailnet)
+    │                                                    └─► Docker services on pico
+    │                                                            ├─► :8123 Home Assistant
+    │                                                            ├─► :8788 ttyd
+    │                                                            ├─► :32400 Plex
+    │                                                            └─► ... (all pico ports)
     │
     └─── hass2.stevegore.au / bw2.stevegore.au ─► Cloudflare Tunnel
                                                    │
-                                                   └─► pico (direct, bypasses WireGuard)
+                                                   └─► pico (direct)
 ```
+
+**ACME certificates:** DNS-01 challenge via Cloudflare (token in Vault at `kv/caddy/config → cf_api_token`). Cert state shared across Caddy replicas via OCI Object Storage (`caddy-acme` bucket, S3-compat endpoint). Let's Encrypt only; ZeroSSL fallback disabled.
 
 ---
 
@@ -160,36 +175,38 @@ These rules must sit before the blanket `REJECT` rule. The OCI Security List doe
 
 ## Service → Domain Mapping
 
-All services below are proxied through Caddy on ampere-ubuntu:
+All services proxied through Caddy on OKE (NLB → 159.13.44.68).
 
-**Via WireGuard to pico (10.20.30.1):**
+**In-cluster (OKE) services:**
 
-| Domain              | Port  | Service               |
-| ------------------- | ----- | --------------------- |
-| stevegore.au        | 8788  | Main site (ttyd)      |
-| auth.stevegore.au   | -     | GitHub OAuth portal   |
-| hass.stevegore.au   | 8123  | Home Assistant        |
-| desk.stevegore.au   | 8111  | NuraSpace (protected) |
-| gym.stevegore.au    | 8112  | GymMaster (protected) |
-| plex.stevegore.au   | 32400 | Plex Media Server     |
-| photos.stevegore.au | 2342  | PhotoPrism            |
-| immich.stevegore.au | 2283  | Immich                |
-| homepage.stevegore.au | 8080 | Homepage dashboard (protected) |
-| port.stevegore.au   | 9000  | Portainer             |
-| huggin.stevegore.au | 3000  | Huginn                |
+| Domain                   | Backend (ClusterIP)                       | Auth     | Notes                            |
+| ------------------------ | ----------------------------------------- | -------- | -------------------------------- |
+| auth.stevegore.au        | —                                         | —        | GitHub OAuth portal (caddy-security) |
+| healthz.stevegore.au     | —                                         | —        | Caddy `respond "OK"`             |
+| argocd.stevegore.au      | argocd-server.argocd:80 (HTTP, insecure)  | ArgoCD   | ArgoCD in `--insecure` mode      |
+| grpc.argocd.stevegore.au | argocd-server.argocd:80 (h2c)             | ArgoCD   | ArgoCD gRPC                      |
+| vault.stevegore.au       | vault.vault:8200                          | Vault UI | Vault handles own auth           |
+| bw.stevegore.au          | vaultwarden.vaultwarden:80 / :3012        | —        | Vaultwarden + WebSocket hub      |
+| homepage.stevegore.au    | homepage.homepage:3000                    | adminonly| Homepage dashboard               |
+| uptime.stevegore.au      | uptime-kuma.uptime-kuma:3001             | Uptime Kuma | Full UI + status page         |
+| headlamp.stevegore.au    | headlamp.headlamp:80                      | —        | Kubernetes web dashboard         |
+| openclaw.stevegore.au    | openclaw.openclaw:18789                   | —        |                                  |
+| oke-test.stevegore.au    | —                                         | —        | Smoke-test stub — remove post-migration |
 
-| pdf.stevegore.au | 8083 | Stirling PDF |
-| strava.stevegore.au | 8180 | Stravakeeper |
-| bw.stevegore.au | 8081/3012 | Vaultwarden |
+**Via Tailscale Egress Service to pico (`pico` ExternalName svc in caddy namespace):**
 
-**Local to ampere-ubuntu (via Caddy → MicroK8s NodePort):**
-
-| Domain                   | Port  | Service                   |
-| ------------------------ | ----- | ------------------------- |
-| argocd.stevegore.au      | 32392 | ArgoCD UI                 |
-| grpc.argocd.stevegore.au | 30481 | ArgoCD gRPC               |
-| vault.stevegore.au       | 30820 | HashiCorp Vault (OCI KMS) |
-| healthz.stevegore.au     | -     | Health check              |
+| Domain              | pico Port | Auth     | Service                        |
+| ------------------- | --------- | -------- | ------------------------------ |
+| stevegore.au        | 8788      | —        | ttyd web terminal              |
+| hass.stevegore.au   | 8123      | —        | Home Assistant                 |
+| desk.stevegore.au   | 8111      | adminonly| NuraSpace remote desktop       |
+| gym.stevegore.au    | 8112      | adminonly| GymMaster                      |
+| plex.stevegore.au   | 32400     | —        | Plex Media Server              |
+| immich.stevegore.au | 2283      | —        | Immich photo library           |
+| port.stevegore.au   | 9000      | —        | Portainer                      |
+| huggin.stevegore.au | 3000      | —        | Huginn                         |
+| pdf.stevegore.au    | 8083      | —        | Stirling PDF                   |
+| strava.stevegore.au | 8180      | —        | Stravakeeper                   |
 
 **Direct access (not via Caddy):**
 
