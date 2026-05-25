@@ -15,7 +15,7 @@ data:
       storage s3 {
         host {env.S3_HOST}
         bucket {env.S3_BUCKET}
-        access_key {env.AWS_ACCESS_KEY_ID}
+        access_id {env.AWS_ACCESS_KEY_ID}
         secret_key {env.AWS_SECRET_ACCESS_KEY}
         prefix {env.S3_PREFIX}
       }
