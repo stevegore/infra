@@ -497,43 +497,39 @@ No data migration — the new Vault pod uses the same `vault-storage` bucket and
   - **Sync blocker:** MySQL at 10.0.1.51 is unreachable from pico (private OCI VCN). Fix: enable Tailscale Connector to advertise 10.0.1.0/24 (done in `apps-oke/tailscale-operator/values.yaml` — `connector.enabled: true`), then approve the route in Tailscale admin console. After that: install `mysql-client` + `mysql2sqlite` on pico, write `/etc/vw-mysql-sync.pass` (chmod 600), run `scripts/install-vw-sync.sh`.
   - `bw2.stevegore.au` access confirmed working (sqlite is frozen at migration time until sync is installed).
 
-### Phase 7 — Decommission ampere-ubuntu (½ day, ⏳ pending Phase 6.5 + ~1 week stability window)
+### Phase 7 — Decommission ampere-ubuntu (✅ complete — 2026-05-26)
 
-- [ ] Verify everything works through new stack for a week.
-- [ ] Stop services on ampere-ubuntu (`systemctl stop caddy wg-quick@wg0 fail2ban`).
-- [ ] Take one final boot-volume backup.
-- [ ] Terminate the instance (releases its 4 OCPU back to free tier — OKE stays at 4 OCPU within Always Free).
-- [ ] Remove WG peer from pico's `wg0.conf` (WireGuard no longer needed).
+- [x] Stop services on ampere-ubuntu (caddy, wg-quick@wg0, fail2ban).
+- [x] Take one final boot-volume backup (`ampere-ubuntu-final-backup-2026-05-26`, OCID: `ocid1.bootvolumebackup.oc1.ap-sydney-1.abzxsljrezupnwr23si6ty4icagomrlzbovuhb7pdenkp35buc66rauq3o3a`).
+- [x] Terminate the instance — `TERMINATED` 2026-05-26 08:45. Boot volume preserved. 4 OCPU returned to Always Free pool.
+- [x] Remove WG peer from pico's `wg0.conf`; disable `wg-quick@wg0.service`.
+- [x] Remove `pico-wg` SSH alias and `10.20.30.2` entry from `~/.ssh/config`.
+- [x] `vault-token-sync` fixed: endpoint updated to `http://vault-oke:8200` (Tailscale); AppRole CIDR restriction dropped (proxy terminates TCP before Vault).
 
 ---
 
-## 10a. Outstanding items (post-Phase-6-Vault-cutover, 2026-05-25)
+## 10a. Outstanding items (2026-05-26)
 
 ### Status summary
 - ✅ **Phase 5 (DNS cutover)** — complete
-- ✅ **Phase 6 (Vault cutover)** — complete; Vault on OKE is live, ampere Vault has been shut down
-- ✅ **Phase 6.5 (Vaultwarden migration)** — complete 2026-05-26; OKE vaultwarden on MySQL with migrated data, pico warm standby running
-- ⏳ **Phase 7 (decommission ampere)** — pending ~1 week stability window
+- ✅ **Phase 6 (Vault cutover)** — complete
+- ✅ **Phase 6.5 (Vaultwarden migration)** — complete 2026-05-26
+- ✅ **Phase 7 (decommission ampere)** — complete 2026-05-26; instance terminated, WireGuard removed
 
-### Pending (Phase 6.5 follow-up)
-1. **Client re-auth** — First login after cutover will prompt re-auth (fresh RSA keys on OKE pod). Expected behaviour, not a regression.
-2. **Warm-standby sync install** — Blocked on Tailscale route approval. Steps: (a) approve `10.0.1.0/24` route from `oke-connector` in Tailscale admin console; (b) `sudo apt-get install mysql-client` + install `mysql2sqlite` on pico; (c) write `/etc/vw-mysql-sync.pass` (chmod 600); (d) run `scripts/install-vw-sync.sh` from Mac.
-3. **Copy pico's live Homepage config to OKE** — `apps-oke/homepage/values.yaml` currently has a placeholder; pull the real config from pico's Docker volume.
-
-### Lower priority (Phase 7)
-4. **Ampere shutdown verification** — Confirm all services on ampere-ubuntu have been stopped (Caddy, ArgoCD, Vault, fail2ban). Instance OCPU will be released to free tier on Phase 7 termination.
-5. **WireGuard cleanup** — After ~1 week of stability (estimated 2026-06-01), remove WG peer from pico's `wg0.conf` and remove WG hub pod + service from ampere during decommission.
+### Remaining
+1. **Client re-auth** — First login to `bw.stevegore.au` will prompt re-auth once (fresh OKE RSA keys). Expected, not a regression.
+2. **Homepage config** — `apps-oke/homepage/` still has placeholder config; pull real config from pico's Docker volume when convenient.
 
 ### Documentation updates completed (2026-05-25 – 2026-05-26)
-- ✅ `vault.md` — updated to reflect OKE deployment, Tailscale IP binding for AppRole
-- ✅ `oracle-cloud.md` — ampere marked as decommissioning, services migrated to OKE
-- ✅ `hosts.md` — Tailscale config updated, AppRole migration noted
-- ✅ `architecture-proposal.md` — Phases 5–6.5 marked complete, outstanding items updated
+- ✅ `vault.md` — Tailscale path for vault-token-sync, CIDR restriction rationale
+- ✅ `oracle-cloud.md` — ampere marked as decommissioned
+- ✅ `hosts.md` — ampere section removed, WireGuard removed, Tailscale updated
+- ✅ `portainer.md` — Vaultwarden warm standby docs
+- ✅ `architecture-proposal.md` — all phases marked complete
 
 ### Tracking
-- **Current milestone:** Phase 7 (decommission ampere, 1-week stability window)
-- **Estimated Phase 7 date:** ~2026-06-02 (after 1-week stability window from 2026-05-26)
-- **Cost:** ~$6 for Phase 0–2; negligible Phase 3–6 cost (on-plan infrastructure already provisioned)
+- **Migration: COMPLETE** — all services on OKE, ampere terminated 2026-05-26
+- **Cost:** ~$6 for Phase 0–2; negligible Phase 3–7 cost (on-plan infrastructure)
 
 ---
 

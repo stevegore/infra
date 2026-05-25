@@ -2,25 +2,16 @@
 
 ## Local Network
 
-| Host                   | Description                                                 |
-| ---------------------- | ----------------------------------------------------------- |
-| pico.local             | Pico (192.168.4.120)                           |
-| pico-wg                | Pico via WireGuard (10.20.30.1 via ProxyJump ampere-ubuntu) |
-| `pi@raspberrypi.local` | Raspberry Pi (192.168.4.61)                                 |
-
-## WireGuard Network (10.20.30.x)
-
-| Host              | Notes                                                    |
-| ----------------- | -------------------------------------------------------- |
-| steve@10.20.30.1  | pico, reachable via ProxyJump through .2 (ampere-ubuntu) |
-| ubuntu@10.20.30.2 | ampere-ubuntu (WireGuard hub)                            |
+| Host                   | Description          |
+| ---------------------- | -------------------- |
+| pico.local             | Pico (192.168.4.120) |
+| `pi@raspberrypi.local` | Raspberry Pi (192.168.4.61) |
 
 ## Cloud / Remote Servers
 
-| Host                   | Notes                                                                                              |
-| ---------------------- | -------------------------------------------------------------------------------------------------- |
-| ubuntu@158.178.136.162 | Oracle Cloud (ampere-ubuntu) — being decommissioned in Phase 7 of the OKE migration                |
-| OKE cluster `homelab`  | `KUBECONFIG=~/.kube/oke-homelab.config kubectl get nodes` (home-IP only; details in oracle-cloud.md) |
+| Host                  | Notes                                                                                              |
+| --------------------- | -------------------------------------------------------------------------------------------------- |
+| OKE cluster `homelab` | `KUBECONFIG=~/.kube/oke-homelab.config kubectl get nodes` (home-IP only; details in oracle-cloud.md) |
 
 ---
 
@@ -44,15 +35,11 @@
   - External access: `hass2.stevegore.au` (Cloudflare Tunnel, direct) and `hass.stevegore.au` (via Tailscale egress in OKE → Caddy → pico:8123)
   - `trusted_proxies` includes `10.244.0.0/16` (OKE pod CIDR) so Caddy pods are trusted for X-Forwarded-For
   - Custom components: `tuya_local`, `eero` (new), `eero_tracker` (legacy — kept for now, `interval_seconds: 30` set to avoid scan overrun)
-- **WireGuard** — 10.20.30.1/32, managed by `wg-quick@wg0.service`
-  - Config: `/etc/wireguard/wg0.conf`
-  - PersistentKeepalive = 25 (to ampere-ubuntu peer)
-  - No ListenPort set — uses ephemeral port (seen by ampere as 159.196.97.38:PORT)
-  - Being replaced by Tailscale (below) per [architecture-proposal.md](architecture-proposal.md) §5.3
-- **Tailscale** — `tailscaled.service`, joined 2026-05-24
+- **Tailscale** — `tailscaled.service`
   - Tailnet IP: `100.98.212.71` (also `fd7a:115c:a1e0::f039:d447`), MagicDNS `pico.chipmunk-fir.ts.net`
   - Hostname in admin: `pico`
-  - Subnet routes: `10.20.30.0/24` + `192.168.4.0/24` can be advertised if needed for OKE access to home LAN devices (currently not required)
+  - `--accept-routes` enabled (receives `10.0.1.0/24` OCI subnet route from `oke-connector` for MySQL HeatWave access)
+  - Subnet routes: `192.168.4.0/24` can be advertised if OKE ever needs to reach home LAN devices (not currently required)
 - **Cloudflare Tunnel** — `cloudflared.service`, exposes HA at `hass2.stevegore.au`
 - **Docker services** — managed via Portainer (`port.stevegore.au`)
 - **Stats Server** — Python HTTP server (systemd `stats-server.service`)
@@ -67,11 +54,10 @@
 
 **Network:**
 
-| Interface  | Address                                       | DNS                          |
-| ---------- | --------------------------------------------- | ---------------------------- |
-| enp3s0     | 192.168.4.120                                 | 192.168.4.1 (router)         |
-| wg0        | 10.20.30.1/32                                 | 10.20.30.2 (~10.20.30.0/24)  |
-| tailscale0 | 100.98.212.71 / fd7a:115c:a1e0::f039:d447     | 100.100.100.100 (MagicDNS)   |
+| Interface  | Address                                       | DNS                         |
+| ---------- | --------------------------------------------- | --------------------------- |
+| enp3s0     | 192.168.4.120                                 | 192.168.4.1 (router)        |
+| tailscale0 | 100.98.212.71 / fd7a:115c:a1e0::f039:d447     | 100.100.100.100 (MagicDNS)  |
 
 **Resource Usage (current):**
 
@@ -119,26 +105,6 @@
 See `scripts/STATS_SERVER.md` for detailed setup and troubleshooting.
 
 ---
-
-### ampere-ubuntu (158.178.136.162)
-
-**Purpose:** ARM-based server retained as WireGuard VPN hub. Caddy and ArgoCD have moved to OKE. Being decommissioned per the OKE migration plan.
-
-**Key Services (remaining):**
-
-- **WireGuard VPN** - Network hub (10.20.30.2)
-  - Config: `/etc/wireguard/wg0.conf`
-  - Peers: 10.20.30.1 (pico), 10.20.30.3 (laptop)
-  - Public key: `h8oS9EjhkNFq5hgX5MFYS9a9ZyhwlKgrWpidFsqZzRs=`
-- **fail2ban** - SSH brute-force protection
-  - Config: `/etc/fail2ban/jail.local`
-  - `sudo fail2ban-client status sshd` to check banned IPs
-
-**Migrated to OKE (no longer on ampere-ubuntu):**
-- Caddy → OKE `caddy` namespace (NLB IP 159.13.44.68)
-- ArgoCD → OKE `argocd` namespace
-- Vault → OKE `vault` namespace
-- Vaultwarden → OKE `vaultwarden` namespace
 
 ---
 
