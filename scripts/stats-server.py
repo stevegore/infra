@@ -90,7 +90,9 @@ def get_oke_stats():
     """Get OKE cluster stats."""
     try:
         # Try to find kubectl in PATH or home directory
+        # Use wrapper script that sets PATH for oci credential plugin
         kubectl_paths = [
+            os.path.expanduser('~/code/infra/scripts/kubectl-wrapper.sh'),
             'kubectl',
             '/home/steve/kubectl',
             '/usr/local/bin/kubectl',
@@ -154,14 +156,17 @@ def get_oke_stats():
                 cpu = float(cpu_str)
 
             # Parse memory (Ki, Mi, Gi)
-            mem_val = float(mem_str.rstrip('KMG'))
             if mem_str.endswith('Ki'):
+                mem_val = float(mem_str[:-2])  # Remove 'Ki'
                 mem_gb = mem_val / (1024 ** 2)
             elif mem_str.endswith('Mi'):
+                mem_val = float(mem_str[:-2])  # Remove 'Mi'
                 mem_gb = mem_val / 1024
             elif mem_str.endswith('Gi'):
+                mem_val = float(mem_str[:-2])  # Remove 'Gi'
                 mem_gb = mem_val
             else:
+                mem_val = float(mem_str.rstrip('KMG'))
                 mem_gb = mem_val / 1e9
 
             total_cpu += cpu
