@@ -61,6 +61,25 @@ which broke GitHub SSO login to ArgoCD.
 500 MiB via `/etc/systemd/journald.conf.d/00-size.conf`. If you bootstrap a
 fresh ampere host, those will be set automatically.
 
+## OKE Cluster Health & Capacity (homelab)
+
+**Cluster Status:** ACTIVE (v1.35.2)
+
+| Node | Internal IP | Status | Capacity | Available | Allocation |
+|------|-------------|--------|----------|-----------|------------|
+| FD-1 (10.0.1.146) | 10.0.1.146 | Ready | 2 OCPU / 12 GB RAM | ~1.5 GB available | 87% CPU-bound, pods evicting on memory pressure |
+| FD-2 (10.0.1.138) | 10.0.1.138 | Ready | 2 OCPU / 12 GB RAM | ~1.5 GB available | 87% CPU-bound, pods evicting on memory pressure |
+
+**Total Cluster:** 4 OCPU / 24 GB RAM (within Always Free tier)
+
+**Workload Distribution:**
+- `argocd` (2 replicas) + `vault` (1) + `vault-secrets-operator` + `caddy` (2 replicas) + `vaultwarden` (1) + `uptime-kuma` (1) + `homepage` (1) + `tailscale-operator` (1)
+- Heavy consumers: caddy (2 replicas, TLS termination), uptime-kuma (SQLite queries), argocd-repo-server
+
+**Metrics:** Metrics-server not yet installed; CPU/memory tracking via pod logs and `kubectl top` when available.
+
+---
+
 ## Networking
 
 ### VCN: nebula

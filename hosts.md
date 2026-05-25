@@ -64,6 +64,21 @@
 | wg0        | 10.20.30.1/32                                 | 10.20.30.2 (~10.20.30.0/24)  |
 | tailscale0 | 100.98.212.71 / fd7a:115c:a1e0::f039:d447     | 100.100.100.100 (MagicDNS)   |
 
+**Resource Usage (current):**
+
+| Resource | Total | Used | Available | % Used |
+|----------|-------|------|-----------|--------|
+| RAM | 30 GB | 9.7 GB | 21 GB available | 32% |
+| CPU | 12 cores | varies | idle most of time | <20% sustained |
+| `/` root | 456 GB | 384 GB | 52 GB | **89%** |
+| `/media/m2` NVMe | 3.6 TB | 1.7 TB | 1.8 TB | 50% |
+
+**Storage Alert:** Root filesystem at 89% — consider cleanup:
+- Docker images: `docker image prune`
+- Unused volumes: `docker volume prune`
+- Duplicati backups: check `/var/lib/docker/volumes/` size
+- Home Assistant DB: `~/.local/share/hassio/homeassistant/home-assistant_v2.db` — ~2-3 GB
+
 ---
 
 ### ampere-ubuntu (158.178.136.162)
