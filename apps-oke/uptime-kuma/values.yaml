@@ -1,5 +1,10 @@
 # Uptime Kuma — single replica + 50 GB OCI block volume for SQLite history.
 # Lives on OKE so it can detect pico outages (proposal §8).
+#
+# SETUP: After deployment, configure monitors via https://uptime.stevegore.au:
+# - pico-hosted services (hass, plex, etc.) via pico Egress Service (pico:<port>)
+# - external services via DNS names (*.stevegore.au, *.local, etc.)
+# Monitors are stored in the SQLite DB (PVC), so they persist across restarts.
 
 replicaCount: 1
 
