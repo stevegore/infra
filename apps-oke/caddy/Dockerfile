@@ -5,7 +5,7 @@
 #
 # Build + push (multi-arch; OKE workers are arm64):
 #   docker buildx build --platform linux/arm64 \
-#     -t syd.ocir.io/sdajdczqv0qo/caddy:2.11.2-stevegore.1 \
+#     -t syd.ocir.io/sdajdczqv0qo/caddy:2.11.3-stevegore.1 \
 #     --push apps-oke/caddy/
 
 FROM caddy:2.11-builder AS builder
