@@ -46,6 +46,14 @@ spec:
       destination:
         server: https://kubernetes.default.svc
         namespace: '{{.path.basename}}'
+      ignoreDifferences:
+        # The tailscale-operator rewrites pico's externalName to point at the
+        # proxy pod once it's up. Ignore that field so ArgoCD doesn't revert it.
+        - group: ""
+          kind: Service
+          name: pico
+          jsonPointers:
+            - /spec/externalName
       syncPolicy:
         automated:
           prune: true
