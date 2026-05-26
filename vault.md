@@ -58,9 +58,20 @@ Used by Vault Secrets Operator and application pods to authenticate.
 **ClusterRoleBinding:** `vault-auth-tokenreview` → `system:auth-delegator`
 
 **Roles:**
-| Role | Service Account | Namespace | Policies |
-|------|-----------------|-----------|----------|
-| vault-secrets-operator | vault-secrets-operator-controller-manager | vault-secrets-operator | openclaw |
+| Role | Bound Service Accounts | Bound Namespaces | Policies |
+|------|------------------------|------------------|----------|
+| vault-secrets-operator | vault-secrets-operator-controller-manager, default | vault-secrets-operator, caddy, openclaw, vaultwarden, tailscale-operator, homepage | caddy, openclaw, vaultwarden, tailscale-operator, homepage |
+
+To onboard a new app namespace, append it to both `bound_service_account_namespaces` and (after writing the policy) `policies`:
+```bash
+vault policy write <app> - <<EOF
+path "kv/data/<app>/*" { capabilities = ["read"] }
+EOF
+vault write auth/kubernetes/role/vault-secrets-operator \
+  bound_service_account_names=vault-secrets-operator-controller-manager,default \
+  bound_service_account_namespaces=<existing list>,<app> \
+  policies=<existing list>,<app> ttl=1h
+```
 
 ### 2. AppRole (for pico → kv/homelab/* token sync)
 
