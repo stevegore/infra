@@ -147,6 +147,14 @@ data:
       import defaults
     }
 
+    # Custom-domain alias for the public 'homelab' status page. Uptime Kuma
+    # serves the right page at / based on Host header via status_page_cname
+    # (managed by scripts/setup_status_page.py).
+    status.stevegore.au {
+      reverse_proxy uptime-kuma.uptime-kuma.svc.cluster.local:3001
+      import defaults
+    }
+
     headlamp.stevegore.au {
       authorize with adminonly
       reverse_proxy headlamp.headlamp.svc.cluster.local:80
