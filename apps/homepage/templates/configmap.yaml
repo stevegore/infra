@@ -87,10 +87,19 @@ data:
             href: https://port.stevegore.au
             description: Container Management
             icon: portainer.png
+            widget:
+              type: portainer
+              url: http://pico:9000
+              env: 1
+              key: {{ "{{HOMEPAGE_VAR_PORTAINER_TOKEN}}" }}
         - Uptime Kuma:
             href: http://pico:3001
             description: Uptime & status monitoring
             icon: uptime-kuma.png
+            widget:
+              type: uptimekuma
+              url: http://uptime-kuma.uptime-kuma.svc.cluster.local:3001
+              slug: homelab
         - Home Assistant:
             href: https://hass.stevegore.au
             description: Smart Home

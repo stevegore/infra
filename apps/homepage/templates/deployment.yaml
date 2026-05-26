@@ -38,6 +38,12 @@ spec:
           env:
             - name: HOMEPAGE_ALLOWED_HOSTS
               value: {{ join "," .Values.allowedHosts | quote }}
+          {{- if .Values.vault.enabled }}
+          envFrom:
+            - secretRef:
+                name: {{ .Values.vault.portainer.secretName }}
+                optional: true
+          {{- end }}
           volumeMounts:
             - name: config-work
               mountPath: /app/config
