@@ -1456,7 +1456,31 @@ docker start uptime-kuma
 **Mounts:** `/usr/share/bitwarden` bind -> `/data`  
 **Domain:** <https://bw2.stevegore.au> (Cloudflare Tunnel; standby only — primary is `bw.stevegore.au` on OKE)
 
-**Sync:** Hourly systemd timer (`vw-mysql-to-sqlite.timer`) pulls MySQL HeatWave → `/usr/share/bitwarden/db.sqlite3` via `~/.local/bin/vw-mysql-to-sqlite.sh` (Python/pymysql). MySQL reachable at `10.0.1.51:3306` via Tailscale (oke-connector advertises `10.0.1.0/24`). Password in `~/.vw-mysql-sync.pass`.
+**Sync:** Hourly systemd timer (`vw-mysql-to-sqlite.timer`) pulls MySQL HeatWave → `/usr/share/bitwarden/db.sqlite3`. Script source: `~/code/infra/scripts/vw-mysql-to-sqlite.sh` (Python/pymysql). Installed at `/usr/local/bin/vw-mysql-to-sqlite.sh`. MySQL reachable at `10.0.1.51:3306` via Tailscale (oke-connector advertises `10.0.1.0/24`). Password in `~/.vw-mysql-sync.pass`.
+
+**To install or reinstall the timer:**
+```bash
+# Copy script
+sudo cp ~/code/infra/scripts/vw-mysql-to-sqlite.sh /usr/local/bin/vw-mysql-to-sqlite.sh
+sudo chmod +x /usr/local/bin/vw-mysql-to-sqlite.sh
+
+# Copy and enable systemd units (service + timer files live in ~/code/infra/scripts/)
+sudo cp ~/code/infra/scripts/vw-mysql-to-sqlite.service /etc/systemd/system/
+sudo cp ~/code/infra/scripts/vw-mysql-to-sqlite.timer /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now vw-mysql-to-sqlite.timer
+
+# Run a one-shot sync and check logs
+sudo systemctl start vw-mysql-to-sqlite.service
+journalctl -u vw-mysql-to-sqlite.service -n 20 --no-pager
+```
+
+**Run sync manually (no sudo, from any user):**
+```bash
+bash ~/code/infra/scripts/vw-mysql-to-sqlite.sh
+```
+
+**Known issue — Diesel migration record gap (fixed 2026-05-26):** After a sync, Vaultwarden 1.36.0 may crash with `no such column: "key"` on startup. This happens because the MySQL source DB was missing migration record `20210315163412` (`rename_send_key`) — the `sends.key` column was already renamed to `akey` historically but the migration table entry was absent, so Diesel tried to re-run it and panicked. Fixed by inserting the record into both MySQL and the SQLite replica. If this recurs after a future Vaultwarden upgrade, check `__diesel_schema_migrations` for gaps against the container's expected migration list.
 
 **Purpose:** Failover replica for `bw.stevegore.au`. Completely independent ingress path (Cloudflare Tunnel → pico-local sqlite) — survives any OKE or OCI NLB failure. Clients re-auth on failover (separate RSA keys).
 
