@@ -24,3 +24,22 @@ service:
 # `homepage.stevegore.au` and Homepage refuses unknown hosts by default.
 allowedHosts:
   - homepage.stevegore.au
+
+# Pico egress — Tailscale Operator pattern, same as caddy/uptime-kuma. Lets
+# homepage's backend reach pico-only services for widget API calls.
+pico:
+  enabled: true
+  tailnetFqdn: pico.chipmunk-fir.ts.net
+  ports:
+    - { name: portainer, port: 9000 }
+
+# Vault — pulls the Portainer API token in as a Secret that the homepage
+# container envFroms (HOMEPAGE_VAR_PORTAINER_TOKEN).
+vault:
+  enabled: true
+  mount: kv
+  refreshAfter: 1h
+  authRole: vault-secrets-operator
+  portainer:
+    path: homepage/portainer
+    secretName: homepage-portainer
