@@ -65,10 +65,11 @@ service:
       port: 443
       targetPort: 443
       protocol: TCP
-    - name: https-quic
-      port: 443
-      targetPort: 443
-      protocol: UDP
+    # UDP 443 (HTTP/3) intentionally omitted. The OCI CCM rejects any
+    # security-list-management-mode other than "None" when a UDP listener is
+    # present, which would force us to hand-manage worker-subnet NodePort
+    # rules. Public security list doesn't open UDP 443 anyway, so HTTP/3
+    # wasn't reaching clients end-to-end. Caddy stays on h1/h2 over TCP.
 
 # OCI Object Storage S3-compat endpoint for certmagic-s3.
 # Bucket created out-of-band; vault-instances dynamic group has manage objects

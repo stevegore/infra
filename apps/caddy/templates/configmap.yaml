@@ -27,7 +27,7 @@ data:
 
       servers :443 {
         name stevegore
-        protocols h1 h2 h2c h3
+        protocols h1 h2 h2c
         strict_sni_host on
       }
 

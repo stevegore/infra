@@ -60,9 +60,6 @@ spec:
             - name: https
               containerPort: 443
               protocol: TCP
-            - name: https-quic
-              containerPort: 443
-              protocol: UDP
           env:
             # Sourced from VSO-managed Secrets. caddy-security reads these via
             # {env.*} placeholders in the Caddyfile.
