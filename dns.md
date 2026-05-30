@@ -79,6 +79,8 @@ Internet
 
 **ACME certificates:** DNS-01 challenge via Cloudflare (token in Vault at `kv/caddy/config → cf_api_token`). Cert state shared across Caddy replicas via OCI Object Storage (`caddy-acme` bucket, S3-compat endpoint). Let's Encrypt only; ZeroSSL fallback disabled.
 
+**NLB backend policy:** `THREE_TUPLE` (src IP / dst IP / proto), set via `oci-network-load-balancer.oraclecloud.com/backend-policy` on the caddy Service. Default `FIVE_TUPLE` hashes the source port too, so a single browser's TCP connections fan out across both caddy pods — that breaks caddy-security's in-process OAuth flow state (AUTHP_SESSION_ID → redirect_url), leaving users stuck on `auth.stevegore.au` after a successful GitHub login. THREE_TUPLE pins a client IP to one node, and pod anti-affinity makes that the same pod for every connection.
+
 ---
 
 ## Cloudflare Tunnel
