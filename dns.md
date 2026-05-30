@@ -208,7 +208,7 @@ All services proxied through Caddy on OKE (NLB → 159.13.44.68).
 | immich.stevegore.au        | 2283      | —        | Immich (alias)                 |
 | photoprism.stevegore.au    | 2342      | —        | PhotoPrism                     |
 | port.stevegore.au   | 9000      | —        | Portainer                      |
-| huggin.stevegore.au | 3000      | —        | Huginn                         |
+| huginn.stevegore.au | 3000      | —        | Huginn                         |
 | pdf.stevegore.au    | 8083      | —        | Stirling PDF                   |
 | strava.stevegore.au | 8180      | —        | Stravakeeper                   |
 | stats.stevegore.au  | 8001      | —        | Stats server — public JSON + HTML dashboard (`scripts/STATS_SERVER.md`) |

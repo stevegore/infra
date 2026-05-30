@@ -204,7 +204,7 @@ data:
       import defaults
     }
 
-    huggin.stevegore.au {
+    huginn.stevegore.au {
       reverse_proxy pico:3000
       import defaults
     }

@@ -129,7 +129,7 @@ data:
 
     - Automation:
         - Huginn:
-            href: https://huggin.stevegore.au
+            href: https://huginn.stevegore.au
             description: Workflow Automation
             icon: huginn.png
         - Home Assistant:
