@@ -132,7 +132,7 @@ pico:
     - { name: immich,       port: 2283  }
     - { name: photoprism,  port: 2342  }
     - { name: port,        port: 9000  }
-    - { name: huggin,  port: 3000  }
+    - { name: huginn,  port: 3000  }
     - { name: pdf,     port: 8083  }
     - { name: strava,  port: 8180  }
     - { name: ttyd,    port: 8788  }

@@ -826,6 +826,13 @@ volumes:
 **Database:** MySQL 5.7, database name `huginn`  
 **Volumes:** `huggin_mysqldata`
 
+**Agents:**
+
+| Agent ID | Name | Type | Schedule | Notes |
+| --- | --- | --- | --- | --- |
+| 8 | Nike Running Shoe Sales | WebsiteAgent | 8am | Scrapes `www.nike.com/au/w/mens-sale-road-running-shoes-…` via CSS selectors. Switched from `api.nike.com/cic/browse/v2` (deprecated 2024) to HTML mode after Nike moved to Kasada-protected GraphQL. Extracts: `div.product-card__title`, `div[data-testid="product-price-reduced"]`, `div[data-testid="product-price"]`, `a[data-testid="product-card__img-link-overlay"]`. |
+| 10 | Send shoes | PushoverAgent | — | Receives events from agent 8, sends Pushover notification with shoe name, sale price, and link. |
+
 ---
 
 ### nuraspace2
