@@ -40,6 +40,16 @@ service:
     # (frontend) and the worker node subnet (backend NodePorts). Without this the
     # CCM defaults to None and NodePort rules must be added manually.
     oci-network-load-balancer.oraclecloud.com/security-list-management-mode: "All"
+    # NLB backend hash policy. Default FIVE_TUPLE hashes src+dst IP/port+proto,
+    # so different TCP connections from the same client land on different
+    # nodes/pods. caddy-security keeps OAuth flow state (AUTHP_SESSION_ID →
+    # redirect_url) in-process per pod, so a callback landing on a different
+    # pod than the one that started the flow loses the redirect and dumps the
+    # user on auth.stevegore.au. THREE_TUPLE hashes src IP / dst IP / proto,
+    # pinning all connections from one client IP to the same backend node
+    # (paired with anti-affinity → same pod). FIVE_TUPLE/TWO_TUPLE/THREE_TUPLE
+    # are the only values OCI NLB accepts.
+    oci-network-load-balancer.oraclecloud.com/backend-policy: "THREE_TUPLE"
   # externalTrafficPolicy=Local pairs with the NLB pass-through above.
   externalTrafficPolicy: Local
   # Reserved public IP minted in terraform/nlb.tf — survives NLB recreation.
