@@ -1214,7 +1214,7 @@ services:
 
 **Purpose:** Photo management app (Immich) serving the same originals as PhotoPrism  
 **Ports:** 2283 (HTTP)  
-**Domain:** `immich.stevegore.au` (via Caddy → 10.20.30.1:2283)  
+**Domain:** `photos.stevegore.au` (primary), `immich.stevegore.au` (alias) — via Caddy → 10.20.30.1:2283  
 **Storage:**
 
 | Host Path                   | Container Path             | Notes                               |

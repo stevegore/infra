@@ -118,8 +118,9 @@ pico:
     - { name: desk,    port: 8111  }
     - { name: gym,     port: 8112  }
     - { name: plex,    port: 32400 }
-    - { name: immich,  port: 2283  }
-    - { name: port,    port: 9000  }
+    - { name: immich,       port: 2283  }
+    - { name: photoprism,  port: 2342  }
+    - { name: port,        port: 9000  }
     - { name: huggin,  port: 3000  }
     - { name: pdf,     port: 8083  }
     - { name: strava,  port: 8180  }
