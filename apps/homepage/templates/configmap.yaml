@@ -70,14 +70,14 @@ data:
             icon: mdi-shield-bug
 
     - Photos:
-        - PhotoPrism:
-            href: https://photos.stevegore.au
-            description: The Gore's Photos — AI-powered
-            icon: photoprism.png
         - Immich:
-            href: https://immich.stevegore.au
+            href: https://photos.stevegore.au
             description: Photo & Video Backup
             icon: immich.png
+        - PhotoPrism:
+            href: https://photoprism.stevegore.au
+            description: The Gore's Photos — AI-powered
+            icon: photoprism.png
         - icloudpd:
             description: iCloud photo downloader (hourly sync to /media/m2/photos/iphone/steve)
             icon: mdi-apple-icloud

@@ -59,8 +59,8 @@ monitors = [
     {"name": "Auth Service", "type": "http", "kwargs": {"url": "https://auth.stevegore.au/", "maxredirects": 10, "accepted_statuscodes_json": ACCEPT_OK}, "tags": ["public", "infra"], "aliases": ["auth.stevegore.au"]},
     {"name": "Home Assistant", "type": "http", "kwargs": {"url": "https://hass.stevegore.au/", "maxredirects": 5, "accepted_statuscodes_json": ACCEPT_OK_REDIR}, "tags": ["public"], "aliases": ["hass.stevegore.au"]},
     {"name": "Home Assistant (CF Tunnel)", "type": "http", "kwargs": {"url": "https://hass2.stevegore.au/", "maxredirects": 5, "accepted_statuscodes_json": ACCEPT_OK_REDIR}, "tags": ["public"], "aliases": ["hass2.stevegore.au"]},
-    {"name": "Immich", "type": "http", "kwargs": {"url": "https://immich.stevegore.au/api/server/ping", "maxredirects": 0, "keyword": "pong", "accepted_statuscodes_json": ACCEPT_OK}, "tags": ["public", "photos"], "aliases": ["immich.stevegore.au"]},
-    {"name": "PhotoPrism", "type": "http", "kwargs": {"url": "https://photos.stevegore.au/api/v1/status", "maxredirects": 0, "accepted_statuscodes_json": ACCEPT_OK}, "tags": ["public", "photos"], "aliases": ["photos.stevegore.au"]},
+    {"name": "Immich", "type": "http", "kwargs": {"url": "https://photos.stevegore.au/api/server/ping", "maxredirects": 0, "keyword": "pong", "accepted_statuscodes_json": ACCEPT_OK}, "tags": ["public", "photos"], "aliases": ["photos.stevegore.au", "immich.stevegore.au"]},
+    {"name": "PhotoPrism", "type": "http", "kwargs": {"url": "https://photoprism.stevegore.au/api/v1/status", "maxredirects": 0, "accepted_statuscodes_json": ACCEPT_OK}, "tags": ["public", "photos"], "aliases": ["photoprism.stevegore.au"]},
     {"name": "Plex", "type": "http", "kwargs": {"url": "https://plex.stevegore.au/identity", "maxredirects": 0, "accepted_statuscodes_json": ACCEPT_OK}, "tags": ["public", "media"], "aliases": ["plex.stevegore.au"]},
     {"name": "Huggin", "type": "http", "kwargs": {"url": "https://huggin.stevegore.au/", "maxredirects": 5, "accepted_statuscodes_json": ACCEPT_OK}, "tags": ["public"], "aliases": ["huggin.stevegore.au"]},
     {"name": "Portainer", "type": "http", "kwargs": {"url": "https://port.stevegore.au/", "maxredirects": 5, "accepted_statuscodes_json": ACCEPT_OK}, "tags": ["public", "infra"], "aliases": ["port.stevegore.au"]},
@@ -75,6 +75,7 @@ monitors = [
     {"name": "Gym Bookings", "type": "http", "kwargs": {"url": "https://gym.stevegore.au/", "maxredirects": 0, "accepted_statuscodes_json": ACCEPT_302}, "tags": ["public"], "aliases": ["gym.stevegore.au"]},
     {"name": "OpenClaw", "type": "http", "kwargs": {"url": "https://openclaw.stevegore.au/", "maxredirects": 5, "accepted_statuscodes_json": ACCEPT_OK}, "tags": ["public"], "aliases": ["openclaw.stevegore.au"]},
     {"name": "Uptime Kuma", "type": "http", "kwargs": {"url": "https://uptime.stevegore.au/", "maxredirects": 5, "accepted_statuscodes_json": ACCEPT_OK}, "tags": ["public", "infra"], "aliases": ["uptime.stevegore.au"]},
+    {"name": "Stats", "type": "http", "kwargs": {"url": "https://stats.stevegore.au/api/stats", "maxredirects": 0, "accepted_statuscodes_json": ACCEPT_OK}, "tags": ["public", "infra"], "aliases": ["stats.stevegore.au"]},
 
     # pico-direct services (Tailscale Operator egress)
     {"name": "Radarr", "type": "http", "kwargs": {"url": "http://pico:7878/", "maxredirects": 5, "accepted_statuscodes_json": ACCEPT_OK}, "tags": ["internal", "media"]},

@@ -203,7 +203,9 @@ All services proxied through Caddy on OKE (NLB → 159.13.44.68).
 | desk.stevegore.au   | 8111      | adminonly| NuraSpace remote desktop       |
 | gym.stevegore.au    | 8112      | adminonly| GymMaster                      |
 | plex.stevegore.au   | 32400     | —        | Plex Media Server              |
-| immich.stevegore.au | 2283      | —        | Immich photo library           |
+| photos.stevegore.au        | 2283      | —        | Immich photo library (primary) |
+| immich.stevegore.au        | 2283      | —        | Immich (alias)                 |
+| photoprism.stevegore.au    | 2342      | —        | PhotoPrism                     |
 | port.stevegore.au   | 9000      | —        | Portainer                      |
 | huggin.stevegore.au | 3000      | —        | Huginn                         |
 | pdf.stevegore.au    | 8083      | —        | Stirling PDF                   |

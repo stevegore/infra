@@ -200,6 +200,11 @@ data:
       import defaults
     }
 
+    photoprism.stevegore.au {
+      reverse_proxy pico:2342
+      import defaults
+    }
+
     port.stevegore.au {
       reverse_proxy pico:9000
       import defaults
@@ -224,7 +229,7 @@ data:
     }
 
     photos.stevegore.au {
-      reverse_proxy pico:2342
+      reverse_proxy pico:2283
       import defaults
     }
 
