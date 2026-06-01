@@ -132,13 +132,16 @@ All Helm charts are defined in `apps/` and synced via ArgoCD. See `argocd/applic
 
 ### Network Security Groups
 
-| Name             | Purpose              | VNICs                         |
-| ---------------- | -------------------- | ----------------------------- |
-| mysql-heatwave   | MySQL HeatWave NSG   | OKE private subnet nodes      |
-| oke-workers      | OKE worker nodes     | OKE node pool                 |
-| oke-api-endpoint | OKE API endpoint     | OKE API endpoint VNIC         |
+| Name              | Purpose                              | VNICs                                          |
+| ----------------- | ------------------------------------ | ---------------------------------------------- |
+| mysql-heatwave    | MySQL HeatWave NSG                   | OKE private subnet nodes                       |
+| oke-workers       | OKE worker nodes                     | OKE node pool                                  |
+| oke-api-endpoint  | OKE API endpoint                     | OKE API endpoint VNIC                          |
+| fss-mount-target  | NFS ingress for the homelab-fss MT   | `homelab-fss` Mount Target VNIC (Private subnet) |
 
-Note: `allow-wireguard`, `allow-all-egress`, `allow-ssh`, and `allow-http-https` were deleted 2026-05-26 (all were attached to ampere-ubuntu which was terminated).
+Ingress on `fss-mount-target`: TCP/UDP 111 + 2048–2050 from the `oke-workers` NSG only. No egress rules (Mount Targets are pure responders). Worker NSG egress is `0.0.0.0/0`, so no worker-side rule change is needed.
+
+Note: `allow-wireguard`, `allow-all-egress`, `allow-ssh`, and `allow-http-https` were deleted 2026-05-26 (all were attached to ampere-ubuntu which was terminated). TF code blocks for those were removed in commit `baf439e` on 2026-06-01.
 
 ### Gateways
 
@@ -253,6 +256,21 @@ Always-Free allotment.
 Used by: `apps/oci-fss/` Helm chart (StorageClass manifest only — the Mount
 Target OCID lives in that chart's `values.yaml`).
 
+#### Gotcha: FSS CSI auth needs a cluster-principal grant, not `service OKE`
+
+The OKE-bundled `fss.csi.oraclecloud.com` provisioner runs on the OKE managed
+control plane and authenticates as the **cluster instance principal**, not as
+`service OKE`. Granting `Allow service OKE to manage file-family` is necessary
+but *not* sufficient — PVCs stall with `HTTP 404 NotAuthorizedOrNotFound` on
+`GetMountTarget` until the cluster principal is granted directly. Both
+statements are in `oke-service-policy` (see IAM section below); the
+load-bearing one is the `any-user where request.principal.type='cluster'` line.
+
+This differs from the BV CSI driver (`blockvolume.csi.oraclecloud.com`), which
+*does* work with just `Allow service OKE to manage volume-family`. Verified
+empirically 2026-06-01 — commit `d3af061`. Reproduces if you ever recreate the
+cluster or test in another tenancy.
+
 ---
 
 ## Identity & Access Management (IAM)
@@ -281,6 +299,36 @@ Allow dynamic-group vault-instances to read buckets in compartment main
 Allow dynamic-group vault-instances to manage file-family in compartment main
 ```
 
+### Policy: oke-service-policy
+
+| Property    | Value                                                                            |
+| ----------- | -------------------------------------------------------------------------------- |
+| OCID        | `ocid1.policy.oc1..aaaaaaaahmnm5qw5ntj6pnbuhbrvy7e2hovfc2suzjoxarp4fzym26mjh73a` |
+| Compartment | main                                                                             |
+| Statements  |                                                                                  |
+
+```text
+Allow service OKE to manage virtual-network-family in compartment main
+Allow service OKE to manage instance-family in compartment main
+Allow service OKE to manage load-balancers in compartment main
+Allow service OKE to manage volume-family in compartment main
+Allow service OKE to manage cluster-node-pools in compartment main
+Allow service OKE to manage file-family in compartment main
+Allow any-user to manage file-family in compartment main where ALL {request.principal.type='cluster', request.principal.compartment.id='<main-compartment-ocid>'}
+```
+
+The last statement is the one that actually unblocks the FSS CSI provisioner
+(see the "FSS CSI auth" gotcha in the File Storage section above). The
+`service OKE` `file-family` line is kept for belt-and-suspenders; remove it
+once you've confirmed FSS CSI never falls back to the service-principal path.
+
+### MySQL service policy
+
+| Property    | Value                                                                            |
+| ----------- | -------------------------------------------------------------------------------- |
+| OCID        | (see `terraform/oke-iam.tf` → `oci_identity_policy.mysql_service`)               |
+| Purpose     | Grants the MySQL DB Service the access it needs to provision a HeatWave DB system in `main` (VNICs, KMS for at-rest encryption, automatic backups to Oracle-managed Object Storage, work-request tracking). |
+
 ### Customer Secret Keys (HMAC creds for S3-compat endpoint)
 
 | Display Name       | Access Key ID                              | Purpose                                                  | Stored in Vault at      |
@@ -307,7 +355,8 @@ OCI users are capped at 2 active Customer Secret Keys. List + delete via
 | Worker NSG              | `oke-workers`                                                                                        |
 | API endpoint NSG        | `oke-api-endpoint`                                                                                   |
 | API endpoint subnet     | `oke-api-endpoint` (10.0.2.0/28)                                                                     |
-| Managed by              | Terraform (`terraform/oke-*.tf`)                                                                     |
+| StorageClasses          | `oci-bv` (RWO Block, FD-pinned, default), `oci-fss` (RWX File, AD-durable, Retain reclaim)           |
+| Managed by              | Terraform (`terraform/oke-*.tf`, `terraform/fss.tf`)                                                  |
 
 ### Kubeconfig
 
