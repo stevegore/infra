@@ -91,6 +91,15 @@ data:
       authenticate with stevegoreauthportal
     }
 
+    # ----- Authentik (Phase 2: temporary host to verify the IdP + GitHub login
+    # before the forward_auth cutover. Plain reverse_proxy — no caddy-security.
+    # Covered by the *.stevegore.au wildcard A record.) -----
+
+    authentik.stevegore.au {
+      reverse_proxy authentik-server.authentik.svc.cluster.local:80
+      import defaults
+    }
+
     # ----- Health -----
 
     healthz.stevegore.au {
