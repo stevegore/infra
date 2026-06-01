@@ -119,7 +119,7 @@ See `scripts/STATS_SERVER.md` for detailed setup and troubleshooting.
 
 | Namespace          | Workload                        | Notes                                      |
 | ------------------ | ------------------------------- | ------------------------------------------ |
-| caddy              | Caddy (2 replicas)              | NLB → Caddy; DNS-01 ACME via Cloudflare; certmagic-s3 on OCI Object Storage |
+| caddy              | Caddy (1 replica)               | NLB → Caddy; DNS-01 ACME via Cloudflare; certmagic-s3 on OCI Object Storage. Single replica required — caddy-security keeps OAuth login state in per-pod memory (see dns.md). |
 | argocd             | ArgoCD                          | `--insecure` mode (Caddy terminates TLS); Git source: `stevegore/infra` |
 | vault              | HashiCorp Vault                 | OCI KMS auto-unseal; VSO syncs secrets to k8s |
 | vault-secrets-operator | VSO                        | Syncs Vault secrets → k8s Secrets          |

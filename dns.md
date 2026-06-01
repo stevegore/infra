@@ -52,7 +52,7 @@ Internet
     │
     ├─── *.stevegore.au ──────────► 159.13.44.68 (OCI NLB, reserved IP)
     │                                    │
-    │                                    └─► Caddy (OKE Deployment, 2 replicas)
+    │                                    └─► Caddy (OKE Deployment, 1 replica — see OAuth note)
     │                                            │
     │                                            ├─► In-cluster services (ClusterIP)
     │                                            │       ├─► argocd-server.argocd:80
@@ -77,9 +77,11 @@ Internet
                                                    └─► pico (direct)
 ```
 
-**ACME certificates:** DNS-01 challenge via Cloudflare (token in Vault at `kv/caddy/config → cf_api_token`). Cert state shared across Caddy replicas via OCI Object Storage (`caddy-acme` bucket, S3-compat endpoint). Let's Encrypt only; ZeroSSL fallback disabled.
+**ACME certificates:** DNS-01 challenge via Cloudflare (token in Vault at `kv/caddy/config → cf_api_token`). Cert state stored in OCI Object Storage (`caddy-acme` bucket, S3-compat endpoint) — kept even at 1 replica so a future scale-out or pod replacement doesn't re-issue and burn Let's Encrypt rate limits. Let's Encrypt only; ZeroSSL fallback disabled.
 
-**NLB backend policy:** `THREE_TUPLE` (src IP / dst IP / proto), set via `oci-network-load-balancer.oraclecloud.com/backend-policy` on the caddy Service. Default `FIVE_TUPLE` hashes the source port too, so a single browser's TCP connections fan out across both caddy pods — that breaks caddy-security's in-process OAuth flow state (AUTHP_SESSION_ID → redirect_url), leaving users stuck on `auth.stevegore.au` after a successful GitHub login. THREE_TUPLE pins a client IP to one node, and pod anti-affinity makes that the same pod for every connection.
+**Single replica (caddy-security OAuth state):** Caddy runs `replicaCount: 1`. caddy-security (authcrunch) keeps the GitHub OAuth login transaction (`state` UUID → `redirect_url`) in **per-pod process memory** with no shared/distributed backend. With 2+ replicas the GitHub callback can land on a different pod than the one that opened the flow, so the redirect is lost and the user is stranded on `auth.stevegore.au` after a successful login (the JWT cookie still gets set, so a *second* visit works — the classic symptom). One pod removes the cross-pod race entirely. **This is the real fix** for that bug.
+
+**NLB backend policy:** `THREE_TUPLE` (src IP / dst IP / proto), set via `oci-network-load-balancer.oraclecloud.com/backend-policy` on the caddy Service. This was an earlier attempt to mitigate the OAuth-state problem by pinning a client IP to one node, but it only holds while the client source IP is perfectly stable for the whole GitHub round-trip (CGNAT/mobile egress rotation defeats it) — hence the move to a single replica above. The annotation is now effectively inert but left in place so a future split (single-replica auth portal + multi-replica proxy) is easy to reintroduce.
 
 ---
 
