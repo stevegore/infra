@@ -12,6 +12,19 @@ spec:
 
   resources:
     {{- toYaml .Values.postgres.resources | nindent 4 }}
+{{- if .Values.backup.enabled }}
+
+  # OCI Object Storage's S3-compatible API rejects boto3/botocore 1.36+'s default
+  # streaming-checksum upload (aws-chunked, omits Content-Length) with
+  # "MissingContentLength: The Content-Length header is required". Forcing both
+  # checksum modes to when_required makes barman-cloud send a classic PutObject
+  # with Content-Length. Without this, WAL archiving + base backups fail.
+  env:
+    - name: AWS_REQUEST_CHECKSUM_CALCULATION
+      value: when_required
+    - name: AWS_RESPONSE_CHECKSUM_VALIDATION
+      value: when_required
+{{- end }}
 {{- if .Values.consumers }}
 
   # Per-app login roles. Each role's password comes from a basic-auth Secret
