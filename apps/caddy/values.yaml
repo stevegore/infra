@@ -1,4 +1,12 @@
-replicaCount: 2
+# Single replica is required, not just preferred. caddy-security (authcrunch)
+# stores the OAuth login transaction (state UUID → redirect_url) in per-pod
+# process memory with no shared/distributed backend. With 2+ replicas, the
+# GitHub callback can land on a different pod than the one that opened the
+# flow, losing the redirect and dumping the user on auth.stevegore.au (login
+# still succeeds, so a second visit works — the classic symptom). NLB
+# THREE_TUPLE affinity only masks this while the client source IP stays
+# perfectly stable for the whole round-trip. One pod removes the race entirely.
+replicaCount: 1
 
 image:
   # Built from apps/caddy/Dockerfile, pushed to OCI Container Registry (Always Free, 5 GB).
