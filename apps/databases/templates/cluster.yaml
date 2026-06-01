@@ -12,11 +12,51 @@ spec:
 
   resources:
     {{- toYaml .Values.postgres.resources | nindent 4 }}
+{{- if .Values.consumers }}
+
+  # Per-app login roles. Each role's password comes from a basic-auth Secret
+  # (username/password) synced by VSO from Vault into this namespace. The
+  # matching databases are created by Database CRs in consumers.yaml.
+  managed:
+    roles:
+    {{- range .Values.consumers }}
+      - name: {{ .name }}
+        ensure: present
+        login: true
+        passwordSecret:
+          name: {{ .passwordSecret }}
+    {{- end }}
+{{- end }}
 
   # Benign default database created at bootstrap. Real app databases are added
-  # out-of-band via `Database` CRs (e.g. apps/authentik) targeting this cluster,
-  # so they stay owned by the app that needs them.
+  # via Database CRs (consumers.yaml) owned by the per-app role above, rather
+  # than sharing this bootstrap `app` database.
   bootstrap:
     initdb:
       database: app
       owner: app
+{{- if .Values.backup.enabled }}
+
+  # Continuous WAL archiving + base backups to OCI Object Storage (S3-compat).
+  # In-tree barmanObjectStore is deprecated in CNPG v1.26+ but fully functional
+  # in v1.29.1; chosen over the Barman Cloud Plugin to avoid a cert-manager
+  # dependency. See values.yaml `backup:` for the full rationale. Creds are the
+  # OCI Customer Secret Key synced from Vault by VSO into Secret
+  # `{{ .Values.vault.secretName }}` (keys access_key / secret_key).
+  backup:
+    retentionPolicy: {{ .Values.backup.retentionPolicy | quote }}
+    barmanObjectStore:
+      destinationPath: s3://{{ .Values.backup.bucket }}/{{ .Values.backup.destinationPrefix }}
+      endpointURL: {{ .Values.backup.endpointURL | quote }}
+      s3Credentials:
+        accessKeyId:
+          name: {{ .Values.vault.secretName }}
+          key: access_key
+        secretAccessKey:
+          name: {{ .Values.vault.secretName }}
+          key: secret_key
+      wal:
+        compression: {{ .Values.backup.wal.compression }}
+      data:
+        compression: {{ .Values.backup.data.compression }}
+{{- end }}
