@@ -61,7 +61,7 @@ Internet
     │                                            │       ├─► homepage.homepage:3000
     │                                            │       ├─► uptime-kuma.uptime-kuma:3001
     │                                            │       ├─► headlamp.headlamp:80
-    │                                            │       └─► openclaw.openclaw:18789
+    │                                            │       └─► hermes.hermes:9119
     │                                            │
     │                                            └─► pico (via Tailscale Egress Service)
     │                                                    │  (Tailscale operator proxy pod
@@ -195,7 +195,7 @@ All services proxied through Caddy on OKE (NLB → 159.13.44.68).
 | uptime.stevegore.au      | uptime-kuma.uptime-kuma:3001             | Uptime Kuma | Full UI + status page         |
 | status.stevegore.au      | uptime-kuma.uptime-kuma:3001             | —        | Custom-domain alias for the `homelab` status page (cname row managed by `scripts/setup_status_page.py`) |
 | headlamp.stevegore.au    | headlamp.headlamp:80                      | adminonly| Kubernetes web dashboard         |
-| openclaw.stevegore.au    | openclaw.openclaw:18789                   | —        |                                  |
+| hermes.stevegore.au      | hermes.hermes:9119                        | —        |                                  |
 
 **Via Tailscale Egress Service to pico (`pico` ExternalName svc in caddy namespace):**
 

@@ -2,7 +2,7 @@
 apiVersion: secrets.hashicorp.com/v1beta1
 kind: VaultAuth
 metadata:
-  name: {{ include "openclaw.fullname" . }}
+  name: {{ include "hermes.fullname" . }}
   namespace: {{ .Release.Namespace }}
 spec:
   method: kubernetes

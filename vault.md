@@ -60,7 +60,7 @@ Used by Vault Secrets Operator and application pods to authenticate.
 **Roles:**
 | Role | Bound Service Accounts | Bound Namespaces | Policies |
 |------|------------------------|------------------|----------|
-| vault-secrets-operator | vault-secrets-operator-controller-manager, default | vault-secrets-operator, caddy, openclaw, vaultwarden, tailscale-operator, homepage | caddy, openclaw, vaultwarden, tailscale-operator, homepage |
+| vault-secrets-operator | vault-secrets-operator-controller-manager, default | vault-secrets-operator, caddy, openclaw, hermes, vaultwarden, tailscale-operator, homepage | caddy, openclaw, hermes, vaultwarden, tailscale-operator, homepage |
 
 To onboard a new app namespace, append it to both `bound_service_account_namespaces` and (after writing the policy) `policies`:
 ```bash
@@ -136,13 +136,18 @@ Key-value secrets engine for application credentials.
 | Path | Description | Access Policies |
 |------|-------------|-----------------|
 | kv/openclaw | OpenClaw AI assistant credentials | openclaw |
+| kv/hermes | Hermes Agent credentials | hermes |
 | kv/homelab/* | Tokens synced from pico (`*.token` files) | pico-token-sync (write) |
 
 **Secrets Structure:**
 ```
 kv/
-└── openclaw/
-    ├── ANTHROPIC_API_KEY
+├── openclaw/
+│   ├── ANTHROPIC_API_KEY
+│   ├── OPENCLAW_GATEWAY_TOKEN
+│   └── TELEGRAM_BOT_TOKEN
+└── hermes/
+    ├── ANTHROPIC_API_KEY (or OPENROUTER_API_KEY)
     └── TELEGRAM_BOT_TOKEN
 ```
 
@@ -165,6 +170,17 @@ path "kv/data/openclaw" {
   capabilities = ["read"]
 }
 path "kv/metadata/openclaw" {
+  capabilities = ["read"]
+}
+```
+
+### hermes
+Read-only access to Hermes Agent secrets.
+```hcl
+path "kv/data/hermes" {
+  capabilities = ["read"]
+}
+path "kv/metadata/hermes" {
   capabilities = ["read"]
 }
 ```
@@ -297,7 +313,7 @@ EOF
 vault write auth/kubernetes/role/vault-secrets-operator \
   bound_service_account_names=vault-secrets-operator-controller-manager \
   bound_service_account_namespaces=vault-secrets-operator \
-  policies="openclaw,<app-name>" \
+  policies="openclaw,hermes,<app-name>" \
   ttl=1h
 ```
 
