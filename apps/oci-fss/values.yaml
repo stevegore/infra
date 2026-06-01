@@ -1,0 +1,23 @@
+# StorageClass parameters for the bundled OCI FSS CSI driver
+# (fss.csi.oraclecloud.com), shipped with OKE worker images for k8s 1.27+.
+#
+# mountTargetOcid is left blank until the ORM `homelab-tf` stack applies
+# terraform/fss.tf and creates the Mount Target. After apply, pull the OCID
+# from `terraform output fss_mount_target_ocid` and fill it in here in a
+# follow-up commit. The template no-ops while it's empty, so ArgoCD just
+# creates the empty `oci-fss` namespace.
+
+storageClassName: oci-fss
+
+# Must match the OKE node pool AD (oke-cluster.tf placement_configs).
+availabilityDomain: "tbGS:AP-SYDNEY-1-AD-1"
+
+# main compartment (variables.tf default).
+compartmentOcid: "ocid1.compartment.oc1..aaaaaaaays62ka24mqjmg7ej5khoswujbqjhwwlvalkjbfm7lz5pkmqugwba"
+
+# Populated after TF apply.
+mountTargetOcid: ""
+
+# Retain protects volumes against accidental PVC deletion. Delete to flip
+# behavior; volumes are then cleaned up when the PVC goes away.
+reclaimPolicy: Retain
