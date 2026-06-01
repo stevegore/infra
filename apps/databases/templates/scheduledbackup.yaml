@@ -1,0 +1,15 @@
+{{- if and .Values.backup.enabled .Values.backup.schedule }}
+# Scheduled base backup of pg-shared to OCI Object Storage (the barmanObjectStore
+# config lives on the Cluster in cluster.yaml). WAL is archived continuously;
+# this takes the periodic full base backup that WAL replays on top of.
+apiVersion: postgresql.cnpg.io/v1
+kind: ScheduledBackup
+metadata:
+  name: pg-shared-daily
+  namespace: {{ .Release.Namespace }}
+spec:
+  schedule: {{ .Values.backup.schedule | quote }}
+  backupOwnerReference: self
+  cluster:
+    name: pg-shared
+{{- end }}

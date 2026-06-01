@@ -1,0 +1,55 @@
+{{- if .Values.consumers }}
+# Per-app databases + login roles on the shared pg-shared instance.
+# For each consumer:
+#   - a VaultStaticSecret syncs a basic-auth (username/password) Secret from
+#     Vault into this namespace, filtered to ONLY username/password so the rest
+#     of the app's Vault config doesn't spill into the databases namespace;
+#   - a CNPG Database CR creates the database owned by the matching managed role
+#     (the role itself is declared in cluster.yaml `.spec.managed.roles`).
+apiVersion: secrets.hashicorp.com/v1beta1
+kind: VaultAuth
+metadata:
+  name: databases
+  namespace: {{ .Release.Namespace }}
+spec:
+  method: kubernetes
+  mount: kubernetes
+  kubernetes:
+    role: {{ .Values.vault.authRole }}
+    serviceAccount: {{ .Values.vault.serviceAccount }}
+{{- range .Values.consumers }}
+---
+apiVersion: secrets.hashicorp.com/v1beta1
+kind: VaultStaticSecret
+metadata:
+  name: {{ .name }}-pg-credentials
+  namespace: {{ $.Release.Namespace }}
+spec:
+  type: kv-v2
+  mount: {{ $.Values.vault.mount }}
+  path: {{ .vaultPath }}
+  destination:
+    name: {{ .passwordSecret }}
+    create: true
+    type: kubernetes.io/basic-auth
+    transformation:
+      # Only sync the DB credential keys — keep the app's other secrets
+      # (secret_key, github_*, bootstrap_*) out of the databases namespace.
+      includes:
+        - ^username$
+        - ^password$
+  refreshAfter: {{ $.Values.vault.refreshAfter }}
+  vaultAuthRef: databases
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: {{ .name }}
+  namespace: {{ $.Release.Namespace }}
+spec:
+  cluster:
+    name: pg-shared
+  name: {{ .name }}
+  owner: {{ .name }}
+{{- end }}
+{{- end }}

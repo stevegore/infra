@@ -1,0 +1,39 @@
+# Authentik blueprints, mounted via authentik.blueprints.configMaps in values.yaml.
+# The worker auto-discovers each data key and applies it on startup (idempotent).
+#
+# PHASE 2 (this file): a GitHub OAuth Source so users can "Sign in with GitHub".
+# consumer_key/secret are read from env (AUTHENTIK_GITHUB_CLIENT_ID/SECRET,
+# injected from the authentik-config Secret via global.env). The default
+# source authentication/enrollment flows shipped by Authentik are referenced
+# with !Find.
+#
+# PHASE 3 (added later, against the live instance): the domain-level forward-auth
+# Proxy Provider (external host auth.stevegore.au, cookie domain stevegore.au),
+# its Application, and assignment to the embedded outpost — that piece is
+# verified live before the Caddy forward_auth cutover.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: authentik-blueprints
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: authentik
+    app.kubernetes.io/component: blueprints
+data:
+  github-source.yaml: |
+    version: 1
+    metadata:
+      name: github-oauth-source
+    entries:
+      - model: authentik_sources_oauth.oauthsource
+        identifiers:
+          slug: github
+        attrs:
+          name: GitHub
+          provider_type: github
+          consumer_key: !Env AUTHENTIK_GITHUB_CLIENT_ID
+          consumer_secret: !Env AUTHENTIK_GITHUB_CLIENT_SECRET
+          enabled: true
+          user_matching_mode: email_link
+          authentication_flow: !Find [authentik_flows.flow, [slug, default-source-authentication]]
+          enrollment_flow: !Find [authentik_flows.flow, [slug, default-source-enrollment]]

@@ -9,8 +9,8 @@
 # also the better substrate for a database. FSS stays reserved for non-root
 # RWX needs (e.g. Authentik /media).
 #
-# Continuous WAL backup to OCI Object Storage (added next) is still the
-# durability safety net regardless of substrate.
+# Continuous WAL backup to OCI Object Storage is the durability safety net
+# regardless of substrate — see the `backup:` block below.
 #
 # Apps get their own database + role via a CNPG `Database` CR pointing at this
 # Cluster (cluster: pg-shared), not by sharing the bootstrap `app` database.
@@ -28,3 +28,69 @@ postgres:
       memory: 256Mi
     limits:
       memory: 512Mi
+
+# Continuous WAL archiving + scheduled base backups to OCI Object Storage via
+# its S3-compatible API.
+#
+# APPROACH — in-tree `.spec.backup.barmanObjectStore` (NOT the Barman Cloud
+# Plugin). CNPG v1.26+ deprecates the in-tree path in favour of the Barman
+# Cloud CNPG-I plugin, BUT the plugin hard-requires cert-manager (it self-issues
+# the plugin<->operator mTLS certs via a selfsigned Issuer). cert-manager is not
+# installed in this homelab, and standing up a whole operator + CRDs + Issuer
+# purely to back up one tiny shared DB is disproportionate. The in-tree path is
+# still fully functional in v1.29.1 and uses the SAME `barmanObjectStore` config
+# schema as the plugin's ObjectStore CR, so a later migration (once/if
+# cert-manager lands) is a mechanical lift-and-shift of this block into an
+# `ObjectStore` CR + `.spec.plugins` reference. Deprecation accepted knowingly.
+#
+# Credentials: OCI Object Storage's S3-compat endpoint needs an HMAC
+# access-key/secret pair (an OCI "Customer Secret Key"), mirroring caddy-acme.
+# VSO syncs them from Vault `kv/oci/pg-backups` into a k8s Secret in this
+# namespace; barman reads access_key / secret_key from that Secret.
+backup:
+  enabled: true
+  # OCI Object Storage S3-compat endpoint (region ap-sydney-1, ns prefix
+  # sdajdczqv0qo) — same host family as caddy's certmagic-s3 block.
+  endpointURL: https://sdajdczqv0qo.compat.objectstorage.ap-sydney-1.oraclecloud.com
+  # Bucket to create out-of-band (Always Free Object Storage, 20 GB). Barman
+  # writes base backups + WALs under this prefix.
+  bucket: pg-backups
+  # Per-cluster prefix inside the bucket so the path stays tidy if more clusters
+  # are ever added. Final destinationPath = s3://<bucket>/<prefix>.
+  destinationPrefix: pg-shared
+  # 14-day retention. A tiny DB's WAL is negligible; well inside Always Free.
+  retentionPolicy: 14d
+  wal:
+    compression: gzip
+  data:
+    compression: gzip
+  # Daily base backup at 03:30 UTC (~13:30 Sydney). CNPG schedule is a
+  # 6-field cron (leading seconds field).
+  schedule: "0 30 3 * * *"
+
+# vault-secrets-operator: sync the S3 HMAC creds from Vault into this namespace.
+# Mirrors apps/caddy. The Vault path holds fields: access_key, secret_key
+# (plus metadata mirrored from scripts/provision-caddy-acme-creds.sh).
+vault:
+  enabled: true
+  mount: kv
+  # VaultStaticSecret KV path under the mount above -> kv/oci/pg-backups.
+  path: oci/pg-backups
+  # Name of the k8s Secret VSO creates; barmanObjectStore.s3Credentials reads it.
+  secretName: pg-backups-s3
+  refreshAfter: 1h
+  # Existing VSO ClusterRoleBinding role from bootstrap (same as caddy).
+  authRole: vault-secrets-operator
+  # ServiceAccount the VaultAuth authenticates as (default SA in this namespace).
+  serviceAccount: default
+
+# Per-app databases provisioned on the shared instance. Each entry creates a
+# CNPG managed login role (cluster.yaml) + a Database owned by it (consumers.yaml),
+# with the role password synced by VSO from `vaultPath` (basic-auth keys
+# username/password) into the named Secret. The same password is read by the
+# app from its own Vault path for its DB connection.
+consumers:
+  - name: authentik
+    passwordSecret: authentik-pg-credentials
+    # Vault kv path (under mount `kv`) holding basic-auth keys username/password.
+    vaultPath: authentik/config
