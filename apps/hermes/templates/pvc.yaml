@@ -2,9 +2,9 @@
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: {{ include "openclaw.fullname" . }}-data
+  name: {{ include "hermes.fullname" . }}-data
   labels:
-    {{- include "openclaw.labels" . | nindent 4 }}
+    {{- include "hermes.labels" . | nindent 4 }}
 spec:
   accessModes:
     - ReadWriteOnce
