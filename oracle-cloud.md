@@ -65,18 +65,18 @@ This was fixed on the now-terminated ampere-ubuntu instance by manually installi
 
 **Cluster Status:** ACTIVE (v1.35.2)
 
-| Node | Internal IP | Status | Capacity | Available | Allocation |
-|------|-------------|--------|----------|-----------|------------|
-| FD-1 (10.0.1.146) | 10.0.1.146 | Ready | 2 OCPU / 12 GB RAM | ~1.5 GB available | 87% CPU-bound, pods evicting on memory pressure |
-| FD-2 (10.0.1.138) | 10.0.1.138 | Ready | 2 OCPU / 12 GB RAM | ~1.5 GB available | 87% CPU-bound, pods evicting on memory pressure |
+| Node | Internal IP | Status | Capacity | Mem used | CPU used |
+|------|-------------|--------|----------|----------|----------|
+| FD-1 (10.0.1.146) | 10.0.1.146 | Ready | 2 OCPU / 12 GB RAM | 3.9 GB (41%) | 12% |
+| FD-2 (10.0.1.138) | 10.0.1.138 | Ready | 2 OCPU / 12 GB RAM | 2.8 GB (30%) | 11% |
 
-**Total Cluster:** 4 OCPU / 24 GB RAM (within Always Free tier)
+**Total Cluster:** 4 OCPU / 24 GB RAM (within Always Free tier). ~36% memory / ~11% CPU in use — roughly **12 GB RAM free** (measured 2026-06-01 via metrics-server). The cluster is *not* memory- or CPU-constrained; an earlier note here claiming "~1.5 GB available / 87% CPU-bound / pods evicting" was inaccurate and has been corrected against live `kubectl top` data.
 
 **Workload Distribution:**
-- `argocd` (2 replicas) + `vault` (1) + `vault-secrets-operator` + `caddy` (1 replica) + `vaultwarden` (1) + `uptime-kuma` (1) + `homepage` (1) + `tailscale-operator` (1)
-- Heavy consumers: caddy (TLS termination), uptime-kuma (SQLite queries), argocd-repo-server
+- `argocd` (2 replicas) + `vault` (1) + `vault-secrets-operator` + `caddy` (1 replica) + `vaultwarden` (1) + `uptime-kuma` (1) + `homepage` (1) + `metrics-server` (1) + `tailscale-operator` (1)
+- Top memory consumers (actual RSS): openclaw 500 MB, argocd-application-controller 317 MB, uptime-kuma 219 MB, oke-dataplane-observability-agent 170 MB ×2, vaultwarden 138 MB, homepage 106 MB. caddy is only ~50 MB.
 
-**Metrics:** Metrics-server not yet installed; CPU/memory tracking via pod logs and `kubectl top` when available.
+**Metrics:** metrics-server is deployed (`apps/metrics-server`, wrapper over the upstream chart, `--kubelet-insecure-tls` for OKE managed kubelets). `kubectl top nodes` / `kubectl top pods -A` work cluster-wide.
 
 ### Deployed Applications (Helm Charts)
 
@@ -232,6 +232,27 @@ records).
 
 ---
 
+## File Storage
+
+### Mount Target: homelab-fss
+
+| Property            | Value                                                                                                       |
+| ------------------- | ----------------------------------------------------------------------------------------------------------- |
+| Compartment         | main                                                                                                        |
+| Availability Domain | `tbGS:AP-SYDNEY-1-AD-1` (must match the OKE node pool AD)                                                   |
+| Subnet              | `Private-Subnet-nebula` (10.0.1.0/24) — one private IP                                                       |
+| NSG                 | `fss-mount-target` (ingress: TCP/UDP 111, 2048-2050 from `oke-workers` NSG)                                 |
+| Purpose             | NFS endpoint for the `oci-fss` Kubernetes StorageClass — RWX, AD-durable, multi-FD via `fss.csi.oraclecloud.com` |
+
+File Systems themselves are dynamically provisioned by the CSI driver on PVC
+creation; no per-FS Terraform resource. Cost is $0 under the 100 GB FSS
+Always-Free allotment.
+
+Used by: `apps/oci-fss/` Helm chart (StorageClass manifest only — the Mount
+Target OCID lives in that chart's `values.yaml`).
+
+---
+
 ## Identity & Access Management (IAM)
 
 ### Dynamic Group: vault-instances
@@ -240,7 +261,7 @@ records).
 | ------------- | ------------------------------------------------------------------------------------------------------------- |
 | OCID          | `ocid1.dynamicgroup.oc1..aaaaaaaareb5w5qct2kihtaah6nq6tj5uo4fbeg36df6tmfxk3na44oxrvbq`                        |
 | Matching Rule | `instance.compartment.id = 'ocid1.compartment.oc1..aaaaaaaays62ka24mqjmg7ej5khoswujbqjhwwlvalkjbfm7lz5pkmqugwba'` |
-| Purpose       | Instance principal auth for Vault auto-unseal (OCI KMS + Object Storage). Broadened from ampere instance OCID to compartment-match so OKE worker nodes inherit the same auth. |
+| Purpose       | Instance principal auth for Vault auto-unseal (KMS + Object Storage), Caddy ACME storage (Object Storage), and OKE FSS CSI provisioning (File Storage). Broadened from ampere instance OCID to compartment-match so OKE worker nodes inherit the same auth. |
 
 ### Policy: vault-kms-objectstorage-policy
 
@@ -253,7 +274,9 @@ records).
 ```text
 Allow dynamic-group vault-instances to use keys in compartment main
 Allow dynamic-group vault-instances to manage objects in compartment main where target.bucket.name='vault-storage'
+Allow dynamic-group vault-instances to manage objects in compartment main where target.bucket.name='caddy-acme'
 Allow dynamic-group vault-instances to read buckets in compartment main
+Allow dynamic-group vault-instances to manage file-family in compartment main
 ```
 
 ### Customer Secret Keys (HMAC creds for S3-compat endpoint)
