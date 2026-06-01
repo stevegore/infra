@@ -1,0 +1,23 @@
+# Shared CloudNativePG PostgreSQL instance.
+#
+# Storage is on oci-fss (NFS) deliberately: OKE block storage is at the 200 GB
+# Always Free cap, while FSS has its own 200 GB allowance and no 50 GB floor.
+# Postgres-on-NFS is a durability/perf tradeoff (NOT the locking-corruption
+# hazard SQLite-on-NFS is — a single postgres server process owns the files
+# exclusively; CNPG never shares one volume between processes). Continuous WAL
+# backup to OCI Object Storage (added next) is the durability safety net.
+#
+# Apps get their own database + role via a CNPG `Database` CR pointing at this
+# Cluster (cluster: pg-shared), not by sharing the bootstrap `app` database.
+postgres:
+  instances: 1
+  # Pin PG 16 — matches the version Authentik ships/tests against.
+  imageName: ghcr.io/cloudnative-pg/postgresql:16
+  storageClass: oci-fss
+  storageSize: 10Gi
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 512Mi
