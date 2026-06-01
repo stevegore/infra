@@ -1,0 +1,25 @@
+# Metrics Server — gives `kubectl top` (and any future HPA) real CPU/memory
+# numbers. Until this was added, capacity planning relied on pod requests/limits
+# only; see oracle-cloud.md "OKE Cluster Health & Capacity".
+#
+# All knobs live under the `metrics-server:` key because this is a wrapper chart
+# whose only dependency is the upstream metrics-server chart.
+metrics-server:
+  # OKE worker kubelets serve their /metrics over TLS with certs that aren't
+  # signed by a CA metrics-server trusts out of the box, so the secure handshake
+  # fails with "x509: certificate signed by unknown authority". Skip that
+  # verification — standard for managed kubelets (EKS/OKE/GKE node pools).
+  args:
+    - --kubelet-insecure-tls
+
+  # Single replica: this is an observability helper on a tight 2-node cluster,
+  # not something we need HA for. (HA metrics-server needs 2 replicas + a
+  # PodDisruptionBudget; not worth the footprint here.)
+  replicas: 1
+
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      memory: 128Mi
