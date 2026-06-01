@@ -73,8 +73,8 @@ This was fixed on the now-terminated ampere-ubuntu instance by manually installi
 **Total Cluster:** 4 OCPU / 24 GB RAM (within Always Free tier)
 
 **Workload Distribution:**
-- `argocd` (2 replicas) + `vault` (1) + `vault-secrets-operator` + `caddy` (2 replicas) + `vaultwarden` (1) + `uptime-kuma` (1) + `homepage` (1) + `tailscale-operator` (1)
-- Heavy consumers: caddy (2 replicas, TLS termination), uptime-kuma (SQLite queries), argocd-repo-server
+- `argocd` (2 replicas) + `vault` (1) + `vault-secrets-operator` + `caddy` (1 replica) + `vaultwarden` (1) + `uptime-kuma` (1) + `homepage` (1) + `tailscale-operator` (1)
+- Heavy consumers: caddy (TLS termination), uptime-kuma (SQLite queries), argocd-repo-server
 
 **Metrics:** Metrics-server not yet installed; CPU/memory tracking via pod logs and `kubectl top` when available.
 
@@ -84,7 +84,7 @@ This was fixed on the now-terminated ampere-ubuntu instance by manually installi
 |-------------|---------|-----------|--------|
 | ArgoCD | v3.4.2 | ArgoCD | Manages this cluster |
 | Vault | 1.18.1 | HashiCorp | Unsealed with auto-unseal |
-| Caddy | 2.11.3 | Custom build | 2 replicas, TLS termination for `*.stevegore.au` |
+| Caddy | 2.11.3 | Custom build | 1 replica (caddy-security OAuth state is per-pod; see dns.md), TLS termination for `*.stevegore.au` |
 | Tailscale Operator | 1.98.3 | Tailscale | Manages k8s cluster membership on tailnet |
 | Vaultwarden | 1.36.0 | — | MySQL backend on OCI via HeatWave; security fixes (SSO CSRF, enumeration) |
 | Uptime Kuma | 2.3.2 | — | SQLite backend on 50GB OCI block volume; monitors pico+external services |
