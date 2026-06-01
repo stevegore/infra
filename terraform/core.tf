@@ -61,73 +61,6 @@ resource oci_core_internet_gateway export_Internet-Gateway-nebula {
   vcn_id = oci_core_vcn.export_nebula.id
 }
 
-resource oci_core_network_security_group export_allow-wireguard {
-  compartment_id = var.compartment_ocid
-  defined_tags = {
-    "Oracle-Tags.CreatedBy" = "oracleidentitycloudservice/steve.j.gore@gmail.com"
-    "Oracle-Tags.CreatedOn" = "2025-02-12T06:22:27.035Z"
-  }
-  display_name = "allow-wireguard"
-  freeform_tags = {
-  }
-  vcn_id = oci_core_vcn.export_nebula.id
-}
-
-resource oci_core_network_security_group export_allow-all-egress {
-  compartment_id = var.compartment_ocid
-  defined_tags = {
-    "Oracle-Tags.CreatedBy" = "oracleidentitycloudservice/steve.j.gore@gmail.com"
-    "Oracle-Tags.CreatedOn" = "2021-06-20T03:55:11.839Z"
-  }
-  display_name = "allow-all-egress"
-  freeform_tags = {
-  }
-  vcn_id = oci_core_vcn.export_nebula.id
-}
-
-resource oci_core_network_security_group export_allow-ssh {
-  compartment_id = var.compartment_ocid
-  defined_tags = {
-    "Oracle-Tags.CreatedBy" = "oracleidentitycloudservice/steve.j.gore@gmail.com"
-    "Oracle-Tags.CreatedOn" = "2021-02-05T07:30:40.818Z"
-  }
-  display_name = "allow-ssh"
-  freeform_tags = {
-  }
-  vcn_id = oci_core_vcn.export_nebula.id
-}
-
-resource oci_core_network_security_group export_allow-http-https {
-  compartment_id = var.compartment_ocid
-  defined_tags = {
-    "Oracle-Tags.CreatedBy" = "oracleidentitycloudservice/steve.j.gore@gmail.com"
-    "Oracle-Tags.CreatedOn" = "2021-02-05T01:17:03.858Z"
-  }
-  display_name = "allow-http-https"
-  freeform_tags = {
-  }
-  vcn_id = oci_core_vcn.export_nebula.id
-}
-
-resource oci_core_network_security_group_security_rule export_allow-wireguard_network_security_group_security_rule {
-  #description = <<Optional value not found in discovery>>
-  #destination = <<Optional value not found in discovery>>
-  destination_type          = ""
-  direction                 = "INGRESS"
-  network_security_group_id = oci_core_network_security_group.export_allow-wireguard.id
-  protocol                  = "17"
-  source                    = "0.0.0.0/0"
-  source_type               = "CIDR_BLOCK"
-  stateless                 = "false"
-  udp_options {
-    destination_port_range {
-      max = "51820"
-      min = "51820"
-    }
-    #source_port_range = <<Optional value not found in discovery>>
-  }
-}
-
 resource oci_core_subnet export_Private-Subnet-nebula {
   #availability_domain = <<Optional value not found in discovery>>
   cidr_block     = "10.0.1.0/24"
@@ -260,6 +193,13 @@ resource oci_core_security_list export_nebula-private {
     }
   }
   vcn_id = oci_core_vcn.export_nebula.id
+
+  # OCI CCM injects NodePort ingress rules here when LoadBalancer-type
+  # Services are reconciled. Don't fight it — TF owns the static rules
+  # declared above, the CCM owns the dynamic per-Service rules.
+  lifecycle {
+    ignore_changes = [ingress_security_rules, egress_security_rules]
+  }
 }
 
 resource oci_core_default_security_list export_nebula-public {
@@ -376,18 +316,13 @@ resource oci_core_default_security_list export_nebula-public {
     }
   }
   manage_default_resource_id = "ocid1.securitylist.oc1.ap-sydney-1.aaaaaaaasjcn3v53u7bsh63nzzuo4zl7jgv25pcx2ziamb6e2rvnyrbjicvq"
-}
 
-resource oci_core_network_security_group_security_rule export_allow-all-egress_network_security_group_security_rule {
-  #description = <<Optional value not found in discovery>>
-  destination               = "0.0.0.0/0"
-  destination_type          = "CIDR_BLOCK"
-  direction                 = "EGRESS"
-  network_security_group_id = oci_core_network_security_group.export_allow-all-egress.id
-  protocol                  = "all"
-  #source = <<Optional value not found in discovery>>
-  source_type = ""
-  stateless   = "false"
+  # OCI CCM injects NodePort egress rules here when the NLB in this subnet
+  # backends to k8s NodePorts on the private subnet. Same TF/CCM split as
+  # nebula-private.
+  lifecycle {
+    ignore_changes = [ingress_security_rules, egress_security_rules]
+  }
 }
 
 resource oci_core_vcn export_nebula {
@@ -476,210 +411,5 @@ resource oci_core_default_route_table export_Default-Route-Table-for-nebula {
     network_entity_id = oci_core_internet_gateway.export_Internet-Gateway-nebula.id
     route_type        = "STATIC"
   }
-}
-
-resource oci_core_private_ip export_ampere-ubuntu {
-  #cidr_prefix_length = <<Optional value not found in discovery>>
-  defined_tags = {
-    "Oracle-Tags.CreatedBy" = "oracleidentitycloudservice/steve.j.gore@gmail.com"
-    "Oracle-Tags.CreatedOn" = "2023-09-14T11:53:41.906Z"
-  }
-  display_name = "ampere-ubuntu"
-  freeform_tags = {
-  }
-  hostname_label = "ampere-ubuntu"
-  ip_address     = "10.0.0.127"
-  #ipv4subnet_cidr_at_creation = <<Optional value not found in discovery>>
-  lifetime = "EPHEMERAL"
-  #route_table_id = <<Optional value not found in discovery>>
-  subnet_id = oci_core_subnet.export_Public-Subnet-nebula.id
-  #vlan_id = <<Optional value not found in discovery>>
-  vnic_id = "ocid1.vnic.oc1.ap-sydney-1.abzxsljrhygdbia57ukyrzyp67meok5pujjfnq3gxcqe3er3y6fict6arbba"
-}
-
-resource oci_core_network_security_group_security_rule export_allow-ssh_network_security_group_security_rule {
-  #description = <<Optional value not found in discovery>>
-  #destination = <<Optional value not found in discovery>>
-  destination_type          = ""
-  direction                 = "INGRESS"
-  network_security_group_id = oci_core_network_security_group.export_allow-ssh.id
-  protocol                  = "6"
-  source                    = "0.0.0.0/0"
-  source_type               = "CIDR_BLOCK"
-  stateless                 = "false"
-  tcp_options {
-    destination_port_range {
-      max = "22"
-      min = "22"
-    }
-    #source_port_range = <<Optional value not found in discovery>>
-  }
-}
-
-resource oci_core_network_security_group_security_rule export_allow-http-https_network_security_group_security_rule {
-  #description = <<Optional value not found in discovery>>
-  #destination = <<Optional value not found in discovery>>
-  destination_type          = ""
-  direction                 = "INGRESS"
-  network_security_group_id = oci_core_network_security_group.export_allow-http-https.id
-  protocol                  = "6"
-  source                    = "0.0.0.0/0"
-  source_type               = "CIDR_BLOCK"
-  stateless                 = "false"
-  tcp_options {
-    destination_port_range {
-      max = "80"
-      min = "80"
-    }
-    #source_port_range = <<Optional value not found in discovery>>
-  }
-}
-
-resource oci_core_network_security_group_security_rule export_allow-http-https_network_security_group_security_rule_1 {
-  #description = <<Optional value not found in discovery>>
-  #destination = <<Optional value not found in discovery>>
-  destination_type          = ""
-  direction                 = "INGRESS"
-  network_security_group_id = oci_core_network_security_group.export_allow-http-https.id
-  protocol                  = "6"
-  source                    = "0.0.0.0/0"
-  source_type               = "CIDR_BLOCK"
-  stateless                 = "false"
-  tcp_options {
-    destination_port_range {
-      max = "443"
-      min = "443"
-    }
-    #source_port_range = <<Optional value not found in discovery>>
-  }
-}
-
-
-
-resource oci_core_instance export_ampere-ubuntu_1 {
-  agent_config {
-    are_all_plugins_disabled = "false"
-    is_management_disabled   = "false"
-    is_monitoring_disabled   = "false"
-    plugins_config {
-      desired_state = "DISABLED"
-      name          = "Vulnerability Scanning"
-    }
-    plugins_config {
-      desired_state = "DISABLED"
-      name          = "Compute RDMA GPU Monitoring"
-    }
-    plugins_config {
-      desired_state = "ENABLED"
-      name          = "Compute Instance Monitoring"
-    }
-    plugins_config {
-      desired_state = "DISABLED"
-      name          = "Compute HPC RDMA Auto-Configuration"
-    }
-    plugins_config {
-      desired_state = "DISABLED"
-      name          = "Compute HPC RDMA Authentication"
-    }
-    plugins_config {
-      desired_state = "DISABLED"
-      name          = "Block Volume Management"
-    }
-    plugins_config {
-      desired_state = "DISABLED"
-      name          = "Bastion"
-    }
-  }
-  #async = <<Optional value not found in discovery>>
-  availability_config {
-    is_live_migration_preferred = "true"
-    recovery_action             = "RESTORE_INSTANCE"
-  }
-  availability_domain = var.availability_domain--tbGS-AP-SYDNEY-1-AD-1
-  #capacity_reservation_id = <<Optional value not found in discovery>>
-  #cluster_placement_group_id = <<Optional value not found in discovery>>
-  compartment_id = var.compartment_ocid
-  #compute_cluster_id = <<Optional value not found in discovery>>
-  create_vnic_details {
-    #assign_ipv6ip = <<Optional value not found in discovery>>
-    #assign_private_dns_record = <<Optional value not found in discovery>>
-    assign_public_ip = "true"
-    defined_tags = {
-      "Oracle-Tags.CreatedBy" = "oracleidentitycloudservice/steve.j.gore@gmail.com"
-      "Oracle-Tags.CreatedOn" = "2023-09-14T11:53:41.906Z"
-    }
-    display_name = "ampere-ubuntu"
-    freeform_tags = {
-    }
-    hostname_label = "ampere-ubuntu"
-    nsg_ids = [
-      oci_core_network_security_group.export_allow-wireguard.id,
-      oci_core_network_security_group.export_allow-all-egress.id,
-      oci_core_network_security_group.export_allow-ssh.id,
-      oci_core_network_security_group.export_allow-http-https.id,
-    ]
-    private_ip = "10.0.0.127"
-    #private_ip_id = <<Optional value not found in discovery>>
-    security_attributes = {
-    }
-    skip_source_dest_check = "false"
-    #subnet_cidr = <<Optional value not found in discovery>>
-    subnet_id = oci_core_subnet.export_Public-Subnet-nebula.id
-    #vlan_id = <<Optional value not found in discovery>>
-  }
-  #dedicated_vm_host_id = <<Optional value not found in discovery>>
-  defined_tags = {
-    "Oracle-Tags.CreatedBy" = "oracleidentitycloudservice/steve.j.gore@gmail.com"
-    "Oracle-Tags.CreatedOn" = "2023-09-14T11:53:41.792Z"
-  }
-  display_name = "ampere-ubuntu"
-  extended_metadata = {
-  }
-  fault_domain = var.fault_domain--FAULT-DOMAIN-2
-  freeform_tags = {
-  }
-  #instance_configuration_id = <<Optional value not found in discovery>>
-  instance_options {
-    are_legacy_imds_endpoints_disabled = "false"
-  }
-  #ipxe_script = <<Optional value not found in discovery>>
-  #is_ai_enterprise_enabled = <<Optional value not found in discovery>>
-  #is_pv_encryption_in_transit_enabled = <<Optional value not found in discovery>>
-  launch_options {
-    boot_volume_type                    = "PARAVIRTUALIZED"
-    firmware                            = "UEFI_64"
-    is_consistent_volume_naming_enabled = "true"
-    is_pv_encryption_in_transit_enabled = "false"
-    network_type                        = "PARAVIRTUALIZED"
-    remote_data_volume_type             = "PARAVIRTUALIZED"
-  }
-  #launch_volume_attachments = <<Optional value not found in discovery>>
-  metadata = {
-    "ssh_authorized_keys" = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDCEJDyzjwuZ9bnMWggW4v8rInW/0Q0SeF0JWn/wq2d5leATqS+1XVxCd1RfA/vaBajhbaD1SDfZh6hUmjDh2FbU+Uv5YOtin9acyvJpQEIbWpkl2TgfjDm3BOaSjIuRGbGr9PDaoyrv8xgTOhM7TpHFD96/ntcRKBnrDDx7n5g9l0X7QI9DhJBgijl9UTWCaj/U5ptnYgt+5sPK0ESxH3zOKPjuu85cLGdQ6lCEmba2IUD+2b8t7D7G0PcDKTR/6u6s3npTOV7Ip2URVVO00hFGcj4SyvPJHb+MYOvU76qY4kIFw1YNo/n22bxuWCW6KQB8kNq1hVZA7uyxqR0Xeg9 stevegore@C02NP3EHG3QP"
-  }
-  #preserve_boot_volume = <<Optional value not found in discovery>>
-  #preserve_data_volumes_created_at_launch = <<Optional value not found in discovery>>
-  security_attributes = {
-  }
-  shape = "VM.Standard.A1.Flex"
-  shape_config {
-    baseline_ocpu_utilization = ""
-    memory_in_gbs             = "24"
-    nvmes                     = "0"
-    ocpus                     = "4"
-    resource_management       = ""
-    vcpus                     = "4"
-  }
-  source_details {
-    #boot_volume_size_in_gbs = <<Optional value not found in discovery>>
-    boot_volume_vpus_per_gb = "10"
-    #instance_source_image_filter_details = <<Optional value not found in discovery>>
-    #is_preserve_boot_volume_enabled = <<Optional value not found in discovery>>
-    #kms_key_id = <<Optional value not found in discovery>>
-    source_id   = var.oci_core_instance--source_details-source_id--export_ampere-ubuntu_1
-    source_type = "image"
-  }
-  state = "RUNNING"
-  #update_operation_constraint = <<Optional value not found in discovery>>
 }
 
