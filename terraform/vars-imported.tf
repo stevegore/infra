@@ -5,6 +5,3 @@
 # to leave for now; they'll fold into resource bodies during the refactor pass.
 variable "fault_domain--FAULT-DOMAIN-2" { default = "FAULT-DOMAIN-2" }
 variable "availability_domain--tbGS-AP-SYDNEY-1-AD-1" { default = "tbGS:AP-SYDNEY-1-AD-1" }
-variable "oci_core_instance--source_details-source_id--export_ampere-ubuntu_1" {
-  default = "ocid1.image.oc1.ap-sydney-1.aaaaaaaacuk7uab3nq22indgjsm6r6nryvbvjng375woaiz2vuwf6r7qfuna"
-}
