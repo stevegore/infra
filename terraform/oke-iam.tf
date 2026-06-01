@@ -18,6 +18,12 @@ resource "oci_identity_policy" "oke_service" {
     "Allow service OKE to manage load-balancers in compartment main",
     "Allow service OKE to manage volume-family in compartment main",
     "Allow service OKE to manage cluster-node-pools in compartment main",
+    # fss.csi.oraclecloud.com runs the dynamic provisioner on the OKE
+    # control plane, so the OKE service principal — not the worker
+    # instance principal — is the one calling GetMountTarget /
+    # CreateFileSystem. Without this grant, PVCs against the oci-fss
+    # StorageClass stall with FileStorage 404 NotAuthorizedOrNotFound.
+    "Allow service OKE to manage file-family in compartment main",
   ]
 }
 
