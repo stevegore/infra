@@ -1,0 +1,28 @@
+# CloudNativePG operator — shared, cluster-wide PostgreSQL operator.
+#
+# This app installs ONLY the operator + CRDs. The actual database instance is a
+# separate app (apps/databases) that declares a CNPG `Cluster` against these
+# CRDs, and individual apps create `Database` CRs to get their own DB/role on
+# that shared instance. See oracle-cloud.md / dns.md.
+#
+# All knobs live under the `cloudnative-pg:` key (this is a wrapper chart whose
+# only dependency is the upstream cloudnative-pg operator chart).
+cloudnative-pg:
+  # Operator CRDs (Cluster, Database, Pooler, Backup, ScheduledBackup, ...).
+  crds:
+    create: true
+
+  # Single controller is fine — it's a control-plane component, not in the data
+  # path. If it restarts, running Postgres pods keep serving.
+  replicaCount: 1
+
+  resources:
+    requests:
+      cpu: 50m
+      memory: 100Mi
+    limits:
+      memory: 200Mi
+
+  # No Prometheus Operator on this cluster yet — don't emit a PodMonitor.
+  monitoring:
+    podMonitorEnabled: false
