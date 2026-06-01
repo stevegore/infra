@@ -1,0 +1,6 @@
+apiVersion: v2
+name: hermes
+description: Hermes Agent personal AI assistant (NousResearch/hermes-agent)
+type: application
+version: 1.0.0
+appVersion: "v2026.5.29.2"

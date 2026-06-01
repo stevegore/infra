@@ -155,8 +155,8 @@ data:
       import defaults
     }
 
-    openclaw.stevegore.au {
-      reverse_proxy openclaw.openclaw.svc.cluster.local:18789
+    hermes.stevegore.au {
+      reverse_proxy hermes.hermes.svc.cluster.local:9119
       import defaults
     }
 

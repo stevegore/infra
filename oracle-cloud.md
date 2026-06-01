@@ -74,7 +74,7 @@ This was fixed on the now-terminated ampere-ubuntu instance by manually installi
 
 **Workload Distribution:**
 - `argocd` (2 replicas) + `vault` (1) + `vault-secrets-operator` + `caddy` (1 replica) + `vaultwarden` (1) + `uptime-kuma` (1) + `homepage` (1) + `metrics-server` (1) + `tailscale-operator` (1)
-- Top memory consumers (actual RSS): openclaw 500 MB, argocd-application-controller 317 MB, uptime-kuma 219 MB, oke-dataplane-observability-agent 170 MB ×2, vaultwarden 138 MB, homepage 106 MB. caddy is only ~50 MB.
+- Top memory consumers (actual RSS): hermes 500 MB, argocd-application-controller 317 MB, uptime-kuma 219 MB, oke-dataplane-observability-agent 170 MB ×2, vaultwarden 138 MB, homepage 106 MB. caddy is only ~50 MB.
 
 **Metrics:** metrics-server is deployed (`apps/metrics-server`, wrapper over the upstream chart, `--kubelet-insecure-tls` for OKE managed kubelets). `kubectl top nodes` / `kubectl top pods -A` work cluster-wide.
 
