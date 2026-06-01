@@ -16,7 +16,7 @@ availabilityDomain: "tbGS:AP-SYDNEY-1-AD-1"
 compartmentOcid: "ocid1.compartment.oc1..aaaaaaaays62ka24mqjmg7ej5khoswujbqjhwwlvalkjbfm7lz5pkmqugwba"
 
 # Populated after TF apply.
-mountTargetOcid: ""
+mountTargetOcid: "ocid1.mounttarget.oc1.ap_sydney_1.aaaaaa4np2xizqumon4willqojxwiotboawxg6lenzsxsljrfvqwiljr"
 
 # Retain protects volumes against accidental PVC deletion. Delete to flip
 # behavior; volumes are then cleaned up when the PVC goes away.

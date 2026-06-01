@@ -238,9 +238,11 @@ records).
 
 | Property            | Value                                                                                                       |
 | ------------------- | ----------------------------------------------------------------------------------------------------------- |
+| OCID                | `ocid1.mounttarget.oc1.ap_sydney_1.aaaaaa4np2xizqumon4willqojxwiotboawxg6lenzsxsljrfvqwiljr`                |
 | Compartment         | main                                                                                                        |
 | Availability Domain | `tbGS:AP-SYDNEY-1-AD-1` (must match the OKE node pool AD)                                                   |
-| Subnet              | `Private-Subnet-nebula` (10.0.1.0/24) — one private IP                                                       |
+| Subnet              | `Private-Subnet-nebula` (10.0.1.0/24)                                                                       |
+| Private IP          | `10.0.1.254`                                                                                                |
 | NSG                 | `fss-mount-target` (ingress: TCP/UDP 111, 2048-2050 from `oke-workers` NSG)                                 |
 | Purpose             | NFS endpoint for the `oci-fss` Kubernetes StorageClass — RWX, AD-durable, multi-FD via `fss.csi.oraclecloud.com` |
 
