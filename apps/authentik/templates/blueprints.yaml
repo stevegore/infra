@@ -7,10 +7,10 @@
 # source authentication/enrollment flows shipped by Authentik are referenced
 # with !Find.
 #
-# PHASE 3 (added later, against the live instance): the domain-level forward-auth
-# Proxy Provider (external host auth.stevegore.au, cookie domain stevegore.au),
-# its Application, and assignment to the embedded outpost — that piece is
-# verified live before the Caddy forward_auth cutover.
+# PHASE 3 (forward-auth.yaml): the domain-level forward-auth Proxy Provider
+# (external host auth.stevegore.au, cookie domain stevegore.au), its Application,
+# and assignment to the embedded outpost. Verified live before the Caddy
+# forward_auth cutover.
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -37,3 +37,35 @@ data:
           user_matching_mode: email_link
           authentication_flow: !Find [authentik_flows.flow, [slug, default-source-authentication]]
           enrollment_flow: !Find [authentik_flows.flow, [slug, default-source-enrollment]]
+  forward-auth.yaml: |
+    version: 1
+    metadata:
+      name: stevegore-forward-auth
+    entries:
+      # Domain-level forward-auth Proxy Provider for *.stevegore.au.
+      - model: authentik_providers_proxy.proxyprovider
+        id: provider
+        identifiers:
+          name: stevegore-forward-auth
+        attrs:
+          mode: forward_domain
+          external_host: https://auth.stevegore.au
+          cookie_domain: stevegore.au
+          access_token_validity: hours=24
+          authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
+          invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
+      # Application bound to the provider.
+      - model: authentik_core.application
+        identifiers:
+          slug: stevegore
+        attrs:
+          name: stevegore
+          provider: !KeyOf provider
+      # Add the provider to the built-in embedded outpost so it serves the
+      # forward-auth endpoints at /outpost.goauthentik.io/.
+      - model: authentik_outposts.outpost
+        identifiers:
+          managed: goauthentik.io/outposts/embedded
+        attrs:
+          providers:
+            - !KeyOf provider
