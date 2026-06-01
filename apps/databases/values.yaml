@@ -1,11 +1,16 @@
 # Shared CloudNativePG PostgreSQL instance.
 #
-# Storage is on oci-fss (NFS) deliberately: OKE block storage is at the 200 GB
-# Always Free cap, while FSS has its own 200 GB allowance and no 50 GB floor.
-# Postgres-on-NFS is a durability/perf tradeoff (NOT the locking-corruption
-# hazard SQLite-on-NFS is — a single postgres server process owns the files
-# exclusively; CNPG never shares one volume between processes). Continuous WAL
-# backup to OCI Object Storage (added next) is the durability safety net.
+# Storage is on oci-bv (block), NOT oci-fss, despite block being at the 200 GB
+# Always Free cap (this 50 GB volume tips ~50 GB into paid, ~$1.28/mo). Reason:
+# the OKE-bundled FSS CSI driver ships fsGroupPolicy=ReadWriteOnceWithFSType,
+# so the kubelet never applies the pod's fsGroup to an NFS volume — the export
+# root stays root:root and CNPG's hardened non-root postgres (uid 26) can't
+# create pgdata. The block CSI honors fsGroup, so block "just works" and is
+# also the better substrate for a database. FSS stays reserved for non-root
+# RWX needs (e.g. Authentik /media).
+#
+# Continuous WAL backup to OCI Object Storage (added next) is still the
+# durability safety net regardless of substrate.
 #
 # Apps get their own database + role via a CNPG `Database` CR pointing at this
 # Cluster (cluster: pg-shared), not by sharing the bootstrap `app` database.
@@ -13,8 +18,10 @@ postgres:
   instances: 1
   # Pin PG 16 — matches the version Authentik ships/tests against.
   imageName: ghcr.io/cloudnative-pg/postgresql:16
-  storageClass: oci-fss
-  storageSize: 10Gi
+  storageClass: oci-bv
+  # OCI block volume floor is 50 GB; request it honestly rather than a smaller
+  # size that still provisions 50 GB.
+  storageSize: 50Gi
   resources:
     requests:
       cpu: 100m
