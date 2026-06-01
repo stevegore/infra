@@ -1,0 +1,22 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: pg-shared
+spec:
+  instances: {{ .Values.postgres.instances }}
+  imageName: {{ .Values.postgres.imageName }}
+
+  storage:
+    storageClass: {{ .Values.postgres.storageClass }}
+    size: {{ .Values.postgres.storageSize }}
+
+  resources:
+    {{- toYaml .Values.postgres.resources | nindent 4 }}
+
+  # Benign default database created at bootstrap. Real app databases are added
+  # out-of-band via `Database` CRs (e.g. apps/authentik) targeting this cluster,
+  # so they stay owned by the app that needs them.
+  bootstrap:
+    initdb:
+      database: app
+      owner: app
