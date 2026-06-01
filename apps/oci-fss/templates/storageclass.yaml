@@ -1,0 +1,14 @@
+{{- if .Values.mountTargetOcid }}
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: {{ .Values.storageClassName }}
+provisioner: fss.csi.oraclecloud.com
+parameters:
+  availabilityDomain: {{ .Values.availabilityDomain | quote }}
+  mountTargetOcid: {{ .Values.mountTargetOcid | quote }}
+  compartmentOcid: {{ .Values.compartmentOcid | quote }}
+reclaimPolicy: {{ .Values.reclaimPolicy }}
+allowVolumeExpansion: true
+volumeBindingMode: Immediate
+{{- end }}
