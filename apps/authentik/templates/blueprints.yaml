@@ -91,3 +91,32 @@ data:
             kubernetes_replicas: 1
             kubernetes_service_type: ClusterIP
             object_naming_template: ak-outpost-%(name)s
+      # Access restriction — only Steve's GitHub identity (numeric id 13194535)
+      # or a superuser (akadmin break-glass) may use the stevegore application.
+      # Mirrors the old caddy-security `match sub github.com/stevegore` gate.
+      # Without it, any GitHub user who enrolls could reach the gated apps
+      # (homepage, headlamp/k8s dashboard, desk, gym). Fail-closed: if the
+      # source-connection lookup ever errors, only superusers get in.
+      - model: authentik_policies_expression.expressionpolicy
+        id: allow-steve
+        identifiers:
+          name: allow-stevegore-github
+        attrs:
+          expression: |
+            user = request.user
+            if user.is_superuser:
+                return True
+            try:
+                return any(
+                    str(sc.identifier) == "13194535"
+                    for sc in user.usersourceconnection_set.all()
+                )
+            except Exception:
+                return False
+      - model: authentik_policies.policybinding
+        identifiers:
+          target: !Find [authentik_core.application, [slug, stevegore]]
+          policy: !KeyOf allow-steve
+          order: 0
+        attrs:
+          enabled: true
