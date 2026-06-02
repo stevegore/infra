@@ -38,64 +38,27 @@ data:
         level INFO
       }
 
-      order authenticate before respond
-      order authorize before basicauth
-
-      security {
-        oauth identity provider github {env.GITHUB_CLIENT_ID} {env.GITHUB_CLIENT_SECRET}
-
-        authentication portal stevegoreauthportal {
-          crypto default token lifetime 3600
-          crypto key sign-verify from file /etc/caddy/keys/jwt-private.pem
-          cookie domain stevegore.au
-          cookie samesite lax
-          enable identity provider github
-          ui {
-            links {
-              "My Identity" "/whoami" icon "las la-user"
-            }
-          }
-
-          transform user {
-            match realm github
-            match sub github.com/stevegore
-            action add role authp/admin
-          }
-        }
-
-        authorization policy adminonly {
-          set auth url https://auth.stevegore.au/oauth2/github
-          crypto key verify from file /etc/caddy/keys/jwt-public.pem
-          allow roles authp/admin authp/user
-          validate bearer header
-          inject headers with claims
-        }
-
-        authorization policy vaultaccess {
-          set auth url https://auth.stevegore.au/oauth2/github
-          crypto key verify from file /etc/caddy/keys/jwt-public.pem
-          allow roles authp/admin authp/user
-          validate bearer header
-          inject headers with claims
-        }
-      }
     }
 
     (defaults) {
       encode gzip
     }
 
-    # ----- Auth portal -----
-
-    auth.stevegore.au {
-      authenticate with stevegoreauthportal
+    # Authentik domain-level forward-auth. Protected vhosts `import authentik`
+    # plus a reverse_proxy for /outpost.goauthentik.io/* (the outpost's own
+    # endpoints). Unauthenticated requests get 302'd to auth.stevegore.au; the
+    # outpost returns identity headers on success. Replaces caddy-security.
+    (authentik) {
+      forward_auth authentik-server.authentik.svc.cluster.local:80 {
+        uri /outpost.goauthentik.io/auth/caddy
+        copy_headers X-Authentik-Username X-Authentik-Groups X-Authentik-Email X-Authentik-Name X-Authentik-Uid X-Authentik-Jwt X-Authentik-Meta-Jwks X-Authentik-Meta-Outpost X-Authentik-Meta-Provider X-Authentik-Meta-App X-Authentik-Meta-Version
+        trusted_proxies private_ranges
+      }
     }
 
-    # ----- Authentik (Phase 2: temporary host to verify the IdP + GitHub login
-    # before the forward_auth cutover. Plain reverse_proxy — no caddy-security.
-    # Covered by the *.stevegore.au wildcard A record.) -----
+    # ----- Authentik (IdP + forward-auth embedded outpost) -----
 
-    authentik.stevegore.au {
+    auth.stevegore.au {
       reverse_proxy authentik-server.authentik.svc.cluster.local:80
       import defaults
     }
@@ -140,7 +103,8 @@ data:
     }
 
     homepage.stevegore.au {
-      authorize with adminonly
+      reverse_proxy /outpost.goauthentik.io/* authentik-server.authentik.svc.cluster.local:80
+      import authentik
       reverse_proxy homepage.homepage.svc.cluster.local:3000
       import defaults
     }
@@ -159,7 +123,8 @@ data:
     }
 
     headlamp.stevegore.au {
-      authorize with adminonly
+      reverse_proxy /outpost.goauthentik.io/* authentik-server.authentik.svc.cluster.local:80
+      import authentik
       reverse_proxy headlamp.headlamp.svc.cluster.local:80
       import defaults
     }
@@ -182,13 +147,15 @@ data:
     }
 
     desk.stevegore.au {
-      authorize with adminonly
+      reverse_proxy /outpost.goauthentik.io/* authentik-server.authentik.svc.cluster.local:80
+      import authentik
       reverse_proxy pico:8111
       import defaults
     }
 
     gym.stevegore.au {
-      authorize with adminonly
+      reverse_proxy /outpost.goauthentik.io/* authentik-server.authentik.svc.cluster.local:80
+      import authentik
       reverse_proxy pico:8112
       import defaults
     }
