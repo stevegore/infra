@@ -130,6 +130,8 @@ data:
     }
 
     hermes.stevegore.au {
+      reverse_proxy /outpost.goauthentik.io/* authentik-server.authentik.svc.cluster.local:80
+      import authentik
       reverse_proxy hermes.hermes.svc.cluster.local:9119
       import defaults
     }
