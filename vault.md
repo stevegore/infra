@@ -60,7 +60,7 @@ Used by Vault Secrets Operator and application pods to authenticate.
 **Roles:**
 | Role | Bound Service Accounts | Bound Namespaces | Policies |
 |------|------------------------|------------------|----------|
-| vault-secrets-operator | vault-secrets-operator-controller-manager, default | vault-secrets-operator, caddy, openclaw, hermes, vaultwarden, tailscale-operator, homepage | caddy, openclaw, hermes, vaultwarden, tailscale-operator, homepage |
+| vault-secrets-operator | vault-secrets-operator-controller-manager, default | vault-secrets-operator, caddy, openclaw, hermes, vaultwarden, tailscale-operator, homepage, databases, authentik | caddy, openclaw, hermes, vaultwarden, tailscale-operator, homepage, pg-backups, authentik |
 
 To onboard a new app namespace, append it to both `bound_service_account_namespaces` and (after writing the policy) `policies`:
 ```bash
@@ -101,28 +101,17 @@ sudo ~/code/infra/scripts/install-vault-token-sync-timer.sh
 ```
 Tail with `journalctl -u vault-token-sync.service -f`.
 
-### 3. JWT Auth (for human users via Caddy Security)
+### 3. Human UI login
 
-Used by administrators via GitHub OAuth through Caddy Security.
+`vault.stevegore.au` is **not** gated by the edge proxy — Vault handles its own
+login on the UI. (Vault's own GitHub auth method / root token.)
 
-**How it works:**
-1. Access https://vault.stevegore.au
-2. Caddy redirects you to GitHub OAuth
-3. After login, you can access the Vault UI
-4. In the Vault UI, select "JWT" method and use your cookie token
-
-**JWT Key:** RSA keypair stored at `/etc/caddy/keys/jwt-*.pem`
-
-**Roles:**
-| Role | Bound Claims | Policies |
-|------|--------------|----------|
-| caddy-user | (any authenticated) | default |
-| caddy-admin | sub=github.com/stevegore | admin |
-
-**To get your JWT token** (for CLI use):
-1. Login at https://auth.stevegore.au
-2. Open browser dev tools → Application → Cookies
-3. Copy the `access_token` cookie value
+> **Obsolete (removed 2026-06-02):** the old `caddy-user` / `caddy-admin` JWT
+> auth method, which validated a JWT minted by caddy-security (RSA keypair at
+> `/etc/caddy/keys/jwt-*.pem`, issuer `auth.stevegore.au`). caddy-security was
+> replaced by Authentik; that JWT path no longer exists. **Follow-up:** wire
+> Vault's OIDC auth method to Authentik as an OIDC provider for SSO'd UI/CLI
+> login. Until then, use Vault's built-in GitHub method or a root token.
 
 ---
 
@@ -137,6 +126,8 @@ Key-value secrets engine for application credentials.
 |------|-------------|-----------------|
 | kv/openclaw | OpenClaw AI assistant credentials | openclaw |
 | kv/hermes | Hermes Agent credentials | hermes |
+| kv/authentik/config | Authentik: secret_key, username/password (pg-shared role), bootstrap_password/token, github_client_id/secret | authentik (authentik ns), pg-backups+authentik (databases ns) |
+| kv/oci/pg-backups | OCI Customer Secret Key (S3) for pg-shared WAL/base backups | pg-backups (databases ns) |
 | kv/homelab/* | Tokens synced from pico (`*.token` files) | pico-token-sync (write) |
 
 **Secrets Structure:**

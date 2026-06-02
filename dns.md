@@ -52,7 +52,7 @@ Internet
     │
     ├─── *.stevegore.au ──────────► 159.13.44.68 (OCI NLB, reserved IP)
     │                                    │
-    │                                    └─► Caddy (OKE Deployment, 1 replica — see OAuth note)
+    │                                    └─► Caddy (OKE Deployment, 2 replicas, anti-affinity)
     │                                            │
     │                                            ├─► In-cluster services (ClusterIP)
     │                                            │       ├─► argocd-server.argocd:80
@@ -77,11 +77,25 @@ Internet
                                                    └─► pico (direct)
 ```
 
-**ACME certificates:** DNS-01 challenge via Cloudflare (token in Vault at `kv/caddy/config → cf_api_token`). Cert state stored in OCI Object Storage (`caddy-acme` bucket, S3-compat endpoint) — kept even at 1 replica so a future scale-out or pod replacement doesn't re-issue and burn Let's Encrypt rate limits. Let's Encrypt only; ZeroSSL fallback disabled.
+**ACME certificates:** DNS-01 challenge via Cloudflare (token in Vault at `kv/caddy/config → cf_api_token`). Cert state stored in OCI Object Storage (`caddy-acme` bucket, S3-compat endpoint) so both replicas share certs without racing Let's Encrypt rate limits. Let's Encrypt only; ZeroSSL fallback disabled.
 
-**Single replica (caddy-security OAuth state):** Caddy runs `replicaCount: 1`. caddy-security (authcrunch) keeps the GitHub OAuth login transaction (`state` UUID → `redirect_url`) in **per-pod process memory** with no shared/distributed backend. With 2+ replicas the GitHub callback can land on a different pod than the one that opened the flow, so the redirect is lost and the user is stranded on `auth.stevegore.au` after a successful login (the JWT cookie still gets set, so a *second* visit works — the classic symptom). One pod removes the cross-pod race entirely. **This is the real fix** for that bug.
+**Authentication — Authentik forward-auth (replaced caddy-security 2026-06-02):**
+Caddy runs **2 replicas** (anti-affinity across the two fault domains). Auth is
+handled by **Authentik** (`apps/authentik`, namespace `authentik`), not Caddy:
+- `auth.stevegore.au` reverse-proxies the Authentik server (the IdP + embedded
+  forward-auth outpost). Login federates to **GitHub** (OAuth App), restricted to
+  Steve's GitHub identity by an expression policy on the `stevegore` application.
+- Gated vhosts (`homepage`, `headlamp`, `desk`, `gym`, `hermes`) use Caddy's
+  built-in `forward_auth` to the embedded outpost (`/outpost.goauthentik.io/`),
+  defined by the `(authentik)` snippet in `apps/caddy`'s Caddyfile.
+- Caddy is now **stateless** w.r.t. auth (Authentik holds all session/OAuth
+  state in Postgres), so 2 replicas is safe — the old caddy-security per-pod
+  OAuth-state constraint that forced a single replica is gone.
 
-**NLB backend policy:** `THREE_TUPLE` (src IP / dst IP / proto), set via `oci-network-load-balancer.oraclecloud.com/backend-policy` on the caddy Service. This was an earlier attempt to mitigate the OAuth-state problem by pinning a client IP to one node, but it only holds while the client source IP is perfectly stable for the whole GitHub round-trip (CGNAT/mobile egress rotation defeats it) — hence the move to a single replica above. The annotation is now effectively inert but left in place so a future split (single-replica auth portal + multi-replica proxy) is easy to reintroduce.
+**NLB backend policy:** still `THREE_TUPLE` (src IP / dst IP / proto) on the caddy
+Service. It was originally added to pin OAuth flows to one caddy pod; now that
+auth is stateless that pinning is no longer required, but it's harmless and left
+in place.
 
 ---
 
@@ -185,17 +199,17 @@ All services proxied through Caddy on OKE (NLB → 159.13.44.68).
 
 | Domain                   | Backend (ClusterIP)                       | Auth     | Notes                            |
 | ------------------------ | ----------------------------------------- | -------- | -------------------------------- |
-| auth.stevegore.au        | —                                         | —        | GitHub OAuth portal (caddy-security) |
+| auth.stevegore.au        | authentik-server.authentik:80             | —        | Authentik IdP (GitHub-federated) + forward-auth outpost |
 | healthz.stevegore.au     | —                                         | —        | Caddy `respond "OK"`             |
 | argocd.stevegore.au      | argocd-server.argocd:80 (HTTP, insecure)  | ArgoCD   | ArgoCD in `--insecure` mode      |
 | grpc.argocd.stevegore.au | argocd-server.argocd:80 (h2c)             | ArgoCD   | ArgoCD gRPC                      |
 | vault.stevegore.au       | vault.vault:8200                          | Vault UI | Vault handles own auth           |
 | bw.stevegore.au          | vaultwarden.vaultwarden:80 / :3012        | —        | Vaultwarden + WebSocket hub      |
-| homepage.stevegore.au    | homepage.homepage:3000                    | adminonly| Homepage dashboard               |
+| homepage.stevegore.au    | homepage.homepage:3000                    | Authentik| Homepage dashboard               |
 | uptime.stevegore.au      | uptime-kuma.uptime-kuma:3001             | Uptime Kuma | Full UI + status page         |
 | status.stevegore.au      | uptime-kuma.uptime-kuma:3001             | —        | Custom-domain alias for the `homelab` status page (cname row managed by `scripts/setup_status_page.py`) |
-| headlamp.stevegore.au    | headlamp.headlamp:80                      | adminonly| Kubernetes web dashboard         |
-| hermes.stevegore.au      | hermes.hermes:9119                        | —        |                                  |
+| headlamp.stevegore.au    | headlamp.headlamp:80                      | Authentik| Kubernetes web dashboard         |
+| hermes.stevegore.au      | hermes.hermes:9119                        | Authentik|                                  |
 
 **Via Tailscale Egress Service to pico (`pico` ExternalName svc in caddy namespace):**
 
@@ -203,8 +217,8 @@ All services proxied through Caddy on OKE (NLB → 159.13.44.68).
 | ------------------- | --------- | -------- | ------------------------------ |
 | stevegore.au        | 8788      | —        | ttyd web terminal              |
 | hass.stevegore.au   | 8123      | —        | Home Assistant                 |
-| desk.stevegore.au   | 8111      | adminonly| NuraSpace remote desktop       |
-| gym.stevegore.au    | 8112      | adminonly| GymMaster                      |
+| desk.stevegore.au   | 8111      | Authentik| NuraSpace remote desktop       |
+| gym.stevegore.au    | 8112      | Authentik| GymMaster                      |
 | plex.stevegore.au   | 32400     | —        | Plex Media Server              |
 | photos.stevegore.au        | 2283      | —        | Immich photo library (primary) |
 | immich.stevegore.au        | 2283      | —        | Immich (alias)                 |

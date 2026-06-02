@@ -119,13 +119,17 @@ See `scripts/STATS_SERVER.md` for detailed setup and troubleshooting.
 
 | Namespace          | Workload                        | Notes                                      |
 | ------------------ | ------------------------------- | ------------------------------------------ |
-| caddy              | Caddy (1 replica)               | NLB → Caddy; DNS-01 ACME via Cloudflare; certmagic-s3 on OCI Object Storage. Single replica required — caddy-security keeps OAuth login state in per-pod memory (see dns.md). |
+| caddy              | Caddy (2 replicas)              | NLB → Caddy; DNS-01 ACME via Cloudflare; certmagic-s3 on OCI Object Storage. Stateless auth (Authentik forward_auth) so HA across both fault domains (see dns.md). |
+| authentik          | Authentik IdP                   | GitHub-federated SSO + domain-level forward-auth outpost for `*.stevegore.au`; Postgres on `pg-shared`, no Redis (2026.5 is Postgres-backed). `auth.stevegore.au` |
+| cloudnative-pg     | CloudNativePG operator          | Cluster-wide Postgres operator (CRDs + controller); apps declare Cluster/Database CRs |
+| databases          | `pg-shared` Postgres (CNPG)     | Shared PG16 instance on 50 GB `oci-bv`; WAL backups to OCI Object Storage; hosts the `authentik` DB |
 | argocd             | ArgoCD                          | `--insecure` mode (Caddy terminates TLS); Git source: `stevegore/infra` |
 | vault              | HashiCorp Vault                 | OCI KMS auto-unseal; VSO syncs secrets to k8s |
 | vault-secrets-operator | VSO                        | Syncs Vault secrets → k8s Secrets          |
+| metrics-server     | metrics-server                  | `kubectl top` / HPA metrics (`--kubelet-insecure-tls`) |
 | vaultwarden        | Vaultwarden 1.35.7              | Primary at `bw.stevegore.au`; MySQL HeatWave Free backend (`/data` is `emptyDir`) |
-| homepage           | Homepage dashboard              | Protected by caddy-security `adminonly`    |
-| hermes             | Hermes                          |                                            |
+| homepage           | Homepage dashboard              | Gated by Authentik forward-auth            |
+| hermes             | Hermes                          | Gated by Authentik forward-auth            |
 | tailscale          | Tailscale operator              | Manages Egress Service for pico reachability |
 
 **Useful commands:**
