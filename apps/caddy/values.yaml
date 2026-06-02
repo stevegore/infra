@@ -1,12 +1,9 @@
-# Single replica is required, not just preferred. caddy-security (authcrunch)
-# stores the OAuth login transaction (state UUID → redirect_url) in per-pod
-# process memory with no shared/distributed backend. With 2+ replicas, the
-# GitHub callback can land on a different pod than the one that opened the
-# flow, losing the redirect and dumping the user on auth.stevegore.au (login
-# still succeeds, so a second visit works — the classic symptom). NLB
-# THREE_TUPLE affinity only masks this while the client source IP stays
-# perfectly stable for the whole round-trip. One pod removes the race entirely.
-replicaCount: 1
+# 2 replicas for HA. caddy is now stateless w.r.t. auth: caddy-security was
+# replaced by Authentik forward_auth (Authentik holds all session/OAuth state),
+# and ACME certs are shared via OCI Object Storage. The old per-pod-state
+# constraint that forced a single replica is gone. Anti-affinity spreads the
+# two pods across the fault domains (see podAntiAffinity below).
+replicaCount: 2
 
 image:
   # Built from apps/caddy/Dockerfile, pushed to OCI Container Registry (Always Free, 5 GB).
