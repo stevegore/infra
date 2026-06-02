@@ -37,6 +37,15 @@ data:
           user_matching_mode: email_link
           authentication_flow: !Find [authentik_flows.flow, [slug, default-source-authentication]]
           enrollment_flow: !Find [authentik_flows.flow, [slug, default-source-enrollment]]
+      # Show GitHub as a login button on the default authentication flow — a new
+      # source isn't surfaced until it's added to the identification stage's
+      # sources list (which ships empty). Password login still works alongside.
+      - model: authentik_stages_identification.identificationstage
+        identifiers:
+          name: default-authentication-identification
+        attrs:
+          sources:
+            - !Find [authentik_core.source, [slug, github]]
   forward-auth.yaml: |
     version: 1
     metadata:
