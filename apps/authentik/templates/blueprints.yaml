@@ -62,10 +62,23 @@ data:
           name: stevegore
           provider: !KeyOf provider
       # Add the provider to the built-in embedded outpost so it serves the
-      # forward-auth endpoints at /outpost.goauthentik.io/.
+      # forward-auth endpoints at /outpost.goauthentik.io/. authentik_host pins
+      # the browser-facing redirect/callback host to auth.stevegore.au (otherwise
+      # it auto-derives from whatever host first hit Authentik, which broke the
+      # GitHub OAuth callback host match).
       - model: authentik_outposts.outpost
         identifiers:
           managed: goauthentik.io/outposts/embedded
         attrs:
           providers:
             - !KeyOf provider
+          config:
+            authentik_host: https://auth.stevegore.au
+            authentik_host_browser: https://auth.stevegore.au
+            authentik_host_insecure: false
+            log_level: info
+            refresh_interval: minutes=5
+            kubernetes_namespace: authentik
+            kubernetes_replicas: 1
+            kubernetes_service_type: ClusterIP
+            object_naming_template: ak-outpost-%(name)s
