@@ -73,7 +73,7 @@ This was fixed on the now-terminated ampere-ubuntu instance by manually installi
 **Total Cluster:** 4 OCPU / 24 GB RAM (within Always Free tier). ~36% memory / ~11% CPU in use — roughly **12 GB RAM free** (measured 2026-06-01 via metrics-server). The cluster is *not* memory- or CPU-constrained; an earlier note here claiming "~1.5 GB available / 87% CPU-bound / pods evicting" was inaccurate and has been corrected against live `kubectl top` data.
 
 **Workload Distribution:**
-- `argocd` (2 replicas) + `vault` (1) + `vault-secrets-operator` + `caddy` (1 replica) + `vaultwarden` (1) + `uptime-kuma` (1) + `homepage` (1) + `metrics-server` (1) + `tailscale-operator` (1)
+- `argocd` (2 replicas) + `vault` (1) + `vault-secrets-operator` + `caddy` (2 replicas) + `authentik` (server+worker) + `cloudnative-pg` operator (1) + `databases`/`pg-shared` Postgres (1) + `vaultwarden` (1) + `uptime-kuma` (1) + `homepage` (1) + `metrics-server` (1) + `tailscale-operator` (1)
 - Top memory consumers (actual RSS): hermes 500 MB, argocd-application-controller 317 MB, uptime-kuma 219 MB, oke-dataplane-observability-agent 170 MB ×2, vaultwarden 138 MB, homepage 106 MB. caddy is only ~50 MB.
 
 **Metrics:** metrics-server is deployed (`apps/metrics-server`, wrapper over the upstream chart, `--kubelet-insecure-tls` for OKE managed kubelets). `kubectl top nodes` / `kubectl top pods -A` work cluster-wide.
@@ -84,11 +84,15 @@ This was fixed on the now-terminated ampere-ubuntu instance by manually installi
 |-------------|---------|-----------|--------|
 | ArgoCD | v3.4.2 | ArgoCD | Manages this cluster |
 | Vault | 1.18.1 | HashiCorp | Unsealed with auto-unseal |
-| Caddy | 2.11.3 | Custom build | 1 replica (caddy-security OAuth state is per-pod; see dns.md), TLS termination for `*.stevegore.au` |
+| Caddy | 2.11.3 | Custom build | 2 replicas, TLS termination for `*.stevegore.au`; Authentik forward_auth (stateless, see dns.md) |
+| Authentik | 2026.5.2 | goauthentik.io | GitHub-federated SSO + forward-auth outpost; Postgres on pg-shared, no Redis; secrets via VSO (`kv/authentik/config`) |
+| CloudNativePG | 1.29.1 (chart 0.28.2) | cloudnative-pg | Cluster-wide Postgres operator (CRDs + controller) |
+| pg-shared (Postgres) | 16 | CNPG `Cluster` | Shared instance in ns `databases`, 50 GB `oci-bv`; WAL+base backups to OCI Object Storage (`pg-backups` bucket) |
 | Tailscale Operator | 1.98.3 | Tailscale | Manages k8s cluster membership on tailnet |
 | Vaultwarden | 1.36.0 | — | MySQL backend on OCI via HeatWave; security fixes (SSO CSRF, enumeration) |
 | Uptime Kuma | 2.3.2 | — | SQLite backend on 50GB OCI block volume; monitors pico+external services |
-| Homepage | 0.10.9 | — | Service dashboard |
+| Homepage | 0.10.9 | — | Service dashboard (gated by Authentik) |
+| metrics-server | 0.8.0 (chart 3.13.0) | kubernetes-sigs | `kubectl top` / HPA metrics; `--kubelet-insecure-tls` |
 
 All Helm charts are defined in `apps/` and synced via ArgoCD. See `argocd/applicationset.yaml` for the ApplicationSet (`infra-apps`).
 
