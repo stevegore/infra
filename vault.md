@@ -104,14 +104,45 @@ Tail with `journalctl -u vault-token-sync.service -f`.
 ### 3. Human UI login
 
 `vault.stevegore.au` is **not** gated by the edge proxy — Vault handles its own
-login on the UI. (Vault's own GitHub auth method / root token.)
+login. Three ways in:
 
-> **Obsolete (removed 2026-06-02):** the old `caddy-user` / `caddy-admin` JWT
-> auth method, which validated a JWT minted by caddy-security (RSA keypair at
-> `/etc/caddy/keys/jwt-*.pem`, issuer `auth.stevegore.au`). caddy-security was
-> replaced by Authentik; that JWT path no longer exists. **Follow-up:** wire
-> Vault's OIDC auth method to Authentik as an OIDC provider for SSO'd UI/CLI
-> login. Until then, use Vault's built-in GitHub method or a root token.
+1. **OIDC via Authentik (SSO, preferred)** — UI → method **OIDC** (role `default`)
+   → redirects to Authentik → GitHub SSO → back to Vault with the `admin` policy.
+   Restricted to Steve by the `allow-stevegore-github` policy on the Vault app.
+2. **Userpass** — method **Username**, user `steve` (policy `admin`).
+3. **Token** — root token in `~/Code/Personal/infra/vault-root.token` (break-glass).
+
+> Replaced the old caddy-security `caddy-user`/`caddy-admin` JWT method (gone
+> with caddy-security on 2026-06-02) — that path no longer exists.
+
+**OIDC setup (2026-06-02).** Two halves; the Authentik half lives in its DB
+(covered by pg-shared backups), the Vault half is configured imperatively:
+
+*Authentik:* OAuth2/OIDC Provider **Vault** + application slug `vault`
+(`https://auth.stevegore.au/application/o/vault/`), confidential client, signing
+key = the self-signed cert, scopes openid/email/profile, redirect URIs =
+`https://vault.stevegore.au/ui/vault/auth/oidc/oidc/callback` and
+`http://localhost:8250/oidc/callback` (CLI). Client id/secret stored in Vault at
+`kv/authentik/config → vault_oidc_client_id / vault_oidc_client_secret`. The
+`allow-stevegore-github` policy is bound to the `vault` application.
+
+*Vault:* (re-runnable; client id/secret read from `kv/authentik/config`)
+```bash
+vault auth enable oidc   # idempotent; ignore "already in use"
+vault write auth/oidc/config \
+  oidc_discovery_url="https://auth.stevegore.au/application/o/vault/" \
+  oidc_client_id="$(vault kv get -field=vault_oidc_client_id kv/authentik/config)" \
+  oidc_client_secret="$(vault kv get -field=vault_oidc_client_secret kv/authentik/config)" \
+  default_role="default"
+vault write auth/oidc/role/default role_type=oidc user_claim=preferred_username \
+  oidc_scopes="openid,email,profile" token_policies=admin ttl=1h \
+  allowed_redirect_uris="https://vault.stevegore.au/ui/vault/auth/oidc/oidc/callback,http://localhost:8250/oidc/callback"
+```
+CLI login: `vault login -method=oidc role=default`.
+
+> TODO (optional): persist the Authentik Vault provider/app/binding in the
+> `apps/authentik` blueprint (via `!Env` client id/secret from the VSO secret)
+> for from-scratch reproducibility, the same way the forward-auth provider is.
 
 ---
 
