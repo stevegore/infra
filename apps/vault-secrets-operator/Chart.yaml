@@ -3,9 +3,9 @@ name: vault-secrets-operator
 description: HashiCorp Vault Secrets Operator
 type: application
 version: 1.0.0
-appVersion: "0.9.0"
+appVersion: "1.4.0"
 
 dependencies:
   - name: vault-secrets-operator
-    version: 0.9.0
+    version: 1.4.0
     repository: https://helm.releases.hashicorp.com
