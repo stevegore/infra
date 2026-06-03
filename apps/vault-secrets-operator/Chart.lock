@@ -1,6 +1,6 @@
 dependencies:
 - name: vault-secrets-operator
   repository: https://helm.releases.hashicorp.com
-  version: 0.9.0
-digest: sha256:c8e1cfc45f6f595a66c29256c66f8a3c132502c1a338c6f4df45c074cb86bc47
-generated: "2026-05-25T13:50:06.600535+10:00"
+  version: 1.4.0
+digest: sha256:a57ed54f76eb573dd2f1c8ef4e05a1aea61c44c0d30ebdd15573c3b81c79ae10
+generated: "2026-06-03T12:32:09.565606+10:00"

@@ -15,7 +15,13 @@ vault:
     # Pin the tag too so we don't drift on each chart reload.
     image:
       repository: "docker.io/hashicorp/vault"
-      tag: "1.18.1"
+      tag: "1.21.2"
+
+    # Required for mlock (IPC_LOCK moved from runtime setcap to build-time in 1.19.17+)
+    containerSecurityContext:
+      capabilities:
+        add:
+          - IPC_LOCK
 
     # Resource limits for Ampere A1
     resources:
