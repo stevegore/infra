@@ -208,5 +208,6 @@ data:
     stevegore.au {
       respond /health "I'm doing ok, thanks for asking :)"
       respond /healthz "I'm doing ok, thanks for asking :)"
-      reverse_proxy pico:8788
+      reverse_proxy ttyd.ttyd.svc.cluster.local:8788
+      import defaults
     }

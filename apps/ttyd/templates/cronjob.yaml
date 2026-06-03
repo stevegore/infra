@@ -1,0 +1,25 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "ttyd.fullname" . }}-restarter
+  labels:
+    {{- include "ttyd.labels" . | nindent 4 }}
+spec:
+  schedule: {{ .Values.restarter.schedule | quote }}
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 2
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          serviceAccountName: {{ include "ttyd.fullname" . }}-restarter
+          restartPolicy: OnFailure
+          containers:
+            - name: kubectl
+              image: {{ .Values.restarter.image }}
+              command:
+                - kubectl
+                - rollout
+                - restart
+                - deployment/{{ include "ttyd.fullname" . }}
