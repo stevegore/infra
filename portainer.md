@@ -7,7 +7,7 @@
 **Total Containers:** 41 running  
 **Total Volumes:** 48  
 **Total Images:** 114  
-**Total Stacks:** 20 (18 active, 2 stopped)  
+**Total Stacks:** 19 (17 active, 2 stopped)  
 **System CPU:** 12 cores  
 **System Memory:** ~31 GB
 
@@ -52,19 +52,18 @@ curl -s -X POST http://pico.local:9000/api/endpoints/1/docker/exec/$EXEC_ID/star
 5. [owncloud](#owncloud) - Cloud storage (stopped)  
 6. [stevegore-au](#stevegore-au) - Web terminal and utilities  
 7. [photoprism](#photoprism) - Photo management with AI  
-8. [gitea](#gitea) - Git server (stopped)  
-9. [huggin](#huggin) - Task automation  
-10. [nuraspace2](#nuraspace2) - NuraSpace application  
-11. [pdf](#pdf) - Stirling PDF document processor  
-12. [gymmaster-rest](#gymmaster-rest) - Gym booking system  
-13. [goldenboards](#goldenboards) - Golden Boards application  
-14. [stravakeeper](#stravakeeper) - Strava data keeper  
-15. [transmission-wg](#transmission-wg) - WireGuard-based torrent (stopped)  
-16. [stravabot-rs](#stravabot-rs) - Strava bot in Rust  
-17. [immich](#immich) - Photo management (Portainer-managed)  
-18. [icloudpd](#icloudpd) - iCloud photo downloader  
-19. [homepage](#homepage) - Application dashboard (Portainer-managed)  
-20. [uptime-kuma](#uptime-kuma) - Uptime/status monitoring
+8. [huggin](#huggin) - Task automation  
+9. [nuraspace2](#nuraspace2) - NuraSpace application  
+10. [pdf](#pdf) - Stirling PDF document processor  
+11. [gymmaster-rest](#gymmaster-rest) - Gym booking system  
+12. [goldenboards](#goldenboards) - Golden Boards application  
+13. [stravakeeper](#stravakeeper) - Strava data keeper  
+14. [transmission-wg](#transmission-wg) - WireGuard-based torrent (stopped)  
+15. [stravabot-rs](#stravabot-rs) - Strava bot in Rust  
+16. [immich](#immich) - Photo management (Portainer-managed)  
+17. [icloudpd](#icloudpd) - iCloud photo downloader  
+18. [homepage](#homepage) - Application dashboard (Portainer-managed)  
+19. [uptime-kuma](#uptime-kuma) - Uptime/status monitoring
 
 ### Standalone Containers
 
@@ -162,17 +161,17 @@ networks:
 **Stack ID:** 7  
 **Project Path:** `/data/compose/7`  
 **Compose Version:** v4  
-**Last Updated:** 2026-05-10  
+**Last Updated:** 2026-06-03  
 **Created:** 2021-10-04
 
 **Containers:**
 
 | Container    | Image                                      | Status     |
 | ------------ | ------------------------------------------ | ---------- |
-| radarr       | linuxserver/radarr:5.22.4                  | Up 2 weeks |
-| sonarr       | linuxserver/sonarr:4.0.16                  | Up 2 weeks |
-| jackett      | linuxserver/jackett:0.24.338               | Up 4 min   |
-| flaresolverr | ghcr.io/flaresolverr/flaresolverr:latest   | Up 20 min  |
+| radarr       | linuxserver/radarr:6.1.1                   | Up 1 min   |
+| sonarr       | linuxserver/sonarr:4.0.17                  | Up 2 weeks |
+| jackett      | linuxserver/jackett:0.24.1985              | Up 2 weeks |
+| flaresolverr | ghcr.io/flaresolverr/flaresolverr:latest   | Up 2 weeks |
 
 **Docker Compose:**
 
@@ -192,7 +191,7 @@ services:
       - /srv/movies:/movies
     environment:
       - TZ=Australia/Sydney
-    image: linuxserver/radarr:5.22.4
+    image: linuxserver/radarr:6.1.1
 
   sonarr:
     container_name: sonarr
@@ -207,7 +206,7 @@ services:
       - /srv/tv:/tv
     environment:
       - TZ=Australia/Sydney
-    image: linuxserver/sonarr:4.0.16
+    image: linuxserver/sonarr:4.0.17
 
   jackett:
     container_name: jackett
@@ -220,7 +219,7 @@ services:
       - jackett-config:/config
     environment:
       - TZ=Australia/Sydney
-    image: linuxserver/jackett:0.24.338
+    image: linuxserver/jackett:0.24.1985
 
   flaresolverr:
     container_name: flaresolverr
@@ -273,9 +272,9 @@ networks:
 
 **Containers:**
 
-| Container | Image                                    | Status               |
-| --------- | ---------------------------------------- | -------------------- |
-| plex      | plexinc/pms-docker:1.41.6.9685-d301f511a | Up 2 weeks (healthy) |
+| Container | Image                                     | Status               |
+| --------- | ----------------------------------------- | -------------------- |
+| plex      | plexinc/pms-docker:1.43.2.10687-563d026ea | Up 2 weeks (healthy) |
 
 **Docker Compose:**
 
@@ -284,7 +283,7 @@ version: '2'
 services:
   plex:
     container_name: plex
-    image: plexinc/pms-docker:1.41.6.9685-d301f511a
+    image: plexinc/pms-docker:1.43.2.10687-563d026ea
     restart: unless-stopped
     ports:
       - 32400:32400/tcp
@@ -570,7 +569,7 @@ volumes:
 
 | Container               | Image                        | Status     |
 | ----------------------- | ---------------------------- | ---------- |
-| photoprism-photoprism-1 | photoprism/photoprism:260305 | Up 2 weeks |
+| photoprism-photoprism-1 | photoprism/photoprism:260601 | Up 1 min   |
 | photoprism-mariadb-1    | mariadb:10.11                | Up 2 weeks |
 | photoprism-chadburn-1   | premoweb/chadburn:latest     | Up 2 weeks |
 
@@ -589,7 +588,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
 
   photoprism:
-    image: photoprism/photoprism:260305
+    image: photoprism/photoprism:260601
     restart: unless-stopped
     stop_grace_period: 10s
     depends_on:
@@ -682,53 +681,6 @@ PHOTOPRISM_INIT=ffmpeg
 **Scheduler:** Chadburn runs `photoprism index --cleanup` daily at 2:00 AM  
 **Features:** Face detection, ML classification, WebDAV, FFmpeg, gzip compression, JPEG quality 85  
 **Admin:** User `steve`, password auth mode
-
----
-
-### gitea
-
-**Status:** Stopped  
-**Stack ID:** 34  
-**Project Path:** `/data/compose/34`  
-**Compose Version:** v1  
-**Created:** 2023-08-21
-
-**Services:**  
-
-- `server` - gitea/gitea:1.20.2
-
-**Docker Compose:**
-
-```yaml
-version: "3"
-networks:
-  gitea:
-    external: false
-
-services:
-  server:
-    image: gitea/gitea:1.20.2
-    container_name: gitea
-    environment:
-      - USER_UID=1000
-      - USER_GID=1000
-    restart: always
-    networks:
-      - gitea
-    volumes:
-      - gitea:/data
-      - /etc/timezone:/etc/timezone:ro
-      - /etc/localtime:/etc/localtime:ro
-    ports:
-      - "3030:3000"
-      - "222:22"
-
-volumes:
-  gitea:
-```
-
-**Purpose:** Gitea - lightweight Git service with web UI (decommissioned)  
-**Ports:** 3030 -> 3000 (web), 222 -> 22 (SSH)
 
 ---
 
@@ -1596,7 +1548,6 @@ bash ~/code/infra/scripts/vw-mysql-to-sqlite.sh
 | 3005  | Plex Companion        | plex                              | TCP      |
 | 3011  | phpMyAdmin (Huginn)   | huggin-mysqladmin-1               | TCP      |
 | 3012  | Vaultwarden WebSocket | bitwarden                         | TCP      |
-| 3030  | Gitea (stopped)       | gitea                             | TCP      |
 | 4357  | HA Observer           | hassio_observer                   | TCP      |
 | 7878  | Radarr                | radarr                            | TCP      |
 | 3001  | Uptime Kuma           | uptime-kuma                       | TCP      |
@@ -1736,4 +1687,4 @@ This Portainer instance manages a comprehensive home infrastructure on pico:
 - **GoldenBoards** - Custom application (Go, no ports)  
 - **ttyd** - Web terminal access (auto-restarts every 30 min, tmpfs storage)
 
-**Last Updated:** 2026-05-17
+**Last Updated:** 2026-06-03
