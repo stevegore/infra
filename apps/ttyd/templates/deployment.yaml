@@ -1,0 +1,53 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "ttyd.fullname" . }}
+  labels:
+    {{- include "ttyd.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "ttyd.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "ttyd.selectorLabels" . | nindent 8 }}
+    spec:
+      initContainers:
+        # emptyDir mounts as root:root — chown so uid 222 can write
+        - name: chown-home
+          image: busybox:latest
+          command: ["chown", "222:222", "/home/visitor"]
+          volumeMounts:
+            - name: homedir
+              mountPath: /home/visitor
+      containers:
+        - name: ttyd
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["/bin/sh", "-c"]
+          args:
+            - "ulimit -u 250 && touch /home/visitor/.zshrc && exec /usr/bin/tini -- ttyd --writable -t fontSize=16 -t 'fontFamily=Consolas, Monaco, Courier New, monospace' -p 8788 zsh"
+          ports:
+            - name: http
+              containerPort: 8788
+              protocol: TCP
+          volumeMounts:
+            - name: homedir
+              mountPath: /home/visitor
+            - name: tmpdir
+              mountPath: /tmp
+            - name: tmpdir
+              mountPath: /var/tmp
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      volumes:
+        - name: homedir
+          emptyDir:
+            medium: Memory
+            sizeLimit: 500Mi
+        - name: tmpdir
+          emptyDir:
+            medium: Memory
+            sizeLimit: 500Mi
