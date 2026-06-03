@@ -210,12 +210,12 @@ All services proxied through Caddy on OKE (NLB → 159.13.44.68).
 | status.stevegore.au      | uptime-kuma.uptime-kuma:3001             | —        | Custom-domain alias for the `homelab` status page (cname row managed by `scripts/setup_status_page.py`) |
 | headlamp.stevegore.au    | headlamp.headlamp:80                      | Authentik| Kubernetes web dashboard         |
 | hermes.stevegore.au      | hermes.hermes:9119                        | Authentik|                                  |
+| stevegore.au         | ttyd.ttyd:8788                            | —        | ttyd web terminal (migrated from pico 2026-06-03) |
 
 **Via Tailscale Egress Service to pico (`pico` ExternalName svc in caddy namespace):**
 
 | Domain              | pico Port | Auth     | Service                        |
 | ------------------- | --------- | -------- | ------------------------------ |
-| stevegore.au        | 8788      | —        | ttyd web terminal              |
 | hass.stevegore.au   | 8123      | —        | Home Assistant                 |
 | desk.stevegore.au   | 8111      | Authentik| NuraSpace remote desktop       |
 | gym.stevegore.au    | 8112      | Authentik| GymMaster                      |
