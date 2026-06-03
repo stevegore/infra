@@ -26,7 +26,7 @@ spec:
         - name: ttyd
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
-          command: ["/bin/sh", "-c"]
+          command: ["/bin/bash", "-c"]
           args:
             - "ulimit -u 250 && touch /home/visitor/.zshrc && exec /usr/bin/tini -- ttyd --writable -t fontSize=16 -t 'fontFamily=Consolas, Monaco, Courier New, monospace' -p 8788 zsh"
           ports:
