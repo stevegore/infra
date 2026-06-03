@@ -3,4 +3,4 @@ name: uptime-kuma
 description: Uptime Kuma — status page / monitoring. SQLite on OCI Block Volume.
 type: application
 version: 1.0.0
-appVersion: "2.3.2"
+appVersion: "2.4.0"
