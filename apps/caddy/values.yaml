@@ -140,4 +140,3 @@ pico:
     - { name: huginn,  port: 3000  }
     - { name: pdf,     port: 8083  }
     - { name: strava,  port: 8180  }
-    - { name: ttyd,    port: 8788  }

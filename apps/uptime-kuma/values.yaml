@@ -43,7 +43,6 @@ pico:
     - { name: huginn,       port: 3000  }
     - { name: pdf,          port: 8083  }
     - { name: strava,       port: 8180  }
-    - { name: ttyd,         port: 8788  }
     - { name: radarr,       port: 7878  }
     - { name: sonarr,       port: 8989  }
     - { name: jackett,      port: 9117  }
