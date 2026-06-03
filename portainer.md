@@ -50,7 +50,7 @@ curl -s -X POST http://pico.local:9000/api/endpoints/1/docker/exec/$EXEC_ID/star
 3. [plex](#plex) - Media server  
 4. [vault](#vault) - Secrets management  
 5. [owncloud](#owncloud) - Cloud storage (stopped)  
-6. [stevegore-au](#stevegore-au) - Web terminal and utilities  
+6. [stevegore-au](#stevegore-au) - Web terminal and utilities (stopped — migrated to OKE)  
 7. [photoprism](#photoprism) - Photo management with AI  
 8. [huggin](#huggin) - Task automation  
 9. [nuraspace2](#nuraspace2) - NuraSpace application  
@@ -479,12 +479,12 @@ services:
 
 ### stevegore-au
 
-**Status:** Running  
+**Status:** Stopped (migrated to OKE 2026-06-03)  
 **Stack ID:** 29  
 **Project Path:** `/data/compose/29`  
 **Compose Version:** v2  
 **Public:** Yes (Portainer resource control set to public)  
-**Last Updated:** 2026-05-25  
+**Last Updated:** 2026-06-03  
 **Created:** 2023-07-06
 
 **Containers:**
@@ -1685,6 +1685,6 @@ This Portainer instance manages a comprehensive home infrastructure on pico:
 - **StravaBot-rs** - Strava automation (Rust)  
 - **NuraSpace** - Custom application (Python)  
 - **GoldenBoards** - Custom application (Go, no ports)  
-- **ttyd** - Web terminal access (auto-restarts every 30 min, tmpfs storage)
+- **ttyd** - Web terminal access — migrated to OKE (`apps/ttyd`); pico stack stopped 2026-06-03
 
 **Last Updated:** 2026-06-03
