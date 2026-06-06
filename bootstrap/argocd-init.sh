@@ -66,15 +66,37 @@ kubectl apply -f "${REPO_ROOT}/argocd/applicationset.yaml"
 echo "✓ infra-apps ApplicationSet applied — ArgoCD will sync all apps"
 
 # ---------- 4. OCIR pull secret ----------
-log "OCIR pull secret"
-if kubectl get secret ocir-pull -n caddy >/dev/null 2>&1; then
-  skip "ocir-pull secret already exists in caddy namespace"
+# caddy/values.yaml references imagePullSecrets: [ocir-creds].
+# VSO does NOT manage this secret — it must be created manually.
+# The OCIR auth-token lives in Vault at kv/oci/ocir (minted by
+# scripts/provision-ocir-creds.sh and stored there once).
+log "OCIR pull secret (ocir-creds in caddy namespace)"
+if kubectl get secret ocir-creds -n caddy >/dev/null 2>&1; then
+  skip "ocir-creds already exists in caddy namespace"
 else
+  # The caddy namespace may not exist yet if ArgoCD hasn't synced.
+  kubectl create namespace caddy --dry-run=client -o yaml | kubectl apply -f - >/dev/null 2>&1 || true
+
   if [[ -n "${VAULT_TOKEN:-}" ]]; then
-    bash "${REPO_ROOT}/scripts/provision-ocir-creds.sh"
+    echo "    reading OCIR credentials from Vault..."
+    OCIR_USER=$(vault kv get -field=username kv/oci/ocir 2>/dev/null)
+    OCIR_TOKEN=$(vault kv get -field=auth_token kv/oci/ocir 2>/dev/null)
+    if [[ -z "$OCIR_USER" || -z "$OCIR_TOKEN" ]]; then
+      echo "    ERROR: kv/oci/ocir missing or empty — run scripts/provision-ocir-creds.sh first"
+    else
+      kubectl create secret docker-registry ocir-creds \
+        -n caddy \
+        --docker-server=syd.ocir.io \
+        --docker-username="$OCIR_USER" \
+        --docker-password="$OCIR_TOKEN" \
+        --docker-email=steve.j.gore@gmail.com
+      echo "✓ ocir-creds created in caddy namespace"
+    fi
   else
-    echo "    VAULT_TOKEN not set — run after vault login:"
-    echo "      source scripts/vault-env.sh && vlogin && bash scripts/provision-ocir-creds.sh"
+    echo "    VAULT_TOKEN not set — after Vault is up, run:"
+    echo "      export KUBECONFIG=$KUBECONFIG_PATH"
+    echo "      source scripts/vault-env.sh && vlogin"
+    echo "      bash bootstrap/argocd-init.sh   # idempotent, re-runs only missing steps"
   fi
 fi
 
