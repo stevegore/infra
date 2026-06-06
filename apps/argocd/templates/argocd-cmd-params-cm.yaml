@@ -7,7 +7,7 @@ metadata:
     app.kubernetes.io/name: argocd-cmd-params-cm
     app.kubernetes.io/part-of: argocd
 data:
-  redis.server: argocd-redis-ha-haproxy:6379
+  redis.server: argocd-redis:6379
   # Run ArgoCD without its own TLS — Caddy handles TLS termination externally.
   # Without this, ArgoCD serves HTTPS and tries to verify its own Dex OIDC
   # endpoint via the external URL, which fails with "x509: certificate signed
