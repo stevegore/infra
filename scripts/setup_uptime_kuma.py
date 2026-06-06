@@ -66,7 +66,7 @@ retired_monitor_names = {
 
 monitors = [
     # hosts
-    {"name": "Ping pico",    "type": "ping", "kwargs": {"hostname": "pico"},           "tags": ["infra"], "aliases": ["Ping pico.local"]},
+    {"name": "Ping pico",    "type": "ping", "kwargs": {"hostname": "pico"},           "tags": ["infra"], "aliases": ["Ping pico"]},
     {"name": "TCP pico SSH", "type": "port", "kwargs": {"hostname": "pico", "port": 22}, "tags": ["infra"]},
 
     # public services (Caddy on OKE)
@@ -88,7 +88,6 @@ monitors = [
     {"name": "Homepage",                   "type": "http", "kwargs": {"url": "https://homepage.stevegore.au/",                "maxredirects": 0,  "accepted_statuscodes_json": ACCEPT_302},      "tags": ["public"],           "aliases": ["homepage.stevegore.au"]},
     {"name": "Desk Service",               "type": "http", "kwargs": {"url": "https://desk.stevegore.au/",                    "maxredirects": 0,  "accepted_statuscodes_json": ACCEPT_302},      "tags": ["public"],           "aliases": ["desk.stevegore.au"]},
     {"name": "Gym Bookings",               "type": "http", "kwargs": {"url": "https://gym.stevegore.au/",                     "maxredirects": 0,  "accepted_statuscodes_json": ACCEPT_302},      "tags": ["public"],           "aliases": ["gym.stevegore.au"]},
-    {"name": "OpenClaw",                   "type": "http", "kwargs": {"url": "https://openclaw.stevegore.au/",                "maxredirects": 5,  "accepted_statuscodes_json": ACCEPT_OK},       "tags": ["public"],           "aliases": ["openclaw.stevegore.au"]},
     {"name": "Uptime Kuma",                "type": "http", "kwargs": {"url": "https://uptime.stevegore.au/",                  "maxredirects": 5,  "accepted_statuscodes_json": ACCEPT_OK},       "tags": ["public", "infra"],  "aliases": ["uptime.stevegore.au"]},
     {"name": "Stats",                      "type": "http", "kwargs": {"url": "https://stats.stevegore.au/api/stats",          "maxredirects": 0,  "accepted_statuscodes_json": ACCEPT_OK},       "tags": ["public", "infra"],  "aliases": ["stats.stevegore.au"]},
 
@@ -103,7 +102,7 @@ monitors = [
     {"name": "StravaBot",           "type": "port", "kwargs": {"hostname": "pico", "port": 8082},                                                                                "tags": ["internal"]},
     {"name": "StravaKeeper",        "type": "http", "kwargs": {"url": "http://pico:8180/",                     "maxredirects": 0, "accepted_statuscodes_json": ACCEPT_OK_REDIR}, "tags": ["internal"]},
     {"name": "Immich (direct)",     "type": "http", "kwargs": {"url": "http://pico:2283/api/server/ping",      "maxredirects": 0, "accepted_statuscodes_json": ACCEPT_OK,        "keyword": "pong"}, "tags": ["internal", "photos"], "aliases": ["Immich (local)"]},
-    {"name": "PhotoPrism (local)",  "type": "http", "kwargs": {"url": "http://pico.local:2342/api/v1/status",  "maxredirects": 0, "accepted_statuscodes_json": ACCEPT_OK},       "tags": ["internal", "photos"]},
+    {"name": "PhotoPrism (local)",  "type": "http", "kwargs": {"url": "http://pico:2342/api/v1/status",        "maxredirects": 0, "accepted_statuscodes_json": ACCEPT_OK},       "tags": ["internal", "photos"]},
     {"name": "Huginn (direct)",     "type": "http", "kwargs": {"url": "http://pico:3000/",                     "maxredirects": 5, "accepted_statuscodes_json": ACCEPT_OK},       "tags": ["internal"],           "aliases": ["Huginn (local)"]},
     {"name": "Homepage (direct)",   "type": "http", "kwargs": {"url": "http://pico:8080/",                     "maxredirects": 0, "accepted_statuscodes_json": ACCEPT_OK},       "tags": ["internal", "infra"],  "aliases": ["Homepage (local)"]},
     {"name": "Gym Bookings (direct)","type":"http", "kwargs": {"url": "http://pico:8112/",                     "maxredirects": 5, "accepted_statuscodes_json": ACCEPT_OK_REDIR}, "tags": ["internal"],           "aliases": ["GymBooking"]},
