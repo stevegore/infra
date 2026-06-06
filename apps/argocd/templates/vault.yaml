@@ -22,5 +22,7 @@ spec:
   destination:
     name: argocd-github-oauth
     create: true
+    labels:
+      app.kubernetes.io/part-of: argocd
   refreshAfter: 1h
   vaultAuthRef: argocd
