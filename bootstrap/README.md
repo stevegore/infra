@@ -224,7 +224,11 @@ bash scripts/publish-mysql-creds.sh           # Vaultwarden MySQL creds
 vault kv put kv/tailscale/authkey value=<key>
 # OCIR auth token (for caddy image pull):
 bash scripts/provision-ocir-creds.sh         # mints token, stores in Vault
-# Then re-run argocd-init.sh to create the k8s docker-registry secret:
+# ArgoCD GitHub OAuth client secret (github.com/settings/developers,
+# client ID Ov23lilY1eXJlOXH0Dej — generate a new secret if needed):
+vault kv put kv/argocd github_client_secret=<github-oauth-client-secret>
+# Re-run argocd-init.sh — picks up VAULT_TOKEN and handles all missing
+# secrets (ocir-creds, argocd dex.github.clientSecret) idempotently:
 bash bootstrap/argocd-init.sh
 
 # ArgoCD GitHub OAuth client secret (breaks circular bootstrap dependency).

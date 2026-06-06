@@ -100,6 +100,33 @@ else
   fi
 fi
 
+# ---------- 5. ArgoCD GitHub OAuth client secret ----------
+# Dex needs dex.github.clientSecret in argocd-secret to authenticate via GitHub.
+# VSO syncs kv/argocd → argocd-github-oauth, but VSO must be running first.
+# Patching argocd-secret directly breaks the circular bootstrap dependency.
+log "ArgoCD GitHub OAuth client secret"
+EXISTING=$(kubectl get secret argocd-secret -n argocd \
+  -o jsonpath='{.data.dex\.github\.clientSecret}' 2>/dev/null || true)
+if [[ -n "$EXISTING" ]]; then
+  skip "dex.github.clientSecret already set in argocd-secret"
+elif [[ -n "${VAULT_TOKEN:-}" ]]; then
+  GH_SECRET=$(vault kv get -field=github_client_secret kv/argocd 2>/dev/null || true)
+  if [[ -z "$GH_SECRET" ]]; then
+    echo "    ERROR: kv/argocd missing — store the GitHub OAuth client secret first:"
+    echo "      vault kv put kv/argocd github_client_secret=<secret>"
+  else
+    kubectl patch secret argocd-secret -n argocd \
+      --type=json \
+      -p='[{"op":"add","path":"/data/dex.github.clientSecret","value":"'"$(echo -n "$GH_SECRET" | base64)"'"}]'
+    echo "✓ dex.github.clientSecret patched into argocd-secret"
+  fi
+else
+  echo "    VAULT_TOKEN not set — after Vault is up, run:"
+  echo "      export KUBECONFIG=$KUBECONFIG_PATH"
+  echo "      source scripts/vault-env.sh && vlogin"
+  echo "      bash bootstrap/argocd-init.sh   # idempotent, re-runs only missing steps"
+fi
+
 # ---------- Done ----------
 cat <<EOF
 
