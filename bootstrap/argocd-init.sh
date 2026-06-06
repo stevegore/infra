@@ -22,7 +22,7 @@
 
 set -euo pipefail
 
-OKE_CLUSTER_ID="ocid1.cluster.oc1.ap-sydney-1.aaaaaaaaok3ygaxxoaf3vlwoytcnift4yxrmr4dmd75be53iocfghlpevogq"
+OKE_CLUSTER_ID="ocid1.cluster.oc1.ap-sydney-1.aaaaaaaayyadaznxbxlzv7qz6drid3w3erh3yunv2zp7wdqzjclxsok2k6nq"
 REGION="ap-sydney-1"
 KUBECONFIG_PATH="$HOME/.kube/oke-homelab.config"
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"

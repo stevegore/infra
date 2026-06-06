@@ -1,5 +1,0 @@
-# Never commit actual secrets
-secrets.yaml
-*.env
-# But allow VSO template
-!templates/vault-secret.yaml

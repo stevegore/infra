@@ -1,10 +1,8 @@
-# OKE Enhanced cluster + ARM node pool.
+# OKE Basic cluster + ARM node pool.
 #
-# Always-Free constraints: one ENHANCED_CLUSTER is free; A1.Flex burns from
-# the 4 OCPU / 24 GB always-free pool. Two nodes at 2 OCPU each = 4 OCPU —
-# exactly the free tier. During the migration both this pool and the ampere
-# instance run in parallel (8 OCPU, ~$0.04/hr above free); Phase 7 terminates
-# ampere and we drop back into free tier steady-state.
+# Always-Free constraints: BASIC_CLUSTER has no control-plane fee; A1.Flex
+# burns from the 4 OCPU / 24 GB always-free pool. Two nodes at 2 OCPU each =
+# 4 OCPU — exactly the free tier.
 
 variable "oke_kubernetes_version" {
   description = "OKE control-plane version. Bump deliberately; node pool image OCID below must match."
@@ -23,7 +21,7 @@ resource "oci_containerengine_cluster" "homelab" {
   vcn_id             = oci_core_vcn.export_nebula.id
   kubernetes_version = var.oke_kubernetes_version
   name               = "homelab"
-  type               = "ENHANCED_CLUSTER"
+  type               = "BASIC_CLUSTER"
 
   endpoint_config {
     subnet_id            = oci_core_subnet.oke_api_endpoint.id
