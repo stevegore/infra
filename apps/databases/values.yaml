@@ -94,7 +94,7 @@ vault:
 # on existing clusters; ArgoCD ignoreDifferences suppresses the OutOfSync diff).
 recovery:
   enabled: true
-  sourceName: pg-shared-backup
+  sourceName: pg-shared
 
 consumers:
   - name: authentik
