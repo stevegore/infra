@@ -226,7 +226,21 @@ vault kv put kv/tailscale/authkey value=<key>
 bash scripts/provision-ocir-creds.sh         # mints token, stores in Vault
 # Then re-run argocd-init.sh to create the k8s docker-registry secret:
 bash bootstrap/argocd-init.sh
+
+# ArgoCD GitHub OAuth client secret (breaks circular bootstrap dependency).
+# VSO syncs kv/argocd → argocd-github-oauth k8s Secret, but VSO must be
+# running first. Patch argocd-secret directly so Dex can authenticate while
+# VSO comes up. The GitHub OAuth App is at github.com/settings/developers
+# (client ID Ov23lilY1eXJlOXH0Dej).
+vault kv put kv/argocd github_client_secret=<github-oauth-client-secret>
+kubectl patch secret argocd-secret -n argocd \
+  --type=json \
+  -p='[{"op":"add","path":"/data/dex.github.clientSecret","value":"'$(vault kv get -field=github_client_secret kv/argocd | base64)'"}]'
 ```
+
+> **Note (rebuild vs fresh install):** On a cluster rebuild, Vault data persists in OCI
+> Object Storage — `kv/argocd` is already populated and VSO will sync the secret automatically.
+> The `kubectl patch` above is only needed on a fresh install before VSO is running.
 
 ---
 
