@@ -7,7 +7,7 @@
 **Total Containers:** 41 running  
 **Total Volumes:** 48  
 **Total Images:** 114  
-**Total Stacks:** 19 (17 active, 2 stopped)  
+**Total Stacks:** 18 (16 active, 2 stopped)  
 **System CPU:** 12 cores  
 **System Memory:** ~31 GB
 
@@ -48,22 +48,21 @@ curl -s -X POST http://pico.local:9000/api/endpoints/1/docker/exec/$EXEC_ID/star
 1. [transmission](#transmission) - OpenVPN-based torrent downloader  
 2. [sonarrradarrjackett](#sonarrradarrjackett) - Media automation (TV/Movies/Indexers)  
 3. [plex](#plex) - Media server  
-4. [vault](#vault) - Secrets management  
-5. [owncloud](#owncloud) - Cloud storage (stopped)  
-6. [stevegore-au](#stevegore-au) - Web terminal and utilities (stopped — migrated to OKE)  
-7. [photoprism](#photoprism) - Photo management with AI  
-8. [huggin](#huggin) - Task automation  
-9. [nuraspace2](#nuraspace2) - NuraSpace application  
-10. [pdf](#pdf) - Stirling PDF document processor  
-11. [gymmaster-rest](#gymmaster-rest) - Gym booking system  
-12. [goldenboards](#goldenboards) - Golden Boards application  
-13. [stravakeeper](#stravakeeper) - Strava data keeper  
-14. [transmission-wg](#transmission-wg) - WireGuard-based torrent (stopped)  
-15. [stravabot-rs](#stravabot-rs) - Strava bot in Rust  
-16. [immich](#immich) - Photo management (Portainer-managed)  
-17. [icloudpd](#icloudpd) - iCloud photo downloader  
-18. [homepage](#homepage) - Application dashboard (Portainer-managed)  
-19. [uptime-kuma](#uptime-kuma) - Uptime/status monitoring
+4. [owncloud](#owncloud) - Cloud storage (stopped)  
+5. [stevegore-au](#stevegore-au) - Web terminal and utilities (stopped — migrated to OKE)  
+6. [photoprism](#photoprism) - Photo management with AI  
+7. [huggin](#huggin) - Task automation  
+8. [nuraspace2](#nuraspace2) - NuraSpace application  
+9. [pdf](#pdf) - Stirling PDF document processor  
+10. [gymmaster-rest](#gymmaster-rest) - Gym booking system  
+11. [goldenboards](#goldenboards) - Golden Boards application  
+12. [stravakeeper](#stravakeeper) - Strava data keeper  
+13. [transmission-wg](#transmission-wg) - WireGuard-based torrent (stopped)  
+14. [stravabot-rs](#stravabot-rs) - Strava bot in Rust  
+15. [immich](#immich) - Photo management (Portainer-managed)  
+16. [icloudpd](#icloudpd) - iCloud photo downloader  
+17. [homepage](#homepage) - Application dashboard (Portainer-managed)  
+18. [uptime-kuma](#uptime-kuma) - Uptime/status monitoring
 
 ### Standalone Containers
 
@@ -323,60 +322,6 @@ volumes:
 
 ---
 
-### vault
-
-**Status:** Running  
-**Stack ID:** 23  
-**Project Path:** `/data/compose/23`  
-**Compose Version:** v7  
-**Last Updated:** 2025-10-31  
-**Created:** 2022-07-14
-
-**Containers:**
-
-| Container | Image                | Status     |
-| --------- | -------------------- | ---------- |
-| vault     | hashicorp/vault:1.21 | Up 2 weeks |
-
-**Docker Compose:**
-
-```yaml
-version: '3.8'
-services:
-  vault:
-    image: hashicorp/vault:1.21
-    container_name: vault
-    restart: unless-stopped
-    ports:
-      - "8202:8200"
-    cap_add:
-      - IPC_LOCK
-    environment:
-      VAULT_ADDR: <http://127.0.0.1:8200>
-      VAULT_LOCAL_CONFIG: |
-        {
-          "storage": {"file": {"path": "/vault/file"}},
-          "listener": [{"tcp": {"address": "0.0.0.0:8200", "tls_disable": true}}],
-          "ui": true,
-          "default_lease_ttl": "168h",
-          "max_lease_ttl": "720h"
-        }
-    volumes:
-      - vault-data:/vault/file
-    command: server
-
-volumes:
-  vault-data:
-```
-
-**Purpose:** HashiCorp Vault - secrets and credentials management  
-**Ports:** 8202 -> 8200 (web UI, no TLS)  
-**Storage:** Single-node file-based storage backend  
-**Config:** UI enabled, default lease 168h (7 days), max lease 720h (30 days)  
-**Volumes:** `vault_vault-data`  
-**Command:** `docker-entrypoint.sh server`
-
----
 
 ### owncloud
 
@@ -1509,8 +1454,6 @@ bash ~/code/infra/scripts/vw-mysql-to-sqlite.sh
 | owncloud_files                      | owncloud            | 2021-05-22 | OwnCloud file storage (orphaned)  |
 | owncloud_mysql                      | owncloud            | 2021-05-22 | OwnCloud MariaDB data (orphaned)  |
 | owncloud_redis                      | owncloud            | 2021-05-22 | OwnCloud Redis data (orphaned)    |
-| vault_vault-data                    | vault               | 2023-01-04 | Vault secrets storage             |
-| vault_vault-config                  | vault               | 2023-01-05 | Vault configuration               |
 | huggin_mysqldata                    | huggin              | 2023-12-16 | Huginn MySQL data                 |
 | stevegore-au_homedir                | stevegore-au        | 2023-07-06 | tmpfs, 500M, uid/gid 222          |
 | stevegore-au_tmpdir                 | stevegore-au        | 2023-07-06 | tmpfs, 500M                       |
@@ -1560,7 +1503,6 @@ bash ~/code/infra/scripts/vw-mysql-to-sqlite.sh
 | 8112  | GymBooking            | gymmaster-rest-gymbooking-1       | TCP      |
 | 8180  | StravaKeeper          | stravakeeper-stravakeeper-1       | TCP      |
 | 8200  | Duplicati             | duplicati                         | TCP      |
-| 8202  | Vault                 | vault                             | TCP      |
 | 8324  | Plex Roku             | plex                              | TCP      |
 | 8788  | ttyd Terminal         | stevegore-au-ttyd-1               | TCP      |
 | 8844  | OwnCloud (stopped)    | owncloud_server                   | TCP      |
@@ -1670,7 +1612,6 @@ This Portainer instance manages a comprehensive home infrastructure on pico:
 ### Security & Access
 
 - **Vaultwarden** - Warm standby at `bw2.stevegore.au`; primary is OKE (`bw.stevegore.au`). Hourly sync from MySQL HeatWave via `vw-mysql-to-sqlite.timer`.
-- **Vault** - HashiCorp secrets management (moved to OKE)  
 - **Homepage** - Application dashboard at `homepage.stevegore.au` (port 8080, GitHub OAuth)
 
 ### Automation & Utilities
