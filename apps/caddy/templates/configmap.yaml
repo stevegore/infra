@@ -192,7 +192,7 @@ data:
     }
 
     strava.stevegore.au {
-      reverse_proxy pico:8180
+      reverse_proxy strava-keeper.strava-keeper.svc.cluster.local:8180
     }
 
     stats.stevegore.au {

@@ -1,0 +1,53 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "strava-keeper.fullname" . }}
+  labels:
+    {{- include "strava-keeper.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "strava-keeper.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "strava-keeper.selectorLabels" . | nindent 8 }}
+    spec:
+      containers:
+        - name: strava-keeper
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.service.port }}
+              protocol: TCP
+          env:
+            - name: STRAVA_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.vault.secretName }}
+                  key: STRAVA_CLIENT_ID
+            - name: STRAVA_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.vault.secretName }}
+                  key: STRAVA_CLIENT_SECRET
+            - name: STRAVA_VERIFY_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.vault.secretName }}
+                  key: STRAVA_VERIFY_TOKEN
+            - name: MYSQL_DSN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.vault.secretName }}
+                  key: MYSQL_DSN
+            - name: STRAVA_REDIRECT_URL
+              value: {{ .Values.env.stravaRedirectUrl | quote }}
+            - name: STRAVA_VALIDATION_URL
+              value: {{ .Values.env.stravaValidationUrl | quote }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}

@@ -228,7 +228,7 @@ All services proxied through Caddy on OKE (NLB → 159.13.44.68).
 | port.stevegore.au   | 9000      | —        | Portainer                      |
 | huginn.stevegore.au | 3000      | —        | Huginn                         |
 | pdf.stevegore.au    | 8083      | —        | Stirling PDF                   |
-| strava.stevegore.au | 8180      | —        | Stravakeeper                   |
+| strava.stevegore.au | 8180      | —        | Stravakeeper (OKE, strava-keeper ns) |
 | stats.stevegore.au  | 8001      | —        | Stats server — public JSON + HTML dashboard (`scripts/STATS_SERVER.md`) |
 
 **Direct access (not via Caddy):**
