@@ -161,6 +161,7 @@ Key-value secrets engine for application credentials.
 | kv/argocd | GitHub OAuth App client secret for Dex SSO | argocd (argocd ns) |
 | kv/oci/pg-backups | OCI Customer Secret Key (S3) for pg-shared WAL/base backups | pg-backups (databases ns) |
 | kv/homelab/* | Tokens synced from pico (`*.token` files) | pico-token-sync (write) |
+| kv/strava-keeper/config | Strava Keeper: STRAVA_CLIENT_ID, STRAVA_CLIENT_SECRET, STRAVA_VERIFY_TOKEN, MYSQL_DSN | strava-keeper |
 
 **Secrets Structure:**
 ```

@@ -1,0 +1,35 @@
+replicaCount: 1
+
+image:
+  repository: docker.io/stevegore/stravakeeper
+  tag: "latest"
+  pullPolicy: Always
+
+resources:
+  requests:
+    memory: 64Mi
+    cpu: 25m
+  limits:
+    memory: 256Mi
+    cpu: 250m
+
+service:
+  type: ClusterIP
+  port: 8180
+
+env:
+  stravaRedirectUrl: "https://strava.stevegore.au/oauth-callback"
+  stravaValidationUrl: "https://strava.stevegore.au/webhook"
+
+# VSO config — secrets at kv/strava-keeper/config with fields:
+#   STRAVA_CLIENT_ID      — Strava app numeric client ID
+#   STRAVA_CLIENT_SECRET  — Strava app secret
+#   STRAVA_VERIFY_TOKEN   — webhook verification token
+#   MYSQL_DSN             — go-sql-driver DSN, e.g. user:pass@tcp(host:3306)/db?parseTime=true
+vault:
+  enabled: true
+  mount: kv
+  path: strava-keeper/config
+  refreshAfter: 1h
+  authRole: vault-secrets-operator
+  secretName: strava-keeper-config
