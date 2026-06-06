@@ -43,8 +43,18 @@ data:
             public function loginForm() {
                 $current = defined('SERVER') ? SERVER : '';
                 if ($current !== '' && isset($this->servers[$current])) {
-                    echo '<p>Connecting to <strong>' . h($this->servers[$current]['label']) . '</strong></p>';
+                    $s = $this->servers[$current];
+                    echo '<p>Connecting to <strong>' . h($s['label']) . '</strong></p>';
                     echo '<p><a href="?">&larr; switch server</a></p>';
+                    // Hidden fields ensure POST body has full auth context so Adminer
+                    // doesn't fall back to empty values when re-reading from $_POST["auth"].
+                    echo '<input type="hidden" name="auth[driver]" value="' . h($s['driver']) . '">';
+                    echo '<input type="hidden" name="auth[server]" value="' . h($current) . '">';
+                    echo '<input type="hidden" name="auth[username]" value="' . h($s['username']) . '">';
+                    echo '<input type="hidden" name="auth[password]" value="' . h($s['password']) . '">';
+                    if (isset($s['db'])) {
+                        echo '<input type="hidden" name="auth[db]" value="' . h($s['db']) . '">';
+                    }
                     echo '<p><input type="submit" value="Login"></p>';
                 } else {
                     echo '<p>Select a database:</p><table cellspacing="0">';
