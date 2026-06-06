@@ -45,10 +45,7 @@ export KUBECONFIG=~/.kube/oke-homelab.config
 source scripts/vault-env.sh && vlogin    # needs VAULT_TOKEN for later steps
 ```
 
-Optionally snapshot uptime-kuma data before destroying the cluster (uptime history, not critical):
-```bash
-kubectl cp uptime-kuma/$(kubectl get pod -n uptime-kuma -o name | head -1 | cut -d/ -f2):/app/data /tmp/uptime-kuma-backup
-```
+Uptime-kuma data is stored in MySQL HeatWave (external to the cluster) — **no snapshot needed**. Monitor data survives cluster rebuilds automatically.
 
 ### 1. Terraform — change cluster type and apply
 

@@ -1,10 +1,9 @@
-# Uptime Kuma — single replica + 50 GB OCI block volume for SQLite history.
+# Uptime Kuma — single replica, MySQL HeatWave backend (data survives cluster
+# rebuilds), OCI block volume for /app/data (screenshots, uploads only).
 # Lives on OKE so it can detect pico outages (proposal §8).
 #
-# SETUP: After deployment, configure monitors via https://uptime.stevegore.au:
-# - pico-hosted services (hass, plex, etc.) via pico Egress Service (pico:<port>)
-# - external services via DNS names (*.stevegore.au, *.local, etc.)
-# Monitors are stored in the SQLite DB (PVC), so they persist across restarts.
+# SETUP (first install or after MySQL DB loss): create admin at
+# https://uptime.stevegore.au, then run scripts/setup_uptime_kuma.py.
 
 replicaCount: 1
 
@@ -55,8 +54,17 @@ pico:
     - { name: phpmyadmin,   port: 3011  }
 
 persistence:
-  # OCI block volume floor is 50 GB regardless of what's requested — pick the
-  # floor so the storage budget is honest (proposal §7).
+  # OCI block volume floor is 50 GB regardless of what's requested.
+  # Even with MySQL backend this PVC is kept for /app/data (screenshots, uploads).
   size: 50Gi
-  # OCI CSI BV class — RWO, expandable, can't shrink.
   storageClass: oci-bv
+
+# MySQL backend — uses the OCI MySQL HeatWave Free instance shared with
+# Vaultwarden (separate database: uptime_kuma). Credentials synced from
+# Vault kv/uptime-kuma/config by VSO into k8s Secret uptime-kuma-db.
+# With MySQL, monitor data survives cluster rebuilds (no pre-snapshot needed).
+mysql:
+  enabled: true
+  vault:
+    path: uptime-kuma/config
+    authRole: vault-secrets-operator

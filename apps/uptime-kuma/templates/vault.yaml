@@ -1,0 +1,28 @@
+{{- if .Values.mysql.enabled }}
+apiVersion: secrets.hashicorp.com/v1beta1
+kind: VaultAuth
+metadata:
+  name: {{ include "uptime-kuma.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+spec:
+  method: kubernetes
+  mount: kubernetes
+  kubernetes:
+    role: {{ .Values.mysql.vault.authRole }}
+    serviceAccount: default
+---
+apiVersion: secrets.hashicorp.com/v1beta1
+kind: VaultStaticSecret
+metadata:
+  name: {{ include "uptime-kuma.fullname" . }}-db
+  namespace: {{ .Release.Namespace }}
+spec:
+  type: kv-v2
+  mount: kv
+  path: {{ .Values.mysql.vault.path }}
+  destination:
+    name: uptime-kuma-db
+    create: true
+  refreshAfter: 1h
+  vaultAuthRef: {{ include "uptime-kuma.fullname" . }}
+{{- end }}
