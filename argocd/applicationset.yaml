@@ -38,22 +38,25 @@ spec:
           name: pico
           jsonPointers:
             - /spec/externalName
-        # CNPG admission webhook injects defaults into Cluster spec (affinity,
-        # enablePDB, logLevel, storage.resizeInUseVolumes, role connectionLimit,
-        # backup.target, bootstrap.recovery.database/owner, etc.) that aren't
-        # in the rendered Helm chart, causing a persistent sync loop.
-        # managedFieldsManagers ignores all fields owned by CNPG's controller
-        # ("manager" is the fieldManager name CNPG uses for spec defaulting).
-        # jsonPointers additionally suppresses bootstrap/externalClusters which
-        # are immutable after first reconcile (ArgoCD owns those fields, not
-        # CNPG's manager, so managedFieldsManagers alone doesn't suppress them).
+        # CNPG's mutating admission webhook injects spec defaults at creation
+        # time that aren't in the rendered Helm chart. These defaults are NOT
+        # tracked in managed-fields (webhook, not controller update), so
+        # managedFieldsManagers doesn't suppress them — explicit jsonPointers
+        # are required. RespectIgnoreDifferences=true prevents ArgoCD from
+        # trying to apply changes to these fields and causing a sync loop.
         - group: "postgresql.cnpg.io"
           kind: Cluster
-          managedFieldsManagers:
-            - manager
           jsonPointers:
-            - /spec/bootstrap
-            - /spec/externalClusters
+            - /spec/bootstrap           # immutable; recovery subfields injected by webhook
+            - /spec/externalClusters    # immutable after first reconcile
+            - /spec/affinity            # podAntiAffinityType: preferred
+            - /spec/backup/target       # prefer-standby
+            - /spec/enablePDB           # true
+            - /spec/enableSuperuserAccess # false
+            - /spec/failoverDelay       # 0
+            - /spec/logLevel            # info
+            - /spec/storage/resizeInUseVolumes # true
+            - /spec/managed/roles       # connectionLimit/-1 and inherit/true per role
       syncPolicy:
         automated:
           prune: true
