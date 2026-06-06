@@ -1,0 +1,25 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "ttyd.fullname" . }}-restarter
+  labels:
+    {{- include "ttyd.labels" . | nindent 4 }}
+rules:
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "ttyd.fullname" . }}-restarter
+  labels:
+    {{- include "ttyd.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "ttyd.fullname" . }}-restarter
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "ttyd.fullname" . }}-restarter
+    namespace: {{ .Release.Namespace }}

@@ -1,0 +1,220 @@
+# Homepage config — synced with pico.local. To update:
+#   ssh pico.local "cat /home/steve/dashboards/homepage/config/{settings,services,widgets,bookmarks,docker,kubernetes}.yaml"
+# and paste here. Both copies are then driven from this ConfigMap.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "homepage.fullname" . }}-config
+  labels:
+    {{- include "homepage.labels" . | nindent 4 }}
+data:
+  settings.yaml: |
+    title: Steve's Homelab
+    theme: dark
+    color: slate
+    headerStyle: boxed
+    layout:
+      Media:
+        icon: mdi-television-play
+        style: row
+        columns: 4
+      Photos:
+        icon: mdi-camera
+        style: row
+        columns: 2
+      Infrastructure:
+        icon: mdi-server
+        style: row
+        columns: 4
+      Security:
+        icon: mdi-shield-lock
+        style: row
+        columns: 2
+      Automation:
+        icon: mdi-robot
+        style: row
+        columns: 2
+      Tools:
+        icon: mdi-tools
+        style: row
+        columns: 3
+      Custom Apps:
+        icon: mdi-application
+        style: row
+        columns: 4
+  services.yaml: |
+    - Media:
+        - Plex:
+            href: https://plex.stevegore.au
+            description: Media Server
+            icon: plex.png
+        - Sonarr:
+            href: http://pico:8989
+            description: TV Show Management
+            icon: sonarr.png
+        - Radarr:
+            href: http://pico:7878
+            description: Movie Management
+            icon: radarr.png
+        - Jackett:
+            href: http://pico:9117
+            description: Torrent Indexer
+            icon: jackett.png
+        - Transmission:
+            href: http://pico:9092
+            description: BitTorrent (Windscribe VPN)
+            icon: transmission.png
+        - FlareSolverr:
+            href: http://pico:8191
+            description: Cloudflare bypass for Jackett
+            icon: mdi-shield-bug
+
+    - Photos:
+        - Immich:
+            href: https://photos.stevegore.au
+            description: Photo & Video Backup
+            icon: immich.png
+        - PhotoPrism:
+            href: https://photoprism.stevegore.au
+            description: The Gore's Photos — AI-powered
+            icon: photoprism.png
+        - icloudpd:
+            description: iCloud photo downloader (hourly sync to /media/m2/photos/iphone/steve)
+            icon: mdi-apple-icloud
+
+    - Infrastructure:
+        - Portainer:
+            href: https://port.stevegore.au
+            description: Container Management
+            icon: portainer.png
+            widget:
+              type: portainer
+              url: http://pico:9000
+              env: 1
+              key: {{ "{{HOMEPAGE_VAR_PORTAINER_TOKEN}}" }}
+        - Uptime Kuma:
+            href: http://pico:3001
+            description: Uptime & status monitoring
+            icon: uptime-kuma.png
+            widget:
+              type: uptimekuma
+              url: http://uptime-kuma.uptime-kuma.svc.cluster.local:3001
+              slug: homelab
+        - Home Assistant:
+            href: https://hass.stevegore.au
+            description: Smart Home
+            icon: home-assistant.png
+        - ArgoCD:
+            href: https://argocd.stevegore.au
+            description: GitOps — OKE
+            icon: argocd.png
+        - Duplicati:
+            href: http://pico:8200
+            description: Backup & Recovery
+            icon: duplicati.png
+        - Tailscale:
+            href: https://login.tailscale.com/admin/machines
+            description: Mesh VPN — admin
+            icon: tailscale.png
+
+    - Security:
+        - Vaultwarden:
+            href: https://bw.stevegore.au
+            description: Password Manager
+            icon: bitwarden.png
+        - Vault:
+            href: https://vault.stevegore.au
+            description: Secrets Management — OKE
+            icon: hashicorp-vault.png
+
+    - Automation:
+        - Huginn:
+            href: https://huginn.stevegore.au
+            description: Workflow Automation
+            icon: huginn.png
+        - Home Assistant:
+            href: https://hass.stevegore.au
+            description: Smart Home Automations
+            icon: home-assistant.png
+
+    - Tools:
+        - Stirling PDF:
+            href: https://pdf.stevegore.au
+            description: PDF Manipulation
+            icon: stirling-pdf.png
+        - Duplicati:
+            href: http://pico:8200
+            description: Backup Manager
+            icon: duplicati.png
+        - phpMyAdmin:
+            href: http://pico:3011
+            description: Huginn Database
+            icon: phpmyadmin.png
+
+    - Custom Apps:
+        - NuraSpace:
+            href: https://desk.stevegore.au
+            description: NuraSpace App
+            icon: mdi-desk
+        - GymBooking:
+            href: https://gym.stevegore.au
+            description: Elixr Gym Reservations
+            icon: mdi-dumbbell
+        - StravaKeeper:
+            href: https://strava.stevegore.au
+            description: Strava Data Archiver
+            icon: strava.png
+        - StravaBot:
+            href: http://pico:8082
+            description: Strava Bot (Rust)
+            icon: strava.png
+        - ttyd Terminal:
+            href: https://stevegore.au
+            description: Public Web Terminal
+            icon: mdi-console
+        - GoldenBoards:
+            description: Golden Boards (Go, no UI)
+            icon: mdi-trophy
+  widgets.yaml: |
+    - datetime:
+        text_size: xl
+        format:
+          dateStyle: long
+          timeStyle: short
+          hourCycle: h23
+
+    - openmeteo:
+        label: Sydney
+        latitude: -33.8688
+        longitude: 151.2093
+        timezone: Australia/Sydney
+        units: metric
+        cache: 5
+
+    - search:
+        provider: google
+        target: _blank
+  bookmarks.yaml: |
+    - Domains:
+        - stevegore.au:
+            - abbr: SG
+              href: https://stevegore.au
+        - Cloudflare:
+            - abbr: CF
+              href: https://dash.cloudflare.com
+        - Oracle Cloud:
+            - abbr: OCI
+              href: https://cloud.oracle.com
+
+    - Repos:
+        - infra:
+            - abbr: GH
+              href: https://github.com/stevegore/infra
+  docker.yaml: |
+    {}
+  kubernetes.yaml: |
+    mode: cluster
+  custom.css: |
+    /* custom styles */
+  custom.js: |
+    /* custom js */

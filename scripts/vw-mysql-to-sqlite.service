@@ -1,0 +1,10 @@
+[Unit]
+Description=Vaultwarden warm-standby sync (MySQL HeatWave → sqlite)
+After=network.target docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/home/steve/.local/bin/vw-mysql-to-sqlite.sh
+User=steve
+StandardOutput=journal
+StandardError=journal

@@ -58,19 +58,30 @@ Used by Vault Secrets Operator and application pods to authenticate.
 **ClusterRoleBinding:** `vault-auth-tokenreview` → `system:auth-delegator`
 
 **Roles:**
-| Role | Service Account | Namespace | Policies |
-|------|-----------------|-----------|----------|
-| vault-secrets-operator | vault-secrets-operator-controller-manager | vault-secrets-operator | openclaw |
+| Role | Bound Service Accounts | Bound Namespaces | Policies |
+|------|------------------------|------------------|----------|
+| vault-secrets-operator | vault-secrets-operator-controller-manager, default | vault-secrets-operator, caddy, openclaw, hermes, vaultwarden, tailscale-operator, homepage, databases, authentik | caddy, openclaw, hermes, vaultwarden, tailscale-operator, homepage, pg-backups, authentik |
+
+To onboard a new app namespace, append it to both `bound_service_account_namespaces` and (after writing the policy) `policies`:
+```bash
+vault policy write <app> - <<EOF
+path "kv/data/<app>/*" { capabilities = ["read"] }
+EOF
+vault write auth/kubernetes/role/vault-secrets-operator \
+  bound_service_account_names=vault-secrets-operator-controller-manager,default \
+  bound_service_account_namespaces=<existing list>,<app> \
+  policies=<existing list>,<app> ttl=1h
+```
 
 ### 2. AppRole (for pico → kv/homelab/* token sync)
 
-Used by pico to push `*.token` files in `~/code/infra/` into Vault. Bound to pico's Tailscale node IP so leaked credentials are useless from anywhere else.
+Used by pico to push `*.token` files in `~/code/infra/` into Vault. No CIDR binding — the Tailscale proxy terminates TCP before Vault, so source-IP restrictions are not enforceable here. Security relies on the role_id + secret_id credentials and the narrow `pico-token-sync` policy scope.
 
-| Role | CIDR (secret_id + token) | Policies | Token TTL |
-|------|---------------------------|----------|-----------|
-| pico-token-sync | 100.98.212.71/32 | pico-token-sync | 10m / 30m max |
+| Role | CIDR | Policies | Token TTL |
+|------|------|----------|-----------|
+| pico-token-sync | none | pico-token-sync | 10m / 30m max |
 
-**Path:** Pico hits Vault over Tailscale at `http://10.96.0.1:8200` (Vault service internal IP) through the Tailscale mesh. The service-to-Vault path is encrypted end-to-end via Tailscale. Pico's stable Tailscale IP (`100.98.212.71`, MagicDNS: `pico.chipmunk-fir.ts.net`) replaces the old `10.20.30.1/32` WireGuard address, aligning with the post-WireGuard target architecture.
+**Path:** Pico hits Vault via `http://vault-oke:8200` (Tailscale MagicDNS — `vault-oke.chipmunk-fir.ts.net`). The `vault-tailscale` LoadBalancer Service in the `vault` namespace exposes port 8200 via the Tailscale operator. Traffic stays on the tailnet; does not traverse the public OKE NLB or Caddy.
 
 **Bootstrap (run once with the root token on pico):**
 ```bash
@@ -90,28 +101,48 @@ sudo ~/code/infra/scripts/install-vault-token-sync-timer.sh
 ```
 Tail with `journalctl -u vault-token-sync.service -f`.
 
-### 3. JWT Auth (for human users via Caddy Security)
+### 3. Human UI login
 
-Used by administrators via GitHub OAuth through Caddy Security.
+`vault.stevegore.au` is **not** gated by the edge proxy — Vault handles its own
+login. Three ways in:
 
-**How it works:**
-1. Access https://vault.stevegore.au
-2. Caddy redirects you to GitHub OAuth
-3. After login, you can access the Vault UI
-4. In the Vault UI, select "JWT" method and use your cookie token
+1. **OIDC via Authentik (SSO, preferred)** — UI → method **OIDC** (role `default`)
+   → redirects to Authentik → GitHub SSO → back to Vault with the `admin` policy.
+   Restricted to Steve by the `allow-stevegore-github` policy on the Vault app.
+2. **Userpass** — method **Username**, user `steve` (policy `admin`).
+3. **Token** — root token in `~/Code/Personal/infra/vault-root.token` (break-glass).
 
-**JWT Key:** RSA keypair stored at `/etc/caddy/keys/jwt-*.pem`
+> Replaced the old caddy-security `caddy-user`/`caddy-admin` JWT method (gone
+> with caddy-security on 2026-06-02) — that path no longer exists.
 
-**Roles:**
-| Role | Bound Claims | Policies |
-|------|--------------|----------|
-| caddy-user | (any authenticated) | default |
-| caddy-admin | sub=github.com/stevegore | admin |
+**OIDC setup (2026-06-02).** Two halves; the Authentik half lives in its DB
+(covered by pg-shared backups), the Vault half is configured imperatively:
 
-**To get your JWT token** (for CLI use):
-1. Login at https://auth.stevegore.au
-2. Open browser dev tools → Application → Cookies
-3. Copy the `access_token` cookie value
+*Authentik:* OAuth2/OIDC Provider **Vault** + application slug `vault`
+(`https://auth.stevegore.au/application/o/vault/`), confidential client, signing
+key = the self-signed cert, scopes openid/email/profile, redirect URIs =
+`https://vault.stevegore.au/ui/vault/auth/oidc/oidc/callback` and
+`http://localhost:8250/oidc/callback` (CLI). Client id/secret stored in Vault at
+`kv/authentik/config → vault_oidc_client_id / vault_oidc_client_secret`. The
+`allow-stevegore-github` policy is bound to the `vault` application.
+
+*Vault:* (re-runnable; client id/secret read from `kv/authentik/config`)
+```bash
+vault auth enable oidc   # idempotent; ignore "already in use"
+vault write auth/oidc/config \
+  oidc_discovery_url="https://auth.stevegore.au/application/o/vault/" \
+  oidc_client_id="$(vault kv get -field=vault_oidc_client_id kv/authentik/config)" \
+  oidc_client_secret="$(vault kv get -field=vault_oidc_client_secret kv/authentik/config)" \
+  default_role="default"
+vault write auth/oidc/role/default role_type=oidc user_claim=preferred_username \
+  oidc_scopes="openid,email,profile" token_policies=admin ttl=1h \
+  allowed_redirect_uris="https://vault.stevegore.au/ui/vault/auth/oidc/oidc/callback,http://localhost:8250/oidc/callback"
+```
+CLI login: `vault login -method=oidc role=default`.
+
+> TODO (optional): persist the Authentik Vault provider/app/binding in the
+> `apps/authentik` blueprint (via `!Env` client id/secret from the VSO secret)
+> for from-scratch reproducibility, the same way the forward-auth provider is.
 
 ---
 
@@ -125,13 +156,20 @@ Key-value secrets engine for application credentials.
 | Path | Description | Access Policies |
 |------|-------------|-----------------|
 | kv/openclaw | OpenClaw AI assistant credentials | openclaw |
+| kv/hermes | Hermes Agent credentials | hermes |
+| kv/authentik/config | Authentik: secret_key, username/password (pg-shared role), bootstrap_password/token, github_client_id/secret | authentik (authentik ns), pg-backups+authentik (databases ns) |
+| kv/oci/pg-backups | OCI Customer Secret Key (S3) for pg-shared WAL/base backups | pg-backups (databases ns) |
 | kv/homelab/* | Tokens synced from pico (`*.token` files) | pico-token-sync (write) |
 
 **Secrets Structure:**
 ```
 kv/
-└── openclaw/
-    ├── ANTHROPIC_API_KEY
+├── openclaw/
+│   ├── ANTHROPIC_API_KEY
+│   ├── OPENCLAW_GATEWAY_TOKEN
+│   └── TELEGRAM_BOT_TOKEN
+└── hermes/
+    ├── ANTHROPIC_API_KEY (or OPENROUTER_API_KEY)
     └── TELEGRAM_BOT_TOKEN
 ```
 
@@ -154,6 +192,17 @@ path "kv/data/openclaw" {
   capabilities = ["read"]
 }
 path "kv/metadata/openclaw" {
+  capabilities = ["read"]
+}
+```
+
+### hermes
+Read-only access to Hermes Agent secrets.
+```hcl
+path "kv/data/hermes" {
+  capabilities = ["read"]
+}
+path "kv/metadata/hermes" {
   capabilities = ["read"]
 }
 ```
@@ -286,7 +335,7 @@ EOF
 vault write auth/kubernetes/role/vault-secrets-operator \
   bound_service_account_names=vault-secrets-operator-controller-manager \
   bound_service_account_namespaces=vault-secrets-operator \
-  policies="openclaw,<app-name>" \
+  policies="openclaw,hermes,<app-name>" \
   ttl=1h
 ```
 

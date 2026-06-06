@@ -1,0 +1,149 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "caddy.fullname" . }}
+  labels:
+    {{- include "caddy.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  strategy:
+    # maxUnavailable=1, maxSurge=0: terminate an old pod before creating a new
+    # one. Required because the pod anti-affinity below is "required", and with
+    # 2 nodes + 2 replicas a surge pod would always be Pending (no free node).
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 0
+  selector:
+    matchLabels:
+      {{- include "caddy.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "caddy.selectorLabels" . | nindent 8 }}
+      annotations:
+        # Roll pods when the Caddyfile changes so reloads happen automatically.
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- if .Values.podAntiAffinity.enabled }}
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels:
+                  {{- include "caddy.selectorLabels" . | nindent 18 }}
+              topologyKey: kubernetes.io/hostname
+      {{- end }}
+      containers:
+        - name: caddy
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          # Explicit command — the upstream caddy:2.11-alpine ENTRYPOINT isn't
+          # guaranteed to be /usr/bin/caddy across rebuilds, and cri-o errors
+          # with "exec: run: executable file not found" when args[0] is "run"
+          # without an ENTRYPOINT to prepend. Set both to be safe.
+          command:
+            - /usr/bin/caddy
+          args:
+            - run
+            - --config
+            - /etc/caddy/Caddyfile
+            - --environ
+          ports:
+            - name: http
+              containerPort: 80
+              protocol: TCP
+            - name: https
+              containerPort: 443
+              protocol: TCP
+          env:
+            # Sourced from VSO-managed Secrets. caddy-security reads these via
+            # {env.*} placeholders in the Caddyfile.
+            - name: GITHUB_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.vault.config.secretName }}
+                  key: github_client_id
+            - name: GITHUB_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.vault.config.secretName }}
+                  key: github_client_secret
+            # Cloudflare DNS-01 challenge token (kv/caddy/config → caddy-config).
+            - name: CF_API_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.vault.config.secretName }}
+                  key: cf_api_token
+            # certmagic-s3 storage backend (Object Storage S3-compat endpoint).
+            # S3 creds come from kv/oci/caddy-acme (mounted as caddy-acme-s3),
+            # provisioned by scripts/provision-caddy-acme-creds.sh.
+            - name: S3_HOST
+              value: {{ .Values.s3.host | quote }}
+            - name: S3_BUCKET
+              value: {{ .Values.s3.bucket | quote }}
+            - name: S3_PREFIX
+              value: {{ .Values.s3.prefix | quote }}
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.vault.s3.secretName }}
+                  key: access_key
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.vault.s3.secretName }}
+                  key: secret_key
+          volumeMounts:
+            - name: caddyfile
+              mountPath: /etc/caddy/Caddyfile
+              subPath: Caddyfile
+              readOnly: true
+            - name: jwt-keys
+              mountPath: /etc/caddy/keys
+              readOnly: true
+            - name: caddy-data
+              mountPath: /data
+            - name: caddy-config
+              mountPath: /config
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+              httpHeaders:
+                - name: Host
+                  value: healthz.stevegore.au
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      volumes:
+        - name: caddyfile
+          configMap:
+            name: {{ include "caddy.fullname" . }}-config
+        - name: jwt-keys
+          secret:
+            secretName: {{ .Values.vault.config.secretName }}
+            items:
+              - key: jwt_private_key
+                path: jwt-private.pem
+                mode: 0400
+              - key: jwt_public_key
+                path: jwt-public.pem
+                mode: 0444
+        # /data holds Caddy's per-pod ephemeral state (lock files, ocsp cache).
+        # The real ACME state lives in the S3 bucket via certmagic-s3, so these
+        # being emptyDir is correct — nothing persistent should land here.
+        - name: caddy-data
+          emptyDir: {}
+        - name: caddy-config
+          emptyDir: {}

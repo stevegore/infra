@@ -1,0 +1,20 @@
+{{- if .Values.pico.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: pico
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "homepage.labels" . | nindent 4 }}
+  annotations:
+    tailscale.com/tailnet-fqdn: {{ .Values.pico.tailnetFqdn | quote }}
+spec:
+  type: ExternalName
+  externalName: placeholder
+  ports:
+    {{- range .Values.pico.ports }}
+    - name: {{ .name }}
+      port: {{ .port }}
+      protocol: TCP
+    {{- end }}
+{{- end }}

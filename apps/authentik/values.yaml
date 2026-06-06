@@ -1,0 +1,130 @@
+# Authentik wrapper-chart values.
+#
+# All upstream-chart config lives under the `authentik:` key (the dependency
+# name). Our own resources (the media PVC, the VSO VaultStaticSecret +
+# VaultAuth, and the blueprint ConfigMap) are plain templates in templates/ and
+# read from the top-level keys below.
+#
+# NOTE: Authentik 2026.5 no longer uses Redis — cache + task queue are now
+# Postgres-backed (the chart has NO redis/cache/broker config keys). pg-shared
+# is the only datastore; there is no Redis Deployment.
+
+# ---------------------------------------------------------------------------
+# Our resources (rendered by apps/authentik/templates/*)
+# ---------------------------------------------------------------------------
+
+# VSO pulls kv/authentik/config from Vault into a k8s Secret named
+# `authentik-config`. Sensitive env vars (secret key, PG password, bootstrap
+# creds, GitHub OAuth id/secret) are injected from this Secret via global.env
+# below, and the GitHub OAuth source blueprint reads the OAuth creds from the
+# same env vars at apply time.
+vault:
+  enabled: true
+  mount: kv
+  path: authentik/config
+  secretName: authentik-config
+  refreshAfter: 1h
+  # Existing VSO ClusterRoleBinding role from bootstrap (same as caddy uses).
+  authRole: vault-secrets-operator
+
+# Authentik /media — RWX on oci-fss (shared, non-root-uid-sensitive data, unlike
+# Postgres which must stay on block per apps/databases/values.yaml).
+media:
+  storageClass: oci-fss
+  accessMode: ReadWriteMany
+  size: 5Gi
+
+# ---------------------------------------------------------------------------
+# Upstream goauthentik chart
+# ---------------------------------------------------------------------------
+authentik:
+  # Bundled Bitnami PostgreSQL — OFF. We use pg-shared (CloudNativePG).
+  postgresql:
+    enabled: false
+
+  global:
+    # Inject sensitive values from the VSO-managed `authentik-config` Secret.
+    # These env vars override the same keys baked into the chart's own config
+    # Secret (env wins over envFrom in Kubernetes), and the worker's blueprint
+    # applier reads AUTHENTIK_GITHUB_* / bootstrap vars from here too.
+    env:
+      - name: AUTHENTIK_SECRET_KEY
+        valueFrom:
+          secretKeyRef:
+            name: authentik-config
+            key: secret_key
+      - name: AUTHENTIK_POSTGRESQL__PASSWORD
+        valueFrom:
+          secretKeyRef:
+            name: authentik-config
+            # Same value the databases ns uses for the CNPG `authentik` role's
+            # basic-auth Secret (key `password`); kept in one Vault key.
+            key: password
+      - name: AUTHENTIK_BOOTSTRAP_PASSWORD
+        valueFrom:
+          secretKeyRef:
+            name: authentik-config
+            key: bootstrap_password
+      - name: AUTHENTIK_BOOTSTRAP_TOKEN
+        valueFrom:
+          secretKeyRef:
+            name: authentik-config
+            key: bootstrap_token
+      # Consumed by the GitHub OAuth Source blueprint (via !Env) and available
+      # to outposts. Not AUTHENTIK_-prefixed config keys, just plain env.
+      - name: AUTHENTIK_GITHUB_CLIENT_ID
+        valueFrom:
+          secretKeyRef:
+            name: authentik-config
+            key: github_client_id
+      - name: AUTHENTIK_GITHUB_CLIENT_SECRET
+        valueFrom:
+          secretKeyRef:
+            name: authentik-config
+            key: github_client_secret
+
+    # Mount the RWX media PVC at /media on BOTH server and worker (global
+    # volumes/volumeMounts apply to every authentik Deployment).
+    volumes:
+      - name: media
+        persistentVolumeClaim:
+          claimName: authentik-media
+    volumeMounts:
+      - name: media
+        mountPath: /media
+
+  # Non-sensitive authentik configuration — rendered into the chart's config
+  # Secret as AUTHENTIK_* env vars (e.g. AUTHENTIK_POSTGRESQL__HOST). The
+  # sensitive password is overridden by global.env above.
+  authentik:
+    log_level: info
+    # Point at the shared CloudNativePG cluster.
+    postgresql:
+      host: pg-shared-rw.databases.svc.cluster.local
+      name: authentik
+      user: authentik
+      port: 5432
+
+  # Blueprints: the worker auto-discovers every *.yaml key in these ConfigMaps
+  # under /blueprints/mounted/cm-<name>/ and applies them on startup.
+  blueprints:
+    configMaps:
+      - authentik-blueprints
+
+  server:
+    replicas: 1
+    resources:
+      requests:
+        cpu: 100m
+        memory: 512Mi
+      limits:
+        memory: 1Gi
+
+  worker:
+    replicas: 1
+    resources:
+      requests:
+        cpu: 100m
+        memory: 512Mi
+      limits:
+        memory: 1Gi

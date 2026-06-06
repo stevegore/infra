@@ -25,7 +25,7 @@ resource oci_identity_policy export_vault-kms-objectstorage-policy {
     "Oracle-Tags.CreatedBy" = "oracleidentitycloudservice/steve.j.gore@gmail.com"
     "Oracle-Tags.CreatedOn" = "2026-01-28T09:52:07.254Z"
   }
-  description = "Allow vault-instances to use KMS and Object Storage"
+  description = "Allow vault-instances to use KMS, Object Storage, and File Storage"
   freeform_tags = {
   }
   name = "vault-kms-objectstorage-policy"
@@ -34,6 +34,7 @@ resource oci_identity_policy export_vault-kms-objectstorage-policy {
     "Allow dynamic-group vault-instances to manage objects in compartment main where target.bucket.name='vault-storage'",
     "Allow dynamic-group vault-instances to manage objects in compartment main where target.bucket.name='caddy-acme'",
     "Allow dynamic-group vault-instances to read buckets in compartment main",
+    "Allow dynamic-group vault-instances to manage file-family in compartment main",
   ]
 }
 

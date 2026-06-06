@@ -1,0 +1,48 @@
+# Vaultwarden — OKE primary, MySQL HeatWave Free backend, /data ephemeral.
+# See architecture-proposal.md §7.1 + §7.1.1.
+
+replicaCount: 1  # Vaultwarden has no native HA; one writer.
+
+image:
+  # FQ image name required by cri-o on OKE workers (short names rejected).
+  repository: docker.io/vaultwarden/server
+  tag: "1.36.0-alpine"
+  pullPolicy: IfNotPresent
+
+resources:
+  requests:
+    memory: 128Mi
+    cpu: 50m
+  limits:
+    memory: 512Mi
+    cpu: 500m
+
+service:
+  type: ClusterIP
+  # Caddy fronts external traffic at bw.stevegore.au; nothing else needs to
+  # talk to Vaultwarden, so ClusterIP is enough.
+  webPort: 80          # main web vault + API
+  websocketPort: 3012  # notifications hub
+
+# Public URL — Vaultwarden generates email links and CORS off this.
+domain: https://bw.stevegore.au
+
+config:
+  signupsAllowed: false
+  invitationsAllowed: false
+  websocketEnabled: true
+  webVaultEnabled: true
+  # logout-on-restart is acceptable: per §7.1 the RSA keys at /data/rsa_key.*
+  # are ephemeral; clients re-auth on cutover anyway.
+  logLevel: info
+
+# VSO config — secrets live at kv/vaultwarden/config with fields:
+#   database_url  — mysql://vaultwarden:<pw>@<mysql-private-endpoint>:3306/vaultwarden
+#   admin_token   — argon2-hashed token for /admin (optional)
+vault:
+  enabled: true
+  mount: kv
+  path: vaultwarden/config
+  refreshAfter: 1h
+  authRole: vault-secrets-operator
+  secretName: vaultwarden-config

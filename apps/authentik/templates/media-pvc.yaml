@@ -1,0 +1,18 @@
+# Authentik /media — RWX shared volume on OCI FSS. FSS is the right substrate
+# here (unlike Postgres) because media is non-root-uid-sensitive shared data and
+# we may run >1 server/worker replica later.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: authentik-media
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: authentik
+    app.kubernetes.io/component: media
+spec:
+  accessModes:
+    - {{ .Values.media.accessMode }}
+  storageClassName: {{ .Values.media.storageClass }}
+  resources:
+    requests:
+      storage: {{ .Values.media.size }}

@@ -1,0 +1,6 @@
+apiVersion: v2
+name: databases
+description: Shared CloudNativePG PostgreSQL instance for cluster apps. Apps create their own Database/role CRs against this instance (see templates).
+type: application
+version: 1.0.0
+appVersion: "1.0.0"

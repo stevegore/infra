@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "hermes.fullname" . }}
+  labels:
+    {{- include "hermes.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+    - port: {{ .Values.service.port }}
+      targetPort: dashboard
+      protocol: TCP
+      name: dashboard
+  selector:
+    {{- include "hermes.selectorLabels" . | nindent 4 }}

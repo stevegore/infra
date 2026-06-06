@@ -1,0 +1,122 @@
+# Authentik blueprints, mounted via authentik.blueprints.configMaps in values.yaml.
+# The worker auto-discovers each data key and applies it on startup (idempotent).
+#
+# PHASE 2 (this file): a GitHub OAuth Source so users can "Sign in with GitHub".
+# consumer_key/secret are read from env (AUTHENTIK_GITHUB_CLIENT_ID/SECRET,
+# injected from the authentik-config Secret via global.env). The default
+# source authentication/enrollment flows shipped by Authentik are referenced
+# with !Find.
+#
+# PHASE 3 (forward-auth.yaml): the domain-level forward-auth Proxy Provider
+# (external host auth.stevegore.au, cookie domain stevegore.au), its Application,
+# and assignment to the embedded outpost. Verified live before the Caddy
+# forward_auth cutover.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: authentik-blueprints
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: authentik
+    app.kubernetes.io/component: blueprints
+data:
+  github-source.yaml: |
+    version: 1
+    metadata:
+      name: github-oauth-source
+    entries:
+      - model: authentik_sources_oauth.oauthsource
+        identifiers:
+          slug: github
+        attrs:
+          name: GitHub
+          provider_type: github
+          consumer_key: !Env AUTHENTIK_GITHUB_CLIENT_ID
+          consumer_secret: !Env AUTHENTIK_GITHUB_CLIENT_SECRET
+          enabled: true
+          user_matching_mode: email_link
+          authentication_flow: !Find [authentik_flows.flow, [slug, default-source-authentication]]
+          enrollment_flow: !Find [authentik_flows.flow, [slug, default-source-enrollment]]
+      # Show GitHub as a login button on the default authentication flow — a new
+      # source isn't surfaced until it's added to the identification stage's
+      # sources list (which ships empty). Password login still works alongside.
+      - model: authentik_stages_identification.identificationstage
+        identifiers:
+          name: default-authentication-identification
+        attrs:
+          sources:
+            - !Find [authentik_core.source, [slug, github]]
+  forward-auth.yaml: |
+    version: 1
+    metadata:
+      name: stevegore-forward-auth
+    entries:
+      # Domain-level forward-auth Proxy Provider for *.stevegore.au.
+      - model: authentik_providers_proxy.proxyprovider
+        id: provider
+        identifiers:
+          name: stevegore-forward-auth
+        attrs:
+          mode: forward_domain
+          external_host: https://auth.stevegore.au
+          cookie_domain: stevegore.au
+          access_token_validity: hours=24
+          authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
+          invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
+      # Application bound to the provider.
+      - model: authentik_core.application
+        identifiers:
+          slug: stevegore
+        attrs:
+          name: stevegore
+          provider: !KeyOf provider
+      # Add the provider to the built-in embedded outpost so it serves the
+      # forward-auth endpoints at /outpost.goauthentik.io/. authentik_host pins
+      # the browser-facing redirect/callback host to auth.stevegore.au (otherwise
+      # it auto-derives from whatever host first hit Authentik, which broke the
+      # GitHub OAuth callback host match).
+      - model: authentik_outposts.outpost
+        identifiers:
+          managed: goauthentik.io/outposts/embedded
+        attrs:
+          providers:
+            - !KeyOf provider
+          config:
+            authentik_host: https://auth.stevegore.au
+            authentik_host_browser: https://auth.stevegore.au
+            authentik_host_insecure: false
+            log_level: info
+            refresh_interval: minutes=5
+            kubernetes_namespace: authentik
+            kubernetes_replicas: 1
+            kubernetes_service_type: ClusterIP
+            object_naming_template: ak-outpost-%(name)s
+      # Access restriction — only Steve's GitHub identity (numeric id 13194535)
+      # or a superuser (akadmin break-glass) may use the stevegore application.
+      # Mirrors the old caddy-security `match sub github.com/stevegore` gate.
+      # Without it, any GitHub user who enrolls could reach the gated apps
+      # (homepage, headlamp/k8s dashboard, desk, gym). Fail-closed: if the
+      # source-connection lookup ever errors, only superusers get in.
+      - model: authentik_policies_expression.expressionpolicy
+        id: allow-steve
+        identifiers:
+          name: allow-stevegore-github
+        attrs:
+          expression: |
+            user = request.user
+            if user.is_superuser:
+                return True
+            try:
+                return any(
+                    str(sc.identifier) == "13194535"
+                    for sc in user.usersourceconnection_set.all()
+                )
+            except Exception:
+                return False
+      - model: authentik_policies.policybinding
+        identifiers:
+          target: !Find [authentik_core.application, [slug, stevegore]]
+          policy: !KeyOf allow-steve
+          order: 0
+        attrs:
+          enabled: true
