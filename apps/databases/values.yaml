@@ -48,7 +48,7 @@ postgres:
 # VSO syncs them from Vault `kv/oci/pg-backups` into a k8s Secret in this
 # namespace; barman reads access_key / secret_key from that Secret.
 backup:
-  enabled: false  # temporarily disabled during recovery — re-enable after cluster is healthy
+  enabled: true
   # OCI Object Storage S3-compat endpoint (region ap-sydney-1, ns prefix
   # sdajdczqv0qo) — same host family as caddy's certmagic-s3 block.
   endpointURL: https://sdajdczqv0qo.compat.objectstorage.ap-sydney-1.oraclecloud.com
@@ -93,7 +93,7 @@ vault:
 # fresh cluster. Revert to false after recovery (CNPG ignores bootstrap changes
 # on existing clusters; ArgoCD ignoreDifferences suppresses the OutOfSync diff).
 recovery:
-  enabled: true
+  enabled: false
   sourceName: pg-shared
 
 consumers:
