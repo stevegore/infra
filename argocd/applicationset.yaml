@@ -38,6 +38,14 @@ spec:
           name: pico
           jsonPointers:
             - /spec/externalName
+        # CNPG bootstrap is immutable after cluster creation. When recovery is
+        # reverted to initdb in values.yaml, the live cluster retains the
+        # recovery bootstrap spec — suppress the resulting OutOfSync diff.
+        - group: "postgresql.cnpg.io"
+          kind: Cluster
+          jsonPointers:
+            - /spec/bootstrap
+            - /spec/externalClusters
       syncPolicy:
         automated:
           prune: true
