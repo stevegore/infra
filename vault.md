@@ -158,6 +158,7 @@ Key-value secrets engine for application credentials.
 | kv/openclaw | OpenClaw AI assistant credentials | openclaw |
 | kv/hermes | Hermes Agent credentials | hermes |
 | kv/authentik/config | Authentik: secret_key, username/password (pg-shared role), bootstrap_password/token, github_client_id/secret | authentik (authentik ns), pg-backups+authentik (databases ns) |
+| kv/argocd | GitHub OAuth App client secret for Dex SSO | argocd (argocd ns) |
 | kv/oci/pg-backups | OCI Customer Secret Key (S3) for pg-shared WAL/base backups | pg-backups (databases ns) |
 | kv/homelab/* | Tokens synced from pico (`*.token` files) | pico-token-sync (write) |
 

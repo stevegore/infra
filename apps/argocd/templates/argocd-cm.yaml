@@ -19,6 +19,6 @@ data:
         name: GitHub
         config:
           clientID: {{ .Values.github.clientID | quote }}
-          clientSecret: $dex.github.clientSecret
+          clientSecret: $argocd-github-oauth:github_client_secret
           # Use GitHub username as the user ID instead of numeric ID
           useLoginAsID: true
