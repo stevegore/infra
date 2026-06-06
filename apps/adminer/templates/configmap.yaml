@@ -29,49 +29,51 @@ data:
         ],
     ];
 
-    class AdminerAutologin extends Adminer {
-        private $servers;
-
-        public function __construct(array $servers) {
-            $this->servers = $servers;
-        }
-
-        public function loginForm() {
-            $current = defined('SERVER') ? SERVER : '';
-            if ($current !== '' && isset($this->servers[$current])) {
-                echo '<p>Connecting to <strong>' . h($this->servers[$current]['label']) . '</strong></p>';
-                echo '<p><a href="?">&larr; switch server</a></p>';
-                echo '<p><input type="submit" value="Login"></p>';
-            } else {
-                echo '<p>Select a database:</p><table cellspacing="0">';
-                foreach ($this->servers as $host => $info) {
-                    $qs = $info['driver'] . '=' . urlencode($host)
-                        . '&username=' . urlencode($info['username'])
-                        . (isset($info['db']) ? '&db=' . urlencode($info['db']) : '');
-                    echo '<tr><td><a href="?' . h($qs) . '">'
-                        . h($info['label']) . '</a></td></tr>';
-                }
-                echo '</table>';
-            }
-        }
-
-        public function login($login, $password) {
-            $current = defined('SERVER') ? SERVER : '';
-            return $current !== '' && isset($this->servers[$current]);
-        }
-
-        public function credentials() {
-            $current = defined('SERVER') ? SERVER : '';
-            if ($current !== '' && isset($this->servers[$current])) {
-                $s = $this->servers[$current];
-                return [$current, $s['username'], $s['password']];
-            }
-            return parent::credentials();
-        }
-    }
-
     function adminer_object() {
         global $ADMINER_SERVERS;
+
+        // Class defined here so Adminer base class is loaded before this runs.
+        class AdminerAutologin extends Adminer {
+            private $servers;
+
+            public function __construct(array $servers) {
+                $this->servers = $servers;
+            }
+
+            public function loginForm() {
+                $current = defined('SERVER') ? SERVER : '';
+                if ($current !== '' && isset($this->servers[$current])) {
+                    echo '<p>Connecting to <strong>' . h($this->servers[$current]['label']) . '</strong></p>';
+                    echo '<p><a href="?">&larr; switch server</a></p>';
+                    echo '<p><input type="submit" value="Login"></p>';
+                } else {
+                    echo '<p>Select a database:</p><table cellspacing="0">';
+                    foreach ($this->servers as $host => $info) {
+                        $qs = $info['driver'] . '=' . urlencode($host)
+                            . '&username=' . urlencode($info['username'])
+                            . (isset($info['db']) ? '&db=' . urlencode($info['db']) : '');
+                        echo '<tr><td><a href="?' . h($qs) . '">'
+                            . h($info['label']) . '</a></td></tr>';
+                    }
+                    echo '</table>';
+                }
+            }
+
+            public function login($login, $password) {
+                $current = defined('SERVER') ? SERVER : '';
+                return $current !== '' && isset($this->servers[$current]);
+            }
+
+            public function credentials() {
+                $current = defined('SERVER') ? SERVER : '';
+                if ($current !== '' && isset($this->servers[$current])) {
+                    $s = $this->servers[$current];
+                    return [$current, $s['username'], $s['password']];
+                }
+                return parent::credentials();
+            }
+        }
+
         return new AdminerAutologin($ADMINER_SERVERS);
     }
 
