@@ -24,6 +24,36 @@ spec:
             - name: http
               containerPort: 3001
               protocol: TCP
+          {{- if .Values.mysql.enabled }}
+          env:
+            - name: UPTIME_KUMA_DB_TYPE
+              value: mysql
+            - name: UPTIME_KUMA_DB_HOSTNAME
+              valueFrom:
+                secretKeyRef:
+                  name: uptime-kuma-db
+                  key: db_hostname
+            - name: UPTIME_KUMA_DB_PORT
+              valueFrom:
+                secretKeyRef:
+                  name: uptime-kuma-db
+                  key: db_port
+            - name: UPTIME_KUMA_DB_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: uptime-kuma-db
+                  key: db_name
+            - name: UPTIME_KUMA_DB_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: uptime-kuma-db
+                  key: db_username
+            - name: UPTIME_KUMA_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: uptime-kuma-db
+                  key: db_password
+          {{- end }}
           volumeMounts:
             - name: data
               mountPath: /app/data
