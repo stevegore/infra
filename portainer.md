@@ -267,7 +267,7 @@ networks:
 **Stack ID:** 10  
 **Project Path:** `/data/compose/10`  
 **Compose Version:** v3  
-**Last Updated:** 2025-05-07  
+**Last Updated:** 2026-06-03  
 **Created:** 2021-11-27
 
 **Containers:**
@@ -297,7 +297,7 @@ services:
     environment:
       - TZ=Australia/Sydney
       - PLEX_CLAIM=claim-MuDFFkYK25yaVxvRUtCz
-      - ADVERTISE_IP=<http://152.67.110.42:32400>
+      - ADVERTISE_IP=https://plex.stevegore.au:443
       - ALLOWED_NETWORKS=192.168.0.0/16,10.0.0.0/8
       # - NVIDIA_VISIBLE_DEVICES=all
     hostname: PlexOnPico
@@ -315,7 +315,7 @@ volumes:
 
 **Purpose:** Plex Media Server - streaming movies and TV shows  
 **Ports:** 32400 (primary web UI), 3005 (Plex Companion), 8324 (Roku), 32469 (DLNA), 32410-32414/udp (GDM network discovery)  
-**External IP:** 152.67.110.42  
+**External URL:** https://plex.stevegore.au:443  
 **Hostname:** PlexOnPico  
 **Storage:** Media from `/srv/tv` and `/srv/movies`, USB passthrough via `/dev/bus/usb`  
 **Volumes:** `plex_plex-config`, `plex_plex-temp`  

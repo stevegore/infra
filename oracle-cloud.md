@@ -74,7 +74,7 @@ This was fixed on the now-terminated ampere-ubuntu instance by manually installi
 
 **Workload Distribution:**
 - `argocd` (2 replicas) + `vault` (1) + `vault-secrets-operator` + `caddy` (2 replicas) + `authentik` (server+worker) + `cloudnative-pg` operator (1) + `databases`/`pg-shared` Postgres (1) + `vaultwarden` (1) + `uptime-kuma` (1) + `homepage` (1) + `metrics-server` (1) + `tailscale-operator` (1)
-- Top memory consumers (actual RSS): hermes 500 MB, argocd-application-controller 317 MB, uptime-kuma 219 MB, oke-dataplane-observability-agent 170 MB ×2, vaultwarden 138 MB, homepage 106 MB. caddy is only ~50 MB.
+- Top memory consumers (actual RSS): argocd-application-controller ~317 MB, uptime-kuma ~219 MB, oke-dataplane-observability-agent ~170 MB ×2, vaultwarden ~138 MB, homepage ~106 MB. caddy ~50 MB. (hermes removed 2026-06-06)
 
 **Metrics:** metrics-server is deployed (`apps/metrics-server`, wrapper over the upstream chart, `--kubelet-insecure-tls` for OKE managed kubelets). `kubectl top nodes` / `kubectl top pods -A` work cluster-wide.
 
@@ -161,15 +161,20 @@ Note: `allow-wireguard`, `allow-all-egress`, `allow-ssh`, and `allow-http-https`
 
 | Name                   | IP              | Lifetime  | Attached to                          | State    |
 | ---------------------- | --------------- | --------- | ------------------------------------ | -------- |
+| caddy-nlb-reserved     | 159.13.44.68    | RESERVED  | OKE Caddy NLB (CCM-managed)         | ASSIGNED |
 | publicip20230914115348 | 158.178.136.162 | EPHEMERAL | (none — detached when ampere terminated 2026-05-26) | UNASSIGNED |
 | (NAT gateway IP)       | 168.138.106.64  | EPHEMERAL | NAT-Gateway-nebula                   | ASSIGNED |
 
-`publicip20230914115348` is misleadingly named — the digits look like a date but
-it's actually an ephemeral IP that's auto-named by OCI when a VNIC's first
-public address is assigned. The architecture migration (Phase 0) promotes it to
-RESERVED via Terraform so it can be detached from ampere and re-attached to the
-NLB in Phase 3 without changing the IP value (which would break Cloudflare DNS
-records).
+`caddy-nlb-reserved` (`159.13.44.68`) is a Terraform-managed reserved IP (`oci_core_public_ip.caddy_nlb` in `nlb.tf`). The Kubernetes CCM creates an NLB and attaches this IP to it when the Caddy `LoadBalancer` service is created. **Important:** when the OKE cluster is rebuilt, the CCM-created NLB is **not** automatically deleted. It must be manually removed so the reserved IP is freed for the new cluster's CCM:
+
+```bash
+# Check if IP is still assigned to an old NLB
+oci network public-ip get --public-ip-address 159.13.44.68 --region ap-sydney-1 | grep lifecycle-state
+# If ASSIGNED, find and delete the old NLB:
+oci nlb network-load-balancer list --compartment-id <compartment-ocid> --region ap-sydney-1 --all \
+  | python3 -c "import sys,json; [print(n['id'],n['display-name']) for n in json.load(sys.stdin)['data']['items'] if any(i.get('ip-address')=='159.13.44.68' for i in n.get('ip-addresses',[]))]"
+oci nlb network-load-balancer delete --network-load-balancer-id <ID> --region ap-sydney-1 --force
+```
 
 ### Boot Volumes
 

@@ -1,11 +1,11 @@
 # Bootstrap — OKE / Terraform
 
-How to provision this homelab from scratch.
+How to provision this homelab from scratch, or rebuild after a cluster change.
 
 ## Architecture overview
 
 ```
-OCI Resource Manager  →  Terraform  →  OKE cluster + VCN + NLB + KMS + Object Storage
+OCI Resource Manager  →  Terraform  →  OKE cluster + VCN + NLB IP + KMS + Object Storage
                                                     ↓
                                              argocd-init.sh
                                                     ↓
@@ -23,7 +23,154 @@ See [ARGOCD_WORKFLOW.md](../ARGOCD_WORKFLOW.md) and [terraform/README.md](../ter
 
 ---
 
-## Step 1 — OCI prerequisites (one-time)
+## Cluster rebuild vs fresh install
+
+| Scenario | Vault data | Terraform state | CNPG data |
+|----------|-----------|-----------------|-----------|
+| **Fresh install** | Empty — must init + provision all secrets | New | Empty |
+| **Cluster rebuild** (e.g. BASIC→ENHANCED downgrade) | Pre-existing (persists in OCI Object Storage) | Existing (restore backup) | Recover from barman backup in OCI Object Storage |
+
+A rebuild skips all secret-provisioning steps and goes straight to cluster recreation → ArgoCD bootstrap → CNPG recovery.
+
+---
+
+## Rebuild runbook (cluster replace, data preserved)
+
+Use this when you need to destroy and recreate the OKE cluster (e.g. switching cluster type, which OCI doesn't support in-place).
+
+### 0. Pre-flight
+
+```bash
+export KUBECONFIG=~/.kube/oke-homelab.config
+source scripts/vault-env.sh && vlogin    # needs VAULT_TOKEN for later steps
+```
+
+Optionally snapshot uptime-kuma data before destroying the cluster (uptime history, not critical):
+```bash
+kubectl cp uptime-kuma/$(kubectl get pod -n uptime-kuma -o name | head -1 | cut -d/ -f2):/app/data /tmp/uptime-kuma-backup
+```
+
+### 1. Terraform — change cluster type and apply
+
+Edit `terraform/oke-cluster.tf`, change `type = "ENHANCED_CLUSTER"` to `type = "BASIC_CLUSTER"` (or vice versa). OCI does **not** support in-place downgrade — you must destroy and recreate.
+
+```bash
+cd terraform
+source scripts/tf-env.sh          # sets TF_VAR_* and pulls state from ORM
+terraform init -reconfigure
+terraform plan                     # verify only the cluster resource is changing
+terraform apply                    # destroys old cluster, creates new one
+```
+
+The node pool takes ~10 min to provision.
+
+### 2. Clean up orphaned NLB
+
+When the old cluster is destroyed, the NLB that Kubernetes CCM created for the Caddy service is **not** automatically deleted (it's not Terraform-managed). It holds the reserved IP `159.13.44.68`, blocking the new cluster's CCM from creating a new NLB.
+
+```bash
+# Check whether the reserved IP is still assigned
+oci network public-ip get --public-ip-address 159.13.44.68 --region ap-sydney-1 \
+  | python3 -c "import sys,json; d=json.load(sys.stdin)['data']; print(d['lifecycle-state'], d.get('assigned-entity-id','none'))"
+# → if "ASSIGNED" and entity-id is set, find and delete the old NLB:
+
+oci nlb network-load-balancer list \
+  --compartment-id $(grep compartment_ocid terraform/vars-imported.tf | grep -o '"[^"]*"' | tr -d '"') \
+  --region ap-sydney-1 --all \
+  | python3 -c "
+import sys,json
+for n in json.load(sys.stdin)['data']['items']:
+    if any(ip.get('ip-address')=='159.13.44.68' for ip in n.get('ip-addresses',[])):
+        print('DELETE:', n['id'], n['display-name'])
+"
+# Then delete it:
+oci nlb network-load-balancer delete --network-load-balancer-id <ID-from-above> \
+  --region ap-sydney-1 --force
+```
+
+Wait ~30s for the IP to show `lifecycle-state: AVAILABLE`, then continue.
+
+### 3. Bootstrap ArgoCD
+
+```bash
+bash bootstrap/argocd-init.sh
+```
+
+This script is idempotent. It:
+1. Regenerates kubeconfig for the new cluster OCID
+2. Installs ArgoCD
+3. Applies the `infra-apps` ApplicationSet (deploying all `apps/`)
+4. Creates the `ocir-creds` docker-registry secret in `caddy` namespace (reads from Vault)
+
+> **Note:** The ApplicationSet (`argocd/applicationset.yaml`) is **not** managed by ArgoCD itself. Any changes to it must be applied manually:
+> ```bash
+> kubectl apply --server-side --force-conflicts -f argocd/applicationset.yaml
+> ```
+
+Wait ~5 min for ArgoCD to sync all apps. Vault auto-unseals via OCI KMS (no manual unseal needed on rebuild).
+
+### 4. Recover CNPG database (pg-shared)
+
+The CNPG cluster starts with `recovery.enabled: true` in git (this is the permanent state). It will try to restore from barman backup in `s3://pg-backups/pg-shared`. However, there's a CNPG safety check that blocks recovery when `spec.backup` is also set (it rejects recovery into a non-empty WAL archive destination).
+
+**Temporarily disable backup to allow recovery:**
+
+```bash
+# Edit apps/databases/values.yaml:
+#   backup:
+#     enabled: false   ← add this line
+git add apps/databases/values.yaml
+git commit -m "databases: disable backup during recovery (WAL archive check bypass)"
+git push
+```
+
+ArgoCD syncs. CNPG creates a fresh PVC and recovery job. If recovery pods fail before VSO has synced the `pg-backups-s3` secret (race condition), delete the cluster + PVC and re-trigger:
+
+```bash
+kubectl delete cluster pg-shared -n databases & kubectl delete pvc pg-shared-1 -n databases &
+wait
+kubectl patch application databases -n argocd --type=merge \
+  -p '{"operation":{"sync":{"syncStrategy":{"hook":{}}}}}'
+```
+
+Monitor until healthy:
+```bash
+kubectl get cluster pg-shared -n databases -w
+# Wait for: "Cluster in healthy state"
+```
+
+**Re-enable backup:**
+```bash
+# Edit apps/databases/values.yaml: backup.enabled: true
+git add apps/databases/values.yaml
+git commit -m "databases: re-enable backup after recovery"
+git push
+```
+
+CNPG restarts the pod to add the AWS checksum env vars (~2 min).
+
+> **Important:** After recovery, `recovery.enabled: true` is the **permanent** state in git.
+> The live cluster has `bootstrap.recovery` (immutable). Changing `recovery.enabled: false`
+> would generate `bootstrap.initdb`, which CNPG's webhook rejects with
+> "only one bootstrap method at a time."
+
+### 5. Verify
+
+```bash
+# All apps Synced + Healthy
+kubectl get applications -n argocd -o custom-columns='NAME:.metadata.name,SYNC:.status.sync.status,HEALTH:.status.health.status'
+
+# External access
+for d in argocd.stevegore.au vault.stevegore.au auth.stevegore.au homepage.stevegore.au; do
+  echo "$d: $(curl -skL --max-time 5 https://$d -o /dev/null -w '%{http_code}')"
+done
+```
+
+---
+
+## Fresh install runbook (no prior Vault data)
+
+### Step 1 — OCI prerequisites (one-time)
 
 OCI CLI credentials live in Vault at `kv/oci/api-key`. On a fresh machine:
 
@@ -33,9 +180,7 @@ source scripts/vault-env.sh && vlogin
 bash scripts/restore-oci-creds.sh   # writes ~/.oci/config + ~/oci.pem
 ```
 
----
-
-## Step 2 — Provision infrastructure via Terraform / ORM
+### Step 2 — Provision infrastructure via Terraform / ORM
 
 The ORM stack (`homelab-tf`) pulls from `github.com/stevegore/infra`, directory `terraform/`, branch `main`.
 
@@ -49,49 +194,41 @@ Then approve and apply the job in the OCI Console or via CLI. This provisions:
 
 - VCN `nebula` (subnets, security lists, NSGs, gateways)
 - OKE cluster `homelab` (2 nodes, 2 fault domains, Always Free A1)
-- NLB with reserved IP `159.13.44.68`
+- Reserved public IP `159.13.44.68` (`oci_core_public_ip.caddy_nlb`)
 - KMS vault + `vault-auto-unseal` key
 - Object Storage buckets (`vault-storage`, `infra-tfstate`, `caddy-acme`)
 - IAM dynamic group + policy for Vault's OCI KMS auto-unseal
 
 ORM stack OCID: `ocid1.ormstack.oc1.ap-sydney-1.amaaaaaaxbp2yoqaytua3d676bavg2kdjw6oud5srw7egs3iea7q7ppiydoq`
 
----
-
-## Step 3 — Bootstrap ArgoCD onto OKE
-
-Run once after ORM has finished:
+### Step 3 — Bootstrap ArgoCD onto OKE
 
 ```bash
 bash bootstrap/argocd-init.sh
 ```
 
-This:
-1. Writes `~/.kube/oke-homelab.config`
-2. Installs ArgoCD from upstream manifests
-3. Applies the `infra-apps` ApplicationSet (covers all `apps/` charts)
-4. Provisions the OCIR pull secret (requires Vault login)
+> On first run `VAULT_TOKEN` won't be set (Vault isn't up yet).
+> The script prints instructions; re-run after Vault is deployed and unsealed.
 
-After this step ArgoCD manages itself and deploys everything else.
-
----
-
-## Step 4 — Post-init (first install only)
-
-If Vault has no prior data (truly fresh install):
+### Step 4 — Post-init (first install only)
 
 ```bash
-# Unseal Vault — OCI KMS handles the unseal key, but init must run once:
+# Init Vault (OCI KMS handles unseal, but init must run once):
 export KUBECONFIG=~/.kube/oke-homelab.config
 kubectl exec -n vault vault-0 -- vault operator init \
   -recovery-shares=1 -recovery-threshold=1
 # Save the recovery key in 1Password.
 
-# Provision app credentials into Vault:
+# Login and provision credentials:
 source scripts/vault-env.sh && vlogin
 bash scripts/provision-caddy-acme-creds.sh   # Cloudflare token for DNS-01 ACME
 bash scripts/publish-mysql-creds.sh           # Vaultwarden MySQL creds
-# Tailscale auth key → vault kv put kv/tailscale/authkey value=<key>
+# Tailscale auth key:
+vault kv put kv/tailscale/authkey value=<key>
+# OCIR auth token (for caddy image pull):
+bash scripts/provision-ocir-creds.sh         # mints token, stores in Vault
+# Then re-run argocd-init.sh to create the k8s docker-registry secret:
+bash bootstrap/argocd-init.sh
 ```
 
 ---
@@ -105,6 +242,7 @@ bash scripts/publish-mysql-creds.sh           # Vaultwarden MySQL creds
 | Local Terraform plan | `source scripts/tf-env.sh && terraform init -reconfigure && terraform plan` |
 | Get kubeconfig | `oci ce cluster create-kubeconfig --cluster-id <id> --file ~/.kube/oke-homelab.config --region ap-sydney-1 --token-version 2.0.0` |
 | Access ArgoCD | `https://argocd.stevegore.au` (GitHub SSO) |
+| Update ApplicationSet | `kubectl apply --server-side --force-conflicts -f argocd/applicationset.yaml` |
 
 ---
 
@@ -112,5 +250,4 @@ bash scripts/publish-mysql-creds.sh           # Vaultwarden MySQL creds
 
 All secrets live in Vault (`vault.stevegore.au`). The Vault Secrets Operator (VSO) syncs them into Kubernetes `Secret` objects consumed by each app. No secrets are committed to this repo.
 
-- SOPS / age used previously for ampere-ubuntu VM configs — **no longer in use**.
-- `config/secrets.sops.yaml` is retained for reference only.
+**Exception:** `ocir-creds` docker-registry secret in `caddy` namespace is created by `argocd-init.sh` from Vault `kv/oci/ocir`. VSO doesn't support `kubernetes.io/dockerconfigjson` type secrets directly.
