@@ -1,0 +1,78 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "adminer.fullname" . }}-php
+  labels:
+    {{- include "adminer.labels" . | nindent 4 }}
+data:
+  index.php: |
+    <?php
+    /**
+     * Adminer with environment-based autologin.
+     * Identity auth is handled upstream by Caddy + Authentik.
+     * Users click a server link, then click Login — no credentials to type.
+     */
+
+    $ADMINER_SERVERS = [
+        getenv('ADMINER_PG_SERVER') => [
+            'driver'   => 'pgsql',
+            'label'    => 'PostgreSQL (pg-shared)',
+            'username' => getenv('ADMINER_PG_USER'),
+            'password' => getenv('ADMINER_PG_PASSWORD'),
+            'db'       => getenv('ADMINER_PG_DB'),
+        ],
+        getenv('ADMINER_MYSQL_SERVER') => [
+            'driver'   => 'server',
+            'label'    => 'MySQL HeatWave',
+            'username' => getenv('ADMINER_MYSQL_USER'),
+            'password' => getenv('ADMINER_MYSQL_PASSWORD'),
+        ],
+    ];
+
+    class AdminerAutologin extends Adminer {
+        private $servers;
+
+        public function __construct(array $servers) {
+            $this->servers = $servers;
+        }
+
+        public function loginForm() {
+            $current = defined('SERVER') ? SERVER : '';
+            if ($current !== '' && isset($this->servers[$current])) {
+                echo '<p>Connecting to <strong>' . h($this->servers[$current]['label']) . '</strong></p>';
+                echo '<p><a href="?">&larr; switch server</a></p>';
+                echo '<p><input type="submit" value="Login"></p>';
+            } else {
+                echo '<p>Select a database:</p><table cellspacing="0">';
+                foreach ($this->servers as $host => $info) {
+                    $qs = $info['driver'] . '=' . urlencode($host)
+                        . '&username=' . urlencode($info['username'])
+                        . (isset($info['db']) ? '&db=' . urlencode($info['db']) : '');
+                    echo '<tr><td><a href="?' . h($qs) . '">'
+                        . h($info['label']) . '</a></td></tr>';
+                }
+                echo '</table>';
+            }
+        }
+
+        public function login($login, $password) {
+            $current = defined('SERVER') ? SERVER : '';
+            return $current !== '' && isset($this->servers[$current]);
+        }
+
+        public function credentials() {
+            $current = defined('SERVER') ? SERVER : '';
+            if ($current !== '' && isset($this->servers[$current])) {
+                $s = $this->servers[$current];
+                return [$current, $s['username'], $s['password']];
+            }
+            return parent::credentials();
+        }
+    }
+
+    function adminer_object() {
+        global $ADMINER_SERVERS;
+        return new AdminerAutologin($ADMINER_SERVERS);
+    }
+
+    include 'adminer.php';

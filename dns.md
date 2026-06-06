@@ -61,6 +61,7 @@ Internet
     │                                            │       ├─► homepage.homepage:3000
     │                                            │       ├─► uptime-kuma.uptime-kuma:3001
     │                                            │       ├─► headlamp.headlamp:80
+    │                                            │       ├─► adminer.adminer:80
     │                                            │       └─► hermes.hermes:9119
     │                                            │
     │                                            └─► pico (via Tailscale Egress Service)
@@ -85,7 +86,7 @@ handled by **Authentik** (`apps/authentik`, namespace `authentik`), not Caddy:
 - `auth.stevegore.au` reverse-proxies the Authentik server (the IdP + embedded
   forward-auth outpost). Login federates to **GitHub** (OAuth App), restricted to
   Steve's GitHub identity by an expression policy on the `stevegore` application.
-- Gated vhosts (`homepage`, `headlamp`, `desk`, `gym`, `hermes`) use Caddy's
+- Gated vhosts (`homepage`, `headlamp`, `desk`, `gym`, `hermes`, `adminer`) use Caddy's
   built-in `forward_auth` to the embedded outpost (`/outpost.goauthentik.io/`),
   defined by the `(authentik)` snippet in `apps/caddy`'s Caddyfile.
 - Caddy is now **stateless** w.r.t. auth (Authentik holds all session/OAuth
@@ -210,6 +211,7 @@ All services proxied through Caddy on OKE (NLB → 159.13.44.68).
 | status.stevegore.au      | uptime-kuma.uptime-kuma:3001             | —        | Custom-domain alias for the `homelab` status page (cname row managed by `scripts/setup_status_page.py`) |
 | headlamp.stevegore.au    | headlamp.headlamp:80                      | Authentik| Kubernetes web dashboard         |
 | hermes.stevegore.au      | hermes.hermes:9119                        | Authentik|                                  |
+| adminer.stevegore.au     | adminer.adminer:80                        | Authentik| DB browser — pg-shared + MySQL HeatWave |
 | stevegore.au         | ttyd.ttyd:8788                            | —        | ttyd web terminal (migrated from pico 2026-06-03) |
 
 **Via Tailscale Egress Service to pico (`pico` ExternalName svc in caddy namespace):**
