@@ -38,14 +38,22 @@ spec:
           name: pico
           jsonPointers:
             - /spec/externalName
-        # CNPG bootstrap is immutable after cluster creation. When recovery is
-        # reverted to initdb in values.yaml, the live cluster retains the
-        # recovery bootstrap spec — suppress the resulting OutOfSync diff.
+        # CNPG admission webhook injects defaults into Cluster spec after
+        # creation (affinity, enablePDB, logLevel, etc.) that aren't in the
+        # rendered Helm chart. Ignore them so ArgoCD doesn't loop trying to
+        # remove them. Also ignore bootstrap/externalClusters because they're
+        # immutable after first reconcile.
         - group: "postgresql.cnpg.io"
           kind: Cluster
           jsonPointers:
             - /spec/bootstrap
             - /spec/externalClusters
+            - /spec/affinity
+            - /spec/enablePDB
+            - /spec/enableSuperuserAccess
+            - /spec/failoverDelay
+            - /spec/logLevel
+            - /spec/backup/target
       syncPolicy:
         automated:
           prune: true
@@ -53,3 +61,4 @@ spec:
         syncOptions:
           - CreateNamespace=true
           - ServerSideApply=true
+          - RespectIgnoreDifferences=true
