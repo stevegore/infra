@@ -122,6 +122,13 @@ data:
       import defaults
     }
 
+    adminer.stevegore.au {
+      reverse_proxy /outpost.goauthentik.io/* authentik-server.authentik.svc.cluster.local:80
+      import authentik
+      reverse_proxy adminer.adminer.svc.cluster.local:80
+      import defaults
+    }
+
     headlamp.stevegore.au {
       reverse_proxy /outpost.goauthentik.io/* authentik-server.authentik.svc.cluster.local:80
       import authentik
