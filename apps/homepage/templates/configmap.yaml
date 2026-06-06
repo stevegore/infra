@@ -150,6 +150,10 @@ data:
             href: http://pico:3011
             description: Huginn Database
             icon: phpmyadmin.png
+        - Adminer:
+            href: https://adminer.stevegore.au
+            description: DB Browser — pg-shared + MySQL HeatWave
+            icon: adminer.png
 
     - Custom Apps:
         - NuraSpace:
