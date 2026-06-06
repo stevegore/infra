@@ -1,0 +1,70 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "adminer.fullname" . }}
+  labels:
+    {{- include "adminer.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "adminer.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "adminer.selectorLabels" . | nindent 8 }}
+    spec:
+      containers:
+        - name: adminer
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.service.targetPort }}
+              protocol: TCP
+          env:
+            - name: ADMINER_PG_SERVER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.vault.postgres.secretName }}
+                  key: server
+            - name: ADMINER_PG_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.vault.postgres.secretName }}
+                  key: username
+            - name: ADMINER_PG_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.vault.postgres.secretName }}
+                  key: password
+            - name: ADMINER_PG_DB
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.vault.postgres.secretName }}
+                  key: db
+            - name: ADMINER_MYSQL_SERVER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.vault.mysql.secretName }}
+                  key: server
+            - name: ADMINER_MYSQL_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.vault.mysql.secretName }}
+                  key: username
+            - name: ADMINER_MYSQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.vault.mysql.secretName }}
+                  key: password
+          volumeMounts:
+            - name: php
+              mountPath: /var/www/html/index.php
+              subPath: index.php
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      volumes:
+        - name: php
+          configMap:
+            name: {{ include "adminer.fullname" . }}-php
