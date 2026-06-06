@@ -1,0 +1,29 @@
+replicaCount: 1
+
+image:
+  repository: docker.io/adminer
+  tag: "4"
+  pullPolicy: IfNotPresent
+
+resources:
+  requests:
+    cpu: 10m
+    memory: 32Mi
+  limits:
+    memory: 128Mi
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 8080
+
+vault:
+  enabled: true
+  authRole: vault-secrets-operator
+  refreshAfter: 1h
+  postgres:
+    path: adminer/postgres
+    secretName: adminer-pg-creds
+  mysql:
+    path: adminer/mysql
+    secretName: adminer-mysql-creds
