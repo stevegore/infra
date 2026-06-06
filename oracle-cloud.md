@@ -350,9 +350,9 @@ OCI users are capped at 2 active Customer Secret Keys. List + delete via
 
 | Property                | Value                                                                                                |
 | ----------------------- | ---------------------------------------------------------------------------------------------------- |
-| OCID                    | `ocid1.cluster.oc1.ap-sydney-1.aaaaaaaaok3ygaxxoaf3vlwoytcnift4yxrmr4dmd75be53iocfghlpevogq`         |
+| OCID                    | `ocid1.cluster.oc1.ap-sydney-1.aaaaaaaayyadaznxbxlzv7qz6drid3w3erh3yunv2zp7wdqzjclxsok2k6nq`         |
 | Kubernetes version      | `v1.35.2`                                                                                            |
-| Type                    | ENHANCED_CLUSTER (Always Free)                                                                       |
+| Type                    | BASIC_CLUSTER (free — Enhanced incurs ~$0.15/hr; downgrade requires full cluster rebuild)            |
 | API endpoint            | Public, NSG-restricted to home IP `159.196.97.38/32`                                                 |
 | CNI                     | FLANNEL_OVERLAY (pods 10.244.0.0/16, services 10.96.0.0/16)                                          |
 | Node pool               | `homelab-arm`, VM.Standard.A1.Flex 2 OCPU / 12 GB, 2 nodes (FD-1 + FD-2 in Private Subnet-nebula)    |
@@ -374,7 +374,7 @@ Regenerate (e.g. on a fresh machine, or to refresh the OCI token cache):
 
 ```bash
 oci ce cluster create-kubeconfig \
-  --cluster-id ocid1.cluster.oc1.ap-sydney-1.aaaaaaaaok3ygaxxoaf3vlwoytcnift4yxrmr4dmd75be53iocfghlpevogq \
+  --cluster-id ocid1.cluster.oc1.ap-sydney-1.aaaaaaaayyadaznxbxlzv7qz6drid3w3erh3yunv2zp7wdqzjclxsok2k6nq \
   --file ~/.kube/oke-homelab.config \
   --region ap-sydney-1 \
   --token-version 2.0.0 \
@@ -413,7 +413,7 @@ bash ~/code/infra/scripts/setup-pico-stats.sh
 3. Generate kubeconfig:
    ```bash
    oci ce cluster create-kubeconfig \
-     --cluster-id ocid1.cluster.oc1.ap-sydney-1.aaaaaaaaok3ygaxxoaf3vlwoytcnift4yxrmr4dmd75be53iocfghlpevogq \
+     --cluster-id ocid1.cluster.oc1.ap-sydney-1.aaaaaaaayyadaznxbxlzv7qz6drid3w3erh3yunv2zp7wdqzjclxsok2k6nq \
      --file ~/.kube/oke-homelab.config \
      --region ap-sydney-1 \
      --token-version 2.0.0 \
