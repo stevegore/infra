@@ -93,7 +93,7 @@ vault:
 # fresh cluster. Revert to false after recovery (CNPG ignores bootstrap changes
 # on existing clusters; ArgoCD ignoreDifferences suppresses the OutOfSync diff).
 recovery:
-  enabled: false
+  enabled: true
   sourceName: pg-shared
 
 consumers:
