@@ -2,25 +2,16 @@
 
 ## Local Network
 
-| Host                   | Description                                                 |
-| ---------------------- | ----------------------------------------------------------- |
-| pico.local             | Pico (192.168.4.120)                           |
-| pico-wg                | Pico via WireGuard (10.20.30.1 via ProxyJump ampere-ubuntu) |
-| `pi@raspberrypi.local` | Raspberry Pi (192.168.4.61)                                 |
-
-## WireGuard Network (10.20.30.x)
-
-| Host              | Notes                                                    |
-| ----------------- | -------------------------------------------------------- |
-| steve@10.20.30.1  | pico, reachable via ProxyJump through .2 (ampere-ubuntu) |
-| ubuntu@10.20.30.2 | ampere-ubuntu (WireGuard hub)                            |
+| Host                   | Description          |
+| ---------------------- | -------------------- |
+| pico.local             | Pico (192.168.4.120) |
+| `pi@raspberrypi.local` | Raspberry Pi (192.168.4.61) |
 
 ## Cloud / Remote Servers
 
-| Host                   | Notes                                                                                              |
-| ---------------------- | -------------------------------------------------------------------------------------------------- |
-| ubuntu@158.178.136.162 | Oracle Cloud (ampere-ubuntu) — being decommissioned in Phase 7 of the OKE migration                |
-| OKE cluster `homelab`  | `KUBECONFIG=~/.kube/oke-homelab.config kubectl get nodes` (home-IP only; details in oracle-cloud.md) |
+| Host                  | Notes                                                                                              |
+| --------------------- | -------------------------------------------------------------------------------------------------- |
+| OKE cluster `homelab` | `KUBECONFIG=~/.kube/oke-homelab.config kubectl get nodes` (home-IP only; details in oracle-cloud.md) |
 
 ---
 
@@ -44,25 +35,29 @@
   - External access: `hass2.stevegore.au` (Cloudflare Tunnel, direct) and `hass.stevegore.au` (via Tailscale egress in OKE → Caddy → pico:8123)
   - `trusted_proxies` includes `10.244.0.0/16` (OKE pod CIDR) so Caddy pods are trusted for X-Forwarded-For
   - Custom components: `tuya_local`, `eero` (new), `eero_tracker` (legacy — kept for now, `interval_seconds: 30` set to avoid scan overrun)
-- **WireGuard** — 10.20.30.1/32, managed by `wg-quick@wg0.service`
-  - Config: `/etc/wireguard/wg0.conf`
-  - PersistentKeepalive = 25 (to ampere-ubuntu peer)
-  - No ListenPort set — uses ephemeral port (seen by ampere as 159.196.97.38:PORT)
-  - Being replaced by Tailscale (below) per [architecture-proposal.md](architecture-proposal.md) §5.3
-- **Tailscale** — `tailscaled.service`, joined 2026-05-24
+- **Tailscale** — `tailscaled.service`
   - Tailnet IP: `100.98.212.71` (also `fd7a:115c:a1e0::f039:d447`), MagicDNS `pico.chipmunk-fir.ts.net`
   - Hostname in admin: `pico`
-  - Subnet routes: `10.20.30.0/24` + `192.168.4.0/24` can be advertised if needed for OKE access to home LAN devices (currently not required)
+  - `--accept-routes` enabled (receives `10.0.1.0/24` OCI subnet route from `oke-connector` for MySQL HeatWave access)
+  - Subnet routes: `192.168.4.0/24` can be advertised if OKE ever needs to reach home LAN devices (not currently required)
 - **Cloudflare Tunnel** — `cloudflared.service`, exposes HA at `hass2.stevegore.au`
 - **Docker services** — managed via Portainer (`port.stevegore.au`)
+- **Stats Server** — Python HTTP server (systemd `stats-server.service`)
+  - Port: 8001 (HTTP)
+  - Endpoints:
+    - `/` — HTML dashboard with real-time resource metrics (pico disk, memory, CPU)
+    - `/api/stats` — JSON API returning pico + OKE cluster stats
+  - Public access: `https://stats.stevegore.au` (via Caddy reverse proxy)
+  - Dashboard integration: embedded as iframe widget in `https://homepage.stevegore.au`
+  - Deployment: `~/code/infra/scripts/stats-server.py` + systemd service
+  - See `scripts/STATS_SERVER.md` for setup and troubleshooting
 
 **Network:**
 
-| Interface  | Address                                       | DNS                          |
-| ---------- | --------------------------------------------- | ---------------------------- |
-| enp3s0     | 192.168.4.120                                 | 192.168.4.1 (router)         |
-| wg0        | 10.20.30.1/32                                 | 10.20.30.2 (~10.20.30.0/24)  |
-| tailscale0 | 100.98.212.71 / fd7a:115c:a1e0::f039:d447     | 100.100.100.100 (MagicDNS)   |
+| Interface  | Address                                       | DNS                         |
+| ---------- | --------------------------------------------- | --------------------------- |
+| enp3s0     | 192.168.4.120                                 | 192.168.4.1 (router)        |
+| tailscale0 | 100.98.212.71 / fd7a:115c:a1e0::f039:d447     | 100.100.100.100 (MagicDNS)  |
 
 **Resource Usage (current):**
 
@@ -79,27 +74,37 @@
 - Duplicati backups: check `/var/lib/docker/volumes/` size
 - Home Assistant DB: `~/.local/share/hassio/homeassistant/home-assistant_v2.db` — ~2-3 GB
 
+**Monitoring & Observability:**
+
+| Component | Purpose | Access | Status |
+|-----------|---------|--------|--------|
+| Stats Server | Real-time resource metrics (disk, memory, CPU, OKE cluster) | `https://stats.stevegore.au` | ✅ Running on pico:8001 |
+| Homepage Dashboard | Live stats widget (embedded iframe) | `https://homepage.stevegore.au` | ✅ Integrated via Caddy |
+| Uptime Kuma | Service health monitoring | `https://uptime.stevegore.au` | ✅ OKE cluster |
+| Home Assistant | Smart home platform + history | `https://hass.stevegore.au` | ✅ pico:8123 |
+
+**Stats Server Details:**
+- Deployed as: systemd service (`stats-server.service`) on pico
+- Port: 8001 (HTTP)
+- Metrics provided:
+  - **Pico**: root disk (`/`), media disk (`/media/m2`), RAM, CPU cores
+  - **OKE cluster**: node status, capacity (OCPU/GB), version
+- JSON endpoint: `/api/stats` (for API integrations)
+- HTML dashboard: `/` (styled with color-coded resource alerts)
+- Color coding: ⚠️ orange >70%, 🔴 red >85%
+- Refresh: real-time (no caching, queries on each request)
+- Public access: via Caddy reverse proxy at `https://stats.stevegore.au`
+
+**OCI CLI & Kubeconfig Setup (on pico):**
+- **OCI CLI**: installed via pipx (available at `~/.local/bin/oci`)
+- **OCI credentials**: copied from local machine (`~/.oci/config`, `~/oci.pem`)
+- **Kubeconfig**: generated via `oci ce cluster create-kubeconfig` command
+- **Kubectl wrapper**: custom shell script (`~/code/infra/scripts/kubectl-wrapper.sh`) that provides PATH for oci credential plugin
+- **Setup**: automated via `bash ~/code/infra/scripts/setup-pico-stats.sh`
+
+See `scripts/STATS_SERVER.md` for detailed setup and troubleshooting.
+
 ---
-
-### ampere-ubuntu (158.178.136.162)
-
-**Purpose:** ARM-based server retained as WireGuard VPN hub. Caddy and ArgoCD have moved to OKE. Being decommissioned per the OKE migration plan.
-
-**Key Services (remaining):**
-
-- **WireGuard VPN** - Network hub (10.20.30.2)
-  - Config: `/etc/wireguard/wg0.conf`
-  - Peers: 10.20.30.1 (pico), 10.20.30.3 (laptop)
-  - Public key: `h8oS9EjhkNFq5hgX5MFYS9a9ZyhwlKgrWpidFsqZzRs=`
-- **fail2ban** - SSH brute-force protection
-  - Config: `/etc/fail2ban/jail.local`
-  - `sudo fail2ban-client status sshd` to check banned IPs
-
-**Migrated to OKE (no longer on ampere-ubuntu):**
-- Caddy → OKE `caddy` namespace (NLB IP 159.13.44.68)
-- ArgoCD → OKE `argocd` namespace
-- Vault → OKE `vault` namespace
-- Vaultwarden → OKE `vaultwarden` namespace
 
 ---
 
@@ -114,13 +119,17 @@
 
 | Namespace          | Workload                        | Notes                                      |
 | ------------------ | ------------------------------- | ------------------------------------------ |
-| caddy              | Caddy (2 replicas)              | NLB → Caddy; DNS-01 ACME via Cloudflare; certmagic-s3 on OCI Object Storage |
+| caddy              | Caddy (2 replicas)              | NLB → Caddy; DNS-01 ACME via Cloudflare; certmagic-s3 on OCI Object Storage. Stateless auth (Authentik forward_auth) so HA across both fault domains (see dns.md). |
+| authentik          | Authentik IdP                   | GitHub-federated SSO + domain-level forward-auth outpost for `*.stevegore.au`; Postgres on `pg-shared`, no Redis (2026.5 is Postgres-backed). `auth.stevegore.au` |
+| cloudnative-pg     | CloudNativePG operator          | Cluster-wide Postgres operator (CRDs + controller); apps declare Cluster/Database CRs |
+| databases          | `pg-shared` Postgres (CNPG)     | Shared PG16 instance on 50 GB `oci-bv`; WAL backups to OCI Object Storage; hosts the `authentik` DB |
 | argocd             | ArgoCD                          | `--insecure` mode (Caddy terminates TLS); Git source: `stevegore/infra` |
 | vault              | HashiCorp Vault                 | OCI KMS auto-unseal; VSO syncs secrets to k8s |
 | vault-secrets-operator | VSO                        | Syncs Vault secrets → k8s Secrets          |
-| vaultwarden        | Vaultwarden                     | Password manager                           |
-| homepage           | Homepage dashboard              | Protected by caddy-security `adminonly`    |
-| openclaw           | OpenClaw                        |                                            |
+| metrics-server     | metrics-server                  | `kubectl top` / HPA metrics (`--kubelet-insecure-tls`) |
+| vaultwarden        | Vaultwarden 1.35.7              | Primary at `bw.stevegore.au`; MySQL HeatWave Free backend (`/data` is `emptyDir`) |
+| homepage           | Homepage dashboard              | Gated by Authentik forward-auth            |
+| hermes             | Hermes                          | Gated by Authentik forward-auth            |
 | tailscale          | Tailscale operator              | Manages Egress Service for pico reachability |
 
 **Useful commands:**

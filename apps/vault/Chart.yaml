@@ -3,9 +3,9 @@ name: vault
 description: HashiCorp Vault with OCI KMS auto-unseal and Object Storage backend
 type: application
 version: 1.0.0
-appVersion: "1.18.1"
+appVersion: "1.21.2"
 
 dependencies:
   - name: vault
-    version: 0.28.1
+    version: 0.32.0
     repository: https://helm.releases.hashicorp.com

@@ -1,0 +1,3 @@
+# Helm chart dependencies (downloaded tarballs) — ArgoCD's repo-server rebuilds
+# these from Chart.lock at sync time. Only Chart.lock is committed.
+charts/

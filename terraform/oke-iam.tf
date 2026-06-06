@@ -18,6 +18,16 @@ resource "oci_identity_policy" "oke_service" {
     "Allow service OKE to manage load-balancers in compartment main",
     "Allow service OKE to manage volume-family in compartment main",
     "Allow service OKE to manage cluster-node-pools in compartment main",
+    # fss.csi.oraclecloud.com runs the dynamic provisioner on the OKE
+    # control plane. The legacy `service OKE` grant below is kept for
+    # belt-and-suspenders, but the modern OKE-bundled FSS CSI driver
+    # authenticates as the cluster instance principal (workload-identity
+    # style), so it needs an `any-user where request.principal.type='cluster'`
+    # statement. Without the cluster-principal grant, PVCs against the
+    # oci-fss StorageClass stall with FileStorage 404 NotAuthorizedOrNotFound
+    # on GetMountTarget — verified on the first FSS smoke test.
+    "Allow service OKE to manage file-family in compartment main",
+    "Allow any-user to manage file-family in compartment main where ALL {request.principal.type='cluster', request.principal.compartment.id='${var.compartment_ocid}'}",
   ]
 }
 

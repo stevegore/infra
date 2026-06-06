@@ -7,7 +7,7 @@
 **Total Containers:** 41 running  
 **Total Volumes:** 48  
 **Total Images:** 114  
-**Total Stacks:** 20 (18 active, 2 stopped)  
+**Total Stacks:** 19 (17 active, 2 stopped)  
 **System CPU:** 12 cores  
 **System Memory:** ~31 GB
 
@@ -50,21 +50,20 @@ curl -s -X POST http://pico.local:9000/api/endpoints/1/docker/exec/$EXEC_ID/star
 3. [plex](#plex) - Media server  
 4. [vault](#vault) - Secrets management  
 5. [owncloud](#owncloud) - Cloud storage (stopped)  
-6. [stevegore-au](#stevegore-au) - Web terminal and utilities  
+6. [stevegore-au](#stevegore-au) - Web terminal and utilities (stopped — migrated to OKE)  
 7. [photoprism](#photoprism) - Photo management with AI  
-8. [gitea](#gitea) - Git server (stopped)  
-9. [huggin](#huggin) - Task automation  
-10. [nuraspace2](#nuraspace2) - NuraSpace application  
-11. [pdf](#pdf) - Stirling PDF document processor  
-12. [gymmaster-rest](#gymmaster-rest) - Gym booking system  
-13. [goldenboards](#goldenboards) - Golden Boards application  
-14. [stravakeeper](#stravakeeper) - Strava data keeper  
-15. [transmission-wg](#transmission-wg) - WireGuard-based torrent (stopped)  
-16. [stravabot-rs](#stravabot-rs) - Strava bot in Rust  
-17. [immich](#immich) - Photo management (Portainer-managed)  
-18. [icloudpd](#icloudpd) - iCloud photo downloader  
-19. [homepage](#homepage) - Application dashboard (Portainer-managed)  
-20. [uptime-kuma](#uptime-kuma) - Uptime/status monitoring
+8. [huggin](#huggin) - Task automation  
+9. [nuraspace2](#nuraspace2) - NuraSpace application  
+10. [pdf](#pdf) - Stirling PDF document processor  
+11. [gymmaster-rest](#gymmaster-rest) - Gym booking system  
+12. [goldenboards](#goldenboards) - Golden Boards application  
+13. [stravakeeper](#stravakeeper) - Strava data keeper  
+14. [transmission-wg](#transmission-wg) - WireGuard-based torrent (stopped)  
+15. [stravabot-rs](#stravabot-rs) - Strava bot in Rust  
+16. [immich](#immich) - Photo management (Portainer-managed)  
+17. [icloudpd](#icloudpd) - iCloud photo downloader  
+18. [homepage](#homepage) - Application dashboard (Portainer-managed)  
+19. [uptime-kuma](#uptime-kuma) - Uptime/status monitoring
 
 ### Standalone Containers
 
@@ -162,17 +161,17 @@ networks:
 **Stack ID:** 7  
 **Project Path:** `/data/compose/7`  
 **Compose Version:** v4  
-**Last Updated:** 2026-05-10  
+**Last Updated:** 2026-06-03  
 **Created:** 2021-10-04
 
 **Containers:**
 
 | Container    | Image                                      | Status     |
 | ------------ | ------------------------------------------ | ---------- |
-| radarr       | linuxserver/radarr:5.22.4                  | Up 2 weeks |
-| sonarr       | linuxserver/sonarr:4.0.16                  | Up 2 weeks |
-| jackett      | linuxserver/jackett:0.24.338               | Up 4 min   |
-| flaresolverr | ghcr.io/flaresolverr/flaresolverr:latest   | Up 20 min  |
+| radarr       | linuxserver/radarr:6.1.1                   | Up 1 min   |
+| sonarr       | linuxserver/sonarr:4.0.17                  | Up 2 weeks |
+| jackett      | linuxserver/jackett:0.24.1985              | Up 2 weeks |
+| flaresolverr | ghcr.io/flaresolverr/flaresolverr:latest   | Up 2 weeks |
 
 **Docker Compose:**
 
@@ -192,7 +191,7 @@ services:
       - /srv/movies:/movies
     environment:
       - TZ=Australia/Sydney
-    image: linuxserver/radarr:5.22.4
+    image: linuxserver/radarr:6.1.1
 
   sonarr:
     container_name: sonarr
@@ -207,7 +206,7 @@ services:
       - /srv/tv:/tv
     environment:
       - TZ=Australia/Sydney
-    image: linuxserver/sonarr:4.0.16
+    image: linuxserver/sonarr:4.0.17
 
   jackett:
     container_name: jackett
@@ -220,7 +219,7 @@ services:
       - jackett-config:/config
     environment:
       - TZ=Australia/Sydney
-    image: linuxserver/jackett:0.24.338
+    image: linuxserver/jackett:0.24.1985
 
   flaresolverr:
     container_name: flaresolverr
@@ -273,9 +272,9 @@ networks:
 
 **Containers:**
 
-| Container | Image                                    | Status               |
-| --------- | ---------------------------------------- | -------------------- |
-| plex      | plexinc/pms-docker:1.41.6.9685-d301f511a | Up 2 weeks (healthy) |
+| Container | Image                                     | Status               |
+| --------- | ----------------------------------------- | -------------------- |
+| plex      | plexinc/pms-docker:1.43.2.10687-563d026ea | Up 2 weeks (healthy) |
 
 **Docker Compose:**
 
@@ -284,7 +283,7 @@ version: '2'
 services:
   plex:
     container_name: plex
-    image: plexinc/pms-docker:1.41.6.9685-d301f511a
+    image: plexinc/pms-docker:1.43.2.10687-563d026ea
     restart: unless-stopped
     ports:
       - 32400:32400/tcp
@@ -480,12 +479,12 @@ services:
 
 ### stevegore-au
 
-**Status:** Running  
+**Status:** Stopped (migrated to OKE 2026-06-03)  
 **Stack ID:** 29  
 **Project Path:** `/data/compose/29`  
 **Compose Version:** v2  
 **Public:** Yes (Portainer resource control set to public)  
-**Last Updated:** 2026-05-25  
+**Last Updated:** 2026-06-03  
 **Created:** 2023-07-06
 
 **Containers:**
@@ -570,7 +569,7 @@ volumes:
 
 | Container               | Image                        | Status     |
 | ----------------------- | ---------------------------- | ---------- |
-| photoprism-photoprism-1 | photoprism/photoprism:260305 | Up 2 weeks |
+| photoprism-photoprism-1 | photoprism/photoprism:260601 | Up 1 min   |
 | photoprism-mariadb-1    | mariadb:10.11                | Up 2 weeks |
 | photoprism-chadburn-1   | premoweb/chadburn:latest     | Up 2 weeks |
 
@@ -589,7 +588,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
 
   photoprism:
-    image: photoprism/photoprism:260305
+    image: photoprism/photoprism:260601
     restart: unless-stopped
     stop_grace_period: 10s
     depends_on:
@@ -682,53 +681,6 @@ PHOTOPRISM_INIT=ffmpeg
 **Scheduler:** Chadburn runs `photoprism index --cleanup` daily at 2:00 AM  
 **Features:** Face detection, ML classification, WebDAV, FFmpeg, gzip compression, JPEG quality 85  
 **Admin:** User `steve`, password auth mode
-
----
-
-### gitea
-
-**Status:** Stopped  
-**Stack ID:** 34  
-**Project Path:** `/data/compose/34`  
-**Compose Version:** v1  
-**Created:** 2023-08-21
-
-**Services:**  
-
-- `server` - gitea/gitea:1.20.2
-
-**Docker Compose:**
-
-```yaml
-version: "3"
-networks:
-  gitea:
-    external: false
-
-services:
-  server:
-    image: gitea/gitea:1.20.2
-    container_name: gitea
-    environment:
-      - USER_UID=1000
-      - USER_GID=1000
-    restart: always
-    networks:
-      - gitea
-    volumes:
-      - gitea:/data
-      - /etc/timezone:/etc/timezone:ro
-      - /etc/localtime:/etc/localtime:ro
-    ports:
-      - "3030:3000"
-      - "222:22"
-
-volumes:
-  gitea:
-```
-
-**Purpose:** Gitea - lightweight Git service with web UI (decommissioned)  
-**Ports:** 3030 -> 3000 (web), 222 -> 22 (SSH)
 
 ---
 
@@ -825,6 +777,13 @@ volumes:
 - `mysqladmin` - phpMyAdmin for database administration  
 **Database:** MySQL 5.7, database name `huginn`  
 **Volumes:** `huggin_mysqldata`
+
+**Agents:**
+
+| Agent ID | Name | Type | Schedule | Notes |
+| --- | --- | --- | --- | --- |
+| 8 | Nike Running Shoe Sales | WebsiteAgent | 8am | Scrapes `www.nike.com/au/w/mens-sale-road-running-shoes-…` via CSS selectors. Switched from `api.nike.com/cic/browse/v2` (deprecated 2024) to HTML mode after Nike moved to Kasada-protected GraphQL. Extracts: `div.product-card__title`, `div[data-testid="product-price-reduced"]`, `div[data-testid="product-price"]`, `a[data-testid="product-card__img-link-overlay"]`. |
+| 10 | Send shoes | PushoverAgent | — | Receives events from agent 8, sends Pushover notification with shoe name, sale price, and link. |
 
 ---
 
@@ -1214,7 +1173,7 @@ services:
 
 **Purpose:** Photo management app (Immich) serving the same originals as PhotoPrism  
 **Ports:** 2283 (HTTP)  
-**Domain:** `immich.stevegore.au` (via Caddy → 10.20.30.1:2283)  
+**Domain:** `photos.stevegore.au` (primary), `immich.stevegore.au` (alias) — via Caddy → 10.20.30.1:2283  
 **Storage:**
 
 | Host Path                   | Container Path             | Notes                               |
@@ -1443,33 +1402,46 @@ docker start uptime-kuma
 
 ---
 
-### Bitwarden (Vaultwarden)
+### Bitwarden (Vaultwarden) — warm standby
 
 **Container:** bitwarden  
-**Image:** vaultwarden/server:1.35.7-alpine  
-**Status:** Running (Up 2 weeks, healthy)  
+**Image:** vaultwarden/server:1.36.0-alpine  
+**Status:** Running (warm standby — primary is OKE `vaultwarden` namespace)  
 **Network:** bridge  
 **Ports:** 8081 -> 80 (web UI), 3012 -> 3012 (WebSocket notifications)  
 **Command:** `/start.sh`  
 **Restart Policy:** always  
 **Healthcheck:** `/healthcheck.sh` (interval 60s, timeout 10s)  
 **Mounts:** `/usr/share/bitwarden` bind -> `/data`  
-**Domain:** <https://bw.stevegore.io>  
-**Environment:**
+**Domain:** <https://bw2.stevegore.au> (Cloudflare Tunnel; standby only — primary is `bw.stevegore.au` on OKE)
 
-```text
-ADMIN_TOKEN=x3lS42JV7pymWtPk14z+plBbbsIH74PL8GVYDT7s7Uxg1hOJU8aFAgki1R9SpzFJ
-DOMAIN=<https://bw.stevegore.io>
-ROCKET_ADDRESS=0.0.0.0
-ROCKET_ENV=staging
-ROCKET_PORT=80
-ROCKET_PROFILE=release
-ROCKET_WORKERS=10
-SIGNUPS_ALLOWED=false
-WEBSOCKET_ENABLED=true
+**Sync:** Hourly systemd timer (`vw-mysql-to-sqlite.timer`) pulls MySQL HeatWave → `/usr/share/bitwarden/db.sqlite3`. Script source: `~/code/infra/scripts/vw-mysql-to-sqlite.sh` (Python/pymysql). Installed at `/usr/local/bin/vw-mysql-to-sqlite.sh`. MySQL reachable at `10.0.1.51:3306` via Tailscale (oke-connector advertises `10.0.1.0/24`). Password in `~/.vw-mysql-sync.pass`.
+
+**To install or reinstall the timer:**
+```bash
+# Copy script
+sudo cp ~/code/infra/scripts/vw-mysql-to-sqlite.sh /usr/local/bin/vw-mysql-to-sqlite.sh
+sudo chmod +x /usr/local/bin/vw-mysql-to-sqlite.sh
+
+# Copy and enable systemd units (service + timer files live in ~/code/infra/scripts/)
+sudo cp ~/code/infra/scripts/vw-mysql-to-sqlite.service /etc/systemd/system/
+sudo cp ~/code/infra/scripts/vw-mysql-to-sqlite.timer /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now vw-mysql-to-sqlite.timer
+
+# Run a one-shot sync and check logs
+sudo systemctl start vw-mysql-to-sqlite.service
+journalctl -u vw-mysql-to-sqlite.service -n 20 --no-pager
 ```
 
-**Purpose:** Password manager (Vaultwarden - lightweight Bitwarden-compatible server). Signups are disabled; WebSocket notifications enabled for live sync.
+**Run sync manually (no sudo, from any user):**
+```bash
+bash ~/code/infra/scripts/vw-mysql-to-sqlite.sh
+```
+
+**Known issue — Diesel migration record gap (fixed 2026-05-26):** After a sync, Vaultwarden 1.36.0 may crash with `no such column: "key"` on startup. This happens because the MySQL source DB was missing migration record `20210315163412` (`rename_send_key`) — the `sends.key` column was already renamed to `akey` historically but the migration table entry was absent, so Diesel tried to re-run it and panicked. Fixed by inserting the record into both MySQL and the SQLite replica. If this recurs after a future Vaultwarden upgrade, check `__diesel_schema_migrations` for gaps against the container's expected migration list.
+
+**Purpose:** Failover replica for `bw.stevegore.au`. Completely independent ingress path (Cloudflare Tunnel → pico-local sqlite) — survives any OKE or OCI NLB failure. Clients re-auth on failover (separate RSA keys).
 
 ---
 
@@ -1576,7 +1548,6 @@ WEBSOCKET_ENABLED=true
 | 3005  | Plex Companion        | plex                              | TCP      |
 | 3011  | phpMyAdmin (Huginn)   | huggin-mysqladmin-1               | TCP      |
 | 3012  | Vaultwarden WebSocket | bitwarden                         | TCP      |
-| 3030  | Gitea (stopped)       | gitea                             | TCP      |
 | 4357  | HA Observer           | hassio_observer                   | TCP      |
 | 7878  | Radarr                | radarr                            | TCP      |
 | 3001  | Uptime Kuma           | uptime-kuma                       | TCP      |
@@ -1698,8 +1669,8 @@ This Portainer instance manages a comprehensive home infrastructure on pico:
 
 ### Security & Access
 
-- **Vaultwarden** - Password manager (healthy)  
-- **Vault** - HashiCorp secrets management (moved to MicroK8s on ampere-ubuntu)  
+- **Vaultwarden** - Warm standby at `bw2.stevegore.au`; primary is OKE (`bw.stevegore.au`). Hourly sync from MySQL HeatWave via `vw-mysql-to-sqlite.timer`.
+- **Vault** - HashiCorp secrets management (moved to OKE)  
 - **Homepage** - Application dashboard at `homepage.stevegore.au` (port 8080, GitHub OAuth)
 
 ### Automation & Utilities
@@ -1714,6 +1685,6 @@ This Portainer instance manages a comprehensive home infrastructure on pico:
 - **StravaBot-rs** - Strava automation (Rust)  
 - **NuraSpace** - Custom application (Python)  
 - **GoldenBoards** - Custom application (Go, no ports)  
-- **ttyd** - Web terminal access (auto-restarts every 30 min, tmpfs storage)
+- **ttyd** - Web terminal access — migrated to OKE (`apps/ttyd`); pico stack stopped 2026-06-03
 
-**Last Updated:** 2026-05-17
+**Last Updated:** 2026-06-03

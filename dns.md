@@ -52,7 +52,7 @@ Internet
     │
     ├─── *.stevegore.au ──────────► 159.13.44.68 (OCI NLB, reserved IP)
     │                                    │
-    │                                    └─► Caddy (OKE Deployment, 2 replicas)
+    │                                    └─► Caddy (OKE Deployment, 2 replicas, anti-affinity)
     │                                            │
     │                                            ├─► In-cluster services (ClusterIP)
     │                                            │       ├─► argocd-server.argocd:80
@@ -61,7 +61,7 @@ Internet
     │                                            │       ├─► homepage.homepage:3000
     │                                            │       ├─► uptime-kuma.uptime-kuma:3001
     │                                            │       ├─► headlamp.headlamp:80
-    │                                            │       └─► openclaw.openclaw:18789
+    │                                            │       └─► hermes.hermes:9119
     │                                            │
     │                                            └─► pico (via Tailscale Egress Service)
     │                                                    │  (Tailscale operator proxy pod
@@ -77,7 +77,25 @@ Internet
                                                    └─► pico (direct)
 ```
 
-**ACME certificates:** DNS-01 challenge via Cloudflare (token in Vault at `kv/caddy/config → cf_api_token`). Cert state shared across Caddy replicas via OCI Object Storage (`caddy-acme` bucket, S3-compat endpoint). Let's Encrypt only; ZeroSSL fallback disabled.
+**ACME certificates:** DNS-01 challenge via Cloudflare (token in Vault at `kv/caddy/config → cf_api_token`). Cert state stored in OCI Object Storage (`caddy-acme` bucket, S3-compat endpoint) so both replicas share certs without racing Let's Encrypt rate limits. Let's Encrypt only; ZeroSSL fallback disabled.
+
+**Authentication — Authentik forward-auth (replaced caddy-security 2026-06-02):**
+Caddy runs **2 replicas** (anti-affinity across the two fault domains). Auth is
+handled by **Authentik** (`apps/authentik`, namespace `authentik`), not Caddy:
+- `auth.stevegore.au` reverse-proxies the Authentik server (the IdP + embedded
+  forward-auth outpost). Login federates to **GitHub** (OAuth App), restricted to
+  Steve's GitHub identity by an expression policy on the `stevegore` application.
+- Gated vhosts (`homepage`, `headlamp`, `desk`, `gym`, `hermes`) use Caddy's
+  built-in `forward_auth` to the embedded outpost (`/outpost.goauthentik.io/`),
+  defined by the `(authentik)` snippet in `apps/caddy`'s Caddyfile.
+- Caddy is now **stateless** w.r.t. auth (Authentik holds all session/OAuth
+  state in Postgres), so 2 replicas is safe — the old caddy-security per-pod
+  OAuth-state constraint that forced a single replica is gone.
+
+**NLB backend policy:** still `THREE_TUPLE` (src IP / dst IP / proto) on the caddy
+Service. It was originally added to pin OAuth flows to one caddy pod; now that
+auth is stateless that pinning is no longer required, but it's harmless and left
+in place.
 
 ---
 
@@ -181,32 +199,35 @@ All services proxied through Caddy on OKE (NLB → 159.13.44.68).
 
 | Domain                   | Backend (ClusterIP)                       | Auth     | Notes                            |
 | ------------------------ | ----------------------------------------- | -------- | -------------------------------- |
-| auth.stevegore.au        | —                                         | —        | GitHub OAuth portal (caddy-security) |
+| auth.stevegore.au        | authentik-server.authentik:80             | —        | Authentik IdP (GitHub-federated) + forward-auth outpost |
 | healthz.stevegore.au     | —                                         | —        | Caddy `respond "OK"`             |
 | argocd.stevegore.au      | argocd-server.argocd:80 (HTTP, insecure)  | ArgoCD   | ArgoCD in `--insecure` mode      |
 | grpc.argocd.stevegore.au | argocd-server.argocd:80 (h2c)             | ArgoCD   | ArgoCD gRPC                      |
 | vault.stevegore.au       | vault.vault:8200                          | Vault UI | Vault handles own auth           |
 | bw.stevegore.au          | vaultwarden.vaultwarden:80 / :3012        | —        | Vaultwarden + WebSocket hub      |
-| homepage.stevegore.au    | homepage.homepage:3000                    | adminonly| Homepage dashboard               |
+| homepage.stevegore.au    | homepage.homepage:3000                    | Authentik| Homepage dashboard               |
 | uptime.stevegore.au      | uptime-kuma.uptime-kuma:3001             | Uptime Kuma | Full UI + status page         |
-| headlamp.stevegore.au    | headlamp.headlamp:80                      | adminonly| Kubernetes web dashboard         |
-| openclaw.stevegore.au    | openclaw.openclaw:18789                   | —        |                                  |
-| oke-test.stevegore.au    | —                                         | —        | Smoke-test stub — remove post-migration |
+| status.stevegore.au      | uptime-kuma.uptime-kuma:3001             | —        | Custom-domain alias for the `homelab` status page (cname row managed by `scripts/setup_status_page.py`) |
+| headlamp.stevegore.au    | headlamp.headlamp:80                      | Authentik| Kubernetes web dashboard         |
+| hermes.stevegore.au      | hermes.hermes:9119                        | Authentik|                                  |
+| stevegore.au         | ttyd.ttyd:8788                            | —        | ttyd web terminal (migrated from pico 2026-06-03) |
 
 **Via Tailscale Egress Service to pico (`pico` ExternalName svc in caddy namespace):**
 
 | Domain              | pico Port | Auth     | Service                        |
 | ------------------- | --------- | -------- | ------------------------------ |
-| stevegore.au        | 8788      | —        | ttyd web terminal              |
 | hass.stevegore.au   | 8123      | —        | Home Assistant                 |
-| desk.stevegore.au   | 8111      | adminonly| NuraSpace remote desktop       |
-| gym.stevegore.au    | 8112      | adminonly| GymMaster                      |
+| desk.stevegore.au   | 8111      | Authentik| NuraSpace remote desktop       |
+| gym.stevegore.au    | 8112      | Authentik| GymMaster                      |
 | plex.stevegore.au   | 32400     | —        | Plex Media Server              |
-| immich.stevegore.au | 2283      | —        | Immich photo library           |
+| photos.stevegore.au        | 2283      | —        | Immich photo library (primary) |
+| immich.stevegore.au        | 2283      | —        | Immich (alias)                 |
+| photoprism.stevegore.au    | 2342      | —        | PhotoPrism                     |
 | port.stevegore.au   | 9000      | —        | Portainer                      |
-| huggin.stevegore.au | 3000      | —        | Huginn                         |
+| huginn.stevegore.au | 3000      | —        | Huginn                         |
 | pdf.stevegore.au    | 8083      | —        | Stirling PDF                   |
 | strava.stevegore.au | 8180      | —        | Stravakeeper                   |
+| stats.stevegore.au  | 8001      | —        | Stats server — public JSON + HTML dashboard (`scripts/STATS_SERVER.md`) |
 
 **Direct access (not via Caddy):**
 

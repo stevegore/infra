@@ -1,0 +1,5 @@
+apiVersion: v2
+name: oci-fss
+description: OCI File Storage StorageClass — RWX volumes backed by the homelab Mount Target (terraform/fss.tf)
+type: application
+version: 1.0.0

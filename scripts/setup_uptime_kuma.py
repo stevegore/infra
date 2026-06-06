@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Reconcile Uptime Kuma monitors and tags into the live SQLite DB."""
+"""Reconcile Uptime Kuma monitors and tags into the live SQLite DB.
+
+Mirrors the live setup on https://uptime.stevegore.au (OKE deployment). Old
+DNS-style names (e.g. `auth.stevegore.au`) are kept as aliases so the
+reconcile renames in place instead of creating duplicates.
+"""
 import sqlite3
 
 DB_PATH = "/app/data/kuma.db"  # path inside container
@@ -42,47 +47,51 @@ OPTIONAL_DEFAULTS = {
 
 retired_monitor_names = {
     "Ping ampere-ubuntu (WG)",
-    "photos.stevegore.au",
-    "PhotoPrism (local)",
 }
 
 monitors = [
+    # hosts
     {"name": "Ping pico", "type": "ping", "kwargs": {"hostname": "pico"}, "tags": ["infra"], "aliases": ["Ping pico.local"]},
     {"name": "TCP pico SSH", "type": "port", "kwargs": {"hostname": "pico", "port": 22}, "tags": ["infra"]},
 
-    {"name": "stevegore.au (ttyd)", "type": "http", "kwargs": {"url": "https://stevegore.au/", "maxredirects": 10, "accepted_statuscodes_json": ACCEPT_OK}, "tags": ["public"]},
-    {"name": "auth.stevegore.au", "type": "http", "kwargs": {"url": "https://auth.stevegore.au/", "maxredirects": 10, "accepted_statuscodes_json": ACCEPT_OK}, "tags": ["public", "infra"]},
-    {"name": "hass.stevegore.au", "type": "http", "kwargs": {"url": "https://hass.stevegore.au/", "maxredirects": 5, "accepted_statuscodes_json": ACCEPT_OK_REDIR}, "tags": ["public"]},
-    {"name": "hass2.stevegore.au", "type": "http", "kwargs": {"url": "https://hass2.stevegore.au/", "maxredirects": 5, "accepted_statuscodes_json": ACCEPT_OK_REDIR}, "tags": ["public"]},
-    {"name": "immich.stevegore.au", "type": "http", "kwargs": {"url": "https://immich.stevegore.au/api/server/ping", "maxredirects": 0, "keyword": "pong", "accepted_statuscodes_json": ACCEPT_OK}, "tags": ["public", "photos"]},
-    {"name": "plex.stevegore.au", "type": "http", "kwargs": {"url": "https://plex.stevegore.au/identity", "maxredirects": 0, "accepted_statuscodes_json": ACCEPT_OK}, "tags": ["public", "media"]},
-    {"name": "huggin.stevegore.au", "type": "http", "kwargs": {"url": "https://huggin.stevegore.au/", "maxredirects": 5, "accepted_statuscodes_json": ACCEPT_OK}, "tags": ["public"]},
-    {"name": "port.stevegore.au", "type": "http", "kwargs": {"url": "https://port.stevegore.au/", "maxredirects": 5, "accepted_statuscodes_json": ACCEPT_OK}, "tags": ["public", "infra"]},
-    {"name": "strava.stevegore.au", "type": "http", "kwargs": {"url": "https://strava.stevegore.au/", "maxredirects": 5, "accepted_statuscodes_json": ACCEPT_OK_REDIR}, "tags": ["public"]},
-    {"name": "bw.stevegore.au", "type": "http", "kwargs": {"url": "https://bw.stevegore.au/alive", "maxredirects": 0, "accepted_statuscodes_json": ACCEPT_OK}, "tags": ["public"]},
-    {"name": "bw2.stevegore.au", "type": "http", "kwargs": {"url": "https://bw2.stevegore.au/alive", "maxredirects": 0, "accepted_statuscodes_json": ACCEPT_OK}, "tags": ["public"]},
-    {"name": "pdf.stevegore.au", "type": "http", "kwargs": {"url": "https://pdf.stevegore.au/", "maxredirects": 0, "accepted_statuscodes_json": ACCEPT_OK}, "tags": ["public"]},
-    {"name": "vault.stevegore.au", "type": "http", "kwargs": {"url": "https://vault.stevegore.au/v1/sys/health", "maxredirects": 0, "accepted_statuscodes_json": ACCEPT_VAULT}, "tags": ["public", "infra"]},
-    {"name": "argocd.stevegore.au", "type": "http", "kwargs": {"url": "https://argocd.stevegore.au/", "maxredirects": 5, "accepted_statuscodes_json": ACCEPT_OK}, "tags": ["public", "infra"]},
-    {"name": "homepage.stevegore.au", "type": "http", "kwargs": {"url": "https://homepage.stevegore.au/", "maxredirects": 0, "accepted_statuscodes_json": ACCEPT_302}, "tags": ["public"]},
-    {"name": "desk.stevegore.au", "type": "http", "kwargs": {"url": "https://desk.stevegore.au/", "maxredirects": 0, "accepted_statuscodes_json": ACCEPT_302}, "tags": ["public"]},
-    {"name": "gym.stevegore.au", "type": "http", "kwargs": {"url": "https://gym.stevegore.au/", "maxredirects": 0, "accepted_statuscodes_json": ACCEPT_302}, "tags": ["public"]},
-    {"name": "openclaw.stevegore.au", "type": "http", "kwargs": {"url": "https://openclaw.stevegore.au/", "maxredirects": 5, "accepted_statuscodes_json": ACCEPT_OK}, "tags": ["public"]},
-    {"name": "uptime.stevegore.au", "type": "http", "kwargs": {"url": "https://uptime.stevegore.au/", "maxredirects": 5, "accepted_statuscodes_json": ACCEPT_OK}, "tags": ["public", "infra"]},
+    # public services (Caddy on OKE)
+    {"name": "stevegore.au", "type": "http", "kwargs": {"url": "https://stevegore.au/", "maxredirects": 10, "accepted_statuscodes_json": ACCEPT_OK}, "tags": ["public"], "aliases": ["stevegore.au (ttyd)"]},
+    {"name": "Auth Service", "type": "http", "kwargs": {"url": "https://auth.stevegore.au/", "maxredirects": 10, "accepted_statuscodes_json": ACCEPT_OK}, "tags": ["public", "infra"], "aliases": ["auth.stevegore.au"]},
+    {"name": "Home Assistant", "type": "http", "kwargs": {"url": "https://hass.stevegore.au/", "maxredirects": 5, "accepted_statuscodes_json": ACCEPT_OK_REDIR}, "tags": ["public"], "aliases": ["hass.stevegore.au"]},
+    {"name": "Home Assistant (CF Tunnel)", "type": "http", "kwargs": {"url": "https://hass2.stevegore.au/", "maxredirects": 5, "accepted_statuscodes_json": ACCEPT_OK_REDIR}, "tags": ["public"], "aliases": ["hass2.stevegore.au"]},
+    {"name": "Immich", "type": "http", "kwargs": {"url": "https://photos.stevegore.au/api/server/ping", "maxredirects": 0, "keyword": "pong", "accepted_statuscodes_json": ACCEPT_OK}, "tags": ["public", "photos"], "aliases": ["photos.stevegore.au", "immich.stevegore.au"]},
+    {"name": "PhotoPrism", "type": "http", "kwargs": {"url": "https://photoprism.stevegore.au/api/v1/status", "maxredirects": 0, "accepted_statuscodes_json": ACCEPT_OK}, "tags": ["public", "photos"], "aliases": ["photoprism.stevegore.au"]},
+    {"name": "Plex", "type": "http", "kwargs": {"url": "https://plex.stevegore.au/identity", "maxredirects": 0, "accepted_statuscodes_json": ACCEPT_OK}, "tags": ["public", "media"], "aliases": ["plex.stevegore.au"]},
+    {"name": "Huginn", "type": "http", "kwargs": {"url": "https://huginn.stevegore.au/", "maxredirects": 5, "accepted_statuscodes_json": ACCEPT_OK}, "tags": ["public"], "aliases": ["huginn.stevegore.au"]},
+    {"name": "Portainer", "type": "http", "kwargs": {"url": "https://port.stevegore.au/", "maxredirects": 5, "accepted_statuscodes_json": ACCEPT_OK}, "tags": ["public", "infra"], "aliases": ["port.stevegore.au"]},
+    {"name": "Strava Service", "type": "http", "kwargs": {"url": "https://strava.stevegore.au/", "maxredirects": 5, "accepted_statuscodes_json": ACCEPT_OK_REDIR}, "tags": ["public"], "aliases": ["strava.stevegore.au"]},
+    {"name": "Vaultwarden", "type": "http", "kwargs": {"url": "https://bw.stevegore.au/alive", "maxredirects": 0, "accepted_statuscodes_json": ACCEPT_OK}, "tags": ["public"], "aliases": ["bw.stevegore.au"]},
+    {"name": "Vaultwarden Replica", "type": "http", "kwargs": {"url": "https://bw2.stevegore.au/alive", "maxredirects": 0, "accepted_statuscodes_json": ACCEPT_OK}, "tags": ["public"], "aliases": ["bw2.stevegore.au"]},
+    {"name": "Stirling PDF", "type": "http", "kwargs": {"url": "https://pdf.stevegore.au/", "maxredirects": 0, "accepted_statuscodes_json": ACCEPT_OK}, "tags": ["public"], "aliases": ["pdf.stevegore.au"]},
+    {"name": "Vault", "type": "http", "kwargs": {"url": "https://vault.stevegore.au/v1/sys/health", "maxredirects": 0, "accepted_statuscodes_json": ACCEPT_VAULT}, "tags": ["public", "infra"], "aliases": ["vault.stevegore.au"]},
+    {"name": "Argo CD", "type": "http", "kwargs": {"url": "https://argocd.stevegore.au/", "maxredirects": 5, "accepted_statuscodes_json": ACCEPT_OK}, "tags": ["public", "infra"], "aliases": ["argocd.stevegore.au"]},
+    {"name": "Homepage", "type": "http", "kwargs": {"url": "https://homepage.stevegore.au/", "maxredirects": 0, "accepted_statuscodes_json": ACCEPT_302}, "tags": ["public"], "aliases": ["homepage.stevegore.au"]},
+    {"name": "Desk Service", "type": "http", "kwargs": {"url": "https://desk.stevegore.au/", "maxredirects": 0, "accepted_statuscodes_json": ACCEPT_302}, "tags": ["public"], "aliases": ["desk.stevegore.au"]},
+    {"name": "Gym Bookings", "type": "http", "kwargs": {"url": "https://gym.stevegore.au/", "maxredirects": 0, "accepted_statuscodes_json": ACCEPT_302}, "tags": ["public"], "aliases": ["gym.stevegore.au"]},
+    {"name": "OpenClaw", "type": "http", "kwargs": {"url": "https://openclaw.stevegore.au/", "maxredirects": 5, "accepted_statuscodes_json": ACCEPT_OK}, "tags": ["public"], "aliases": ["openclaw.stevegore.au"]},
+    {"name": "Uptime Kuma", "type": "http", "kwargs": {"url": "https://uptime.stevegore.au/", "maxredirects": 5, "accepted_statuscodes_json": ACCEPT_OK}, "tags": ["public", "infra"], "aliases": ["uptime.stevegore.au"]},
+    {"name": "Stats", "type": "http", "kwargs": {"url": "https://stats.stevegore.au/api/stats", "maxredirects": 0, "accepted_statuscodes_json": ACCEPT_OK}, "tags": ["public", "infra"], "aliases": ["stats.stevegore.au"]},
 
+    # pico-direct services (Tailscale Operator egress)
     {"name": "Radarr", "type": "http", "kwargs": {"url": "http://pico:7878/", "maxredirects": 5, "accepted_statuscodes_json": ACCEPT_OK}, "tags": ["internal", "media"]},
     {"name": "Sonarr", "type": "http", "kwargs": {"url": "http://pico:8989/", "maxredirects": 5, "accepted_statuscodes_json": ACCEPT_OK}, "tags": ["internal", "media"]},
     {"name": "Jackett", "type": "http", "kwargs": {"url": "http://pico:9117/UI/Dashboard", "maxredirects": 0, "accepted_statuscodes_json": ACCEPT_302}, "tags": ["internal", "media"]},
     {"name": "Transmission", "type": "http", "kwargs": {"url": "http://pico:9092/transmission/web/", "maxredirects": 5, "accepted_statuscodes_json": ACCEPT_OK_REDIR}, "tags": ["internal", "media"]},
     {"name": "FlareSolverr", "type": "http", "kwargs": {"url": "http://pico:8191/", "maxredirects": 0, "accepted_statuscodes_json": ACCEPT_OK}, "tags": ["internal", "media"]},
     {"name": "Duplicati", "type": "http", "kwargs": {"url": "http://pico:8200/", "maxredirects": 0, "accepted_statuscodes_json": ACCEPT_OK_REDIR}, "tags": ["internal", "infra"]},
-    {"name": "Stirling PDF", "type": "http", "kwargs": {"url": "http://pico:8083/", "maxredirects": 5, "accepted_statuscodes_json": ACCEPT_OK}, "tags": ["internal"]},
+    {"name": "Stirling PDF (direct)", "type": "http", "kwargs": {"url": "http://pico:8083/", "maxredirects": 5, "accepted_statuscodes_json": ACCEPT_OK}, "tags": ["internal"]},
     {"name": "StravaBot", "type": "port", "kwargs": {"hostname": "pico", "port": 8082}, "tags": ["internal"]},
     {"name": "StravaKeeper", "type": "http", "kwargs": {"url": "http://pico:8180/", "maxredirects": 0, "accepted_statuscodes_json": ACCEPT_OK_REDIR}, "tags": ["internal"]},
     {"name": "Immich (direct)", "type": "http", "kwargs": {"url": "http://pico:2283/api/server/ping", "maxredirects": 0, "keyword": "pong", "accepted_statuscodes_json": ACCEPT_OK}, "tags": ["internal", "photos"], "aliases": ["Immich (local)"]},
+    {"name": "PhotoPrism (local)", "type": "http", "kwargs": {"url": "http://pico.local:2342/api/v1/status", "maxredirects": 0, "accepted_statuscodes_json": ACCEPT_OK}, "tags": ["internal", "photos"]},
     {"name": "Huginn (direct)", "type": "http", "kwargs": {"url": "http://pico:3000/", "maxredirects": 5, "accepted_statuscodes_json": ACCEPT_OK}, "tags": ["internal"], "aliases": ["Huginn (local)"]},
     {"name": "Homepage (direct)", "type": "http", "kwargs": {"url": "http://pico:8080/", "maxredirects": 0, "accepted_statuscodes_json": ACCEPT_OK}, "tags": ["internal", "infra"], "aliases": ["Homepage (local)"]},
-    {"name": "GymBooking", "type": "http", "kwargs": {"url": "http://pico:8112/", "maxredirects": 5, "accepted_statuscodes_json": ACCEPT_OK_REDIR}, "tags": ["internal"]},
+    {"name": "Gym Bookings (direct)", "type": "http", "kwargs": {"url": "http://pico:8112/", "maxredirects": 5, "accepted_statuscodes_json": ACCEPT_OK_REDIR}, "tags": ["internal"], "aliases": ["GymBooking"]},
     {"name": "NuraSpace", "type": "http", "kwargs": {"url": "http://pico:8111/", "maxredirects": 5, "accepted_statuscodes_json": ACCEPT_OK_REDIR}, "tags": ["internal"]},
     {"name": "Portainer (direct)", "type": "http", "kwargs": {"url": "http://pico:9000/", "maxredirects": 5, "accepted_statuscodes_json": ACCEPT_OK_REDIR}, "tags": ["internal", "infra"], "aliases": ["Portainer (local)"]},
     {"name": "phpMyAdmin", "type": "http", "kwargs": {"url": "http://pico:3011/", "maxredirects": 5, "accepted_statuscodes_json": ACCEPT_OK_REDIR}, "tags": ["internal", "infra"]},

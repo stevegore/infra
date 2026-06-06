@@ -1,0 +1,6 @@
+apiVersion: v2
+name: ttyd
+description: Public web terminal — ephemeral zsh session, restarts every 30 min
+type: application
+version: 0.1.0
+appVersion: "1.7.7"

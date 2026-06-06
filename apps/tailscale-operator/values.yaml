@@ -1,0 +1,75 @@
+# Tailscale Kubernetes Operator — manages tailnet membership for OKE.
+# Pico runs tailscaled directly and advertises 10.20.30.0/24 + 192.168.4.0/24.
+# This operator + Connector lets Caddy reach pico via those advertised routes.
+#
+# OAuth client is provisioned in Tailscale admin console with scopes:
+#   devices:core, devices:read, auth_keys (write)
+# and the tag `tag:k8s-operator` allowed on it. Credentials stored at
+# kv/tailscale/operator_oauth in Vault (keys: client_id, client_secret).
+
+tailscale-operator:
+  # The upstream chart looks for a Secret named `operator-oauth` in the
+  # operator's namespace with keys `client_id` + `client_secret`. VSO
+  # produces that secret from kv/tailscale/operator_oauth — see
+  # templates/vault-secret.yaml.
+  oauth:
+    clientId: ""      # leave empty: provided via operator-oauth Secret
+    clientSecret: ""  # leave empty: provided via operator-oauth Secret
+
+  # Image overrides + tag config nested under operatorConfig — both image
+  # and defaultTags MUST live in the same map block (YAML duplicate keys
+  # silently keep the last value, so a separate block would erase image).
+  # FQ image names are required by cri-o on OKE workers (short names are
+  # rejected as ambiguous).
+  operatorConfig:
+    image:
+      repository: docker.io/tailscale/k8s-operator
+    # Tag every device the operator spawns (connectors, ingress/egress
+    # proxies) with this tag so it can be referenced in Tailscale ACLs.
+    defaultTags:
+      - tag:k8s-operator
+
+  proxyConfig:
+    image:
+      repository: docker.io/tailscale/tailscale
+
+  apiServerProxyConfig:
+    mode: "false"  # we don't need the Tailscale-fronted kube-apiserver
+
+# Subnet router Connector — advertises k8s pod/service CIDRs onto the tailnet
+# so pico (or anything else on the tailnet) can reach in-cluster services by
+# their ClusterIP if needed. Disabled in Phase 2 — the operator alone is
+# enough for Egress Services (the pico backend reach). Flip `enabled: true`
+# + set `advertiseRoutes` to a non-empty list when we actually need it.
+# (The Connector CRD rejects empty subnetRouter.advertiseRoutes outright.)
+connector:
+  enabled: true
+  hostname: oke-connector
+  # OCI private subnet — lets pico reach MySQL HeatWave at 10.0.1.51 for the
+  # vaultwarden warm-standby sync (§7.1.1). Needs route approval in Tailscale
+  # admin console (or an autoApprovers ACL entry for tag:k8s-operator).
+  advertiseRoutes:
+    - "10.0.1.0/24"
+  # Tags applied to the connector device — must be permitted in Tailscale ACLs.
+  tags:
+    - tag:k8s-operator
+
+# Egress mapping: pico's WG-era 10.20.30.1 lives on the tailnet too (pico
+# advertises 10.20.30.0/24). The Caddyfile currently uses `10.20.30.1:<port>`
+# upstreams. For these to resolve from inside cluster pods, traffic must hit a
+# device that has --accept-routes enabled.
+#
+# Two ways to make this work, pick one — both are out of scope for this chart
+# but documented here so it's not silently ambiguous:
+#
+#   A) Run a tailscale "router" pod with --accept-routes and a CNI route
+#      pointing 10.20.30.0/24 → that pod. Most transparent; requires a small
+#      bespoke Deployment + a static route on each node.
+#
+#   B) Use the operator's egress Services (annotation
+#      `tailscale.com/tailnet-ip: 100.x.x.x`) per-backend. Cleanest, but means
+#      the Caddyfile upstream addresses change from `10.20.30.1:8123` to
+#      e.g. `pico-hass.caddy.svc.cluster.local:8123`.
+#
+# Phase 4 of the migration plan decides this; until then this chart only
+# stands up the operator + Connector. See architecture-proposal.md §5.3.

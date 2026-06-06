@@ -1,0 +1,18 @@
+apiVersion: v2
+name: authentik
+description: >-
+  Authentik Identity Provider. Wraps the upstream goauthentik chart with its
+  bundled PostgreSQL (Bitnami) and Redis disabled — Postgres lives on the shared
+  CloudNativePG cluster (pg-shared in the databases namespace) and Redis is a
+  tiny ephemeral redis:7-alpine Deployment in this namespace. Secrets come from
+  Vault via the vault-secrets-operator. GitHub-federated login plus a
+  domain-level forward-auth Proxy Provider are seeded declaratively via a
+  blueprint ConfigMap.
+type: application
+version: 1.0.0
+appVersion: "2026.5.2"
+
+dependencies:
+  - name: authentik
+    version: 2026.5.2
+    repository: https://charts.goauthentik.io

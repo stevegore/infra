@@ -8,35 +8,93 @@ Real-time resource monitoring for pico and OKE cluster, exposed at https://stats
 
 - Python 3.8+
 - systemd (already available on Ubuntu)
+- `pipx` for OCI CLI installation (already available)
+- `kubectl` binary (downloaded during initial setup)
+- OCI credentials for API access (from Vault)
 - Access to `sudo` for service installation
 
-### Setup
+### Quick Setup (on pico)
 
-1. Copy the script to a location on pico:
-   ```bash
-   # Already in ~/code/infra/scripts/stats-server.py
-   ```
+```bash
+bash ~/code/infra/scripts/setup-pico-stats.sh
+```
 
-2. Install the systemd service:
-   ```bash
-   sudo cp ~/code/infra/scripts/stats-server.service /etc/systemd/system/
-   sudo systemctl daemon-reload
-   sudo systemctl enable stats-server
-   sudo systemctl start stats-server
-   ```
+This automated script:
+- Installs systemd service
+- Starts the service
+- Verifies all endpoints
+- Tests OKE cluster access
 
-3. Verify it's running:
-   ```bash
-   sudo systemctl status stats-server
-   curl http://localhost:8000/
-   curl http://localhost:8000/api/stats
-   ```
+### Manual Setup
+
+#### 1. Install OCI CLI (one-time)
+
+```bash
+pipx install oci-cli
+# Adds ~/.local/bin to PATH in ~/.bashrc and ~/.zshrc
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc
+source ~/.bashrc
+```
+
+#### 2. Setup OCI Credentials (one-time)
+
+Copy from local machine:
+```bash
+# From your local machine
+scp ~/.oci/config steve@pico.local:~/.oci/
+scp ~/oci.pem steve@pico.local:~/
+```
+
+On pico:
+```bash
+chmod 600 ~/.oci/config ~/.oci/config.lock
+chmod 600 ~/oci.pem
+```
+
+#### 3. Generate Kubeconfig (one-time)
+
+```bash
+mkdir -p ~/.kube
+oci ce cluster create-kubeconfig \
+  --cluster-id ocid1.cluster.oc1.ap-sydney-1.aaaaaaaaok3ygaxxoaf3vlwoytcnift4yxrmr4dmd75be53iocfghlpevogq \
+  --file ~/.kube/oke-homelab.config \
+  --region ap-sydney-1 \
+  --token-version 2.0.0 \
+  --kube-endpoint PUBLIC_ENDPOINT
+```
+
+Verify:
+```bash
+export KUBECONFIG=~/.kube/oke-homelab.config
+/home/steve/kubectl get nodes
+```
+
+#### 4. Install Systemd Service (on pico)
+
+```bash
+sudo cp ~/code/infra/scripts/stats-server.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable stats-server
+sudo systemctl start stats-server
+```
+
+#### 5. Verify Installation
+
+```bash
+# Check service status
+sudo systemctl status stats-server
+
+# Test endpoints
+curl http://localhost:8001/
+curl http://localhost:8001/api/stats | jq
+```
 
 ## Accessing the Stats
 
 - **HTML Dashboard**: https://stats.stevegore.au
 - **JSON API**: `https://stats.stevegore.au/api/stats`
-- **Local (pico)**: `http://localhost:8000/`
+- **Local (pico)**: `http://localhost:8001/` or `http://pico.local:8001/`
 
 ## Metrics Provided
 
@@ -69,16 +127,39 @@ Check firewall and ensure port 8000 is accessible:
 sudo ss -tlnp | grep 8000
 ```
 
-### kubectl timeouts
-The `get_oke_stats()` function requires:
-- KUBECONFIG set to `~/.kube/oke-homelab.config`
-- Cluster API accessible from pico (via Tailscale)
+### OKE Cluster Monitoring
 
-If stats show "unreachable", check OKE cluster status:
-```bash
-export KUBECONFIG=~/.kube/oke-homelab.config
-kubectl get nodes
-```
+The stats server includes OKE cluster metrics (node status, capacity, version) when properly configured with:
+- OCI CLI (`oci-cli` package installed via pipx)
+- OCI credentials (`~/.oci/config` and `~/oci.pem`)
+- Kubeconfig (`~/.kube/oke-homelab.config` generated via `oci ce cluster create-kubeconfig`)
+- Kubectl wrapper script (`~/code/infra/scripts/kubectl-wrapper.sh`) that provides PATH for oci credential plugin
+
+All of these are set up automatically by the `setup-pico-stats.sh` script.
+
+**If OKE stats show "unavailable":**
+
+1. Verify kubeconfig exists:
+   ```bash
+   ls -la ~/.kube/oke-homelab.config
+   ```
+
+2. Test kubectl access:
+   ```bash
+   export KUBECONFIG=~/.kube/oke-homelab.config
+   /home/steve/kubectl get nodes
+   ```
+
+3. Verify oci CLI is in PATH:
+   ```bash
+   which oci
+   ~/.local/bin/oci --version
+   ```
+
+4. Check service logs:
+   ```bash
+   sudo journalctl -u stats-server -n 30
+   ```
 
 ## Updates
 
