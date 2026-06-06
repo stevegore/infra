@@ -27,7 +27,7 @@ spec:
           {{- if .Values.mysql.enabled }}
           env:
             - name: UPTIME_KUMA_DB_TYPE
-              value: mysql
+              value: mariadb
             - name: UPTIME_KUMA_DB_HOSTNAME
               valueFrom:
                 secretKeyRef:
