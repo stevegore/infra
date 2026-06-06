@@ -41,13 +41,37 @@ spec:
     {{- end }}
 {{- end }}
 
-  # Benign default database created at bootstrap. Real app databases are added
-  # via Database CRs (consumers.yaml) owned by the per-app role above, rather
-  # than sharing this bootstrap `app` database.
+  # Bootstrap: either fresh initdb or barman-source recovery.
+  # Set recovery.enabled=true temporarily to restore from the barman backup;
+  # revert to false once recovery is complete (bootstrap is immutable after
+  # cluster creation, so CNPG ignores the change — ignoreDifferences in the
+  # ApplicationSet suppresses the resulting ArgoCD OutOfSync noise).
+{{- if .Values.recovery.enabled }}
+  externalClusters:
+    - name: {{ .Values.recovery.sourceName }}
+      barmanObjectStore:
+        destinationPath: s3://{{ .Values.backup.bucket }}/{{ .Values.backup.destinationPrefix }}
+        endpointURL: {{ .Values.backup.endpointURL | quote }}
+        s3Credentials:
+          accessKeyId:
+            name: {{ .Values.vault.secretName }}
+            key: access_key
+          secretAccessKey:
+            name: {{ .Values.vault.secretName }}
+            key: secret_key
+        wal:
+          compression: {{ .Values.backup.wal.compression }}
+        data:
+          compression: {{ .Values.backup.data.compression }}
+  bootstrap:
+    recovery:
+      source: {{ .Values.recovery.sourceName }}
+{{- else }}
   bootstrap:
     initdb:
       database: app
       owner: app
+{{- end }}
 {{- if .Values.backup.enabled }}
 
   # Continuous WAL archiving + base backups to OCI Object Storage (S3-compat).

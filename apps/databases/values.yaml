@@ -89,6 +89,13 @@ vault:
 # with the role password synced by VSO from `vaultPath` (basic-auth keys
 # username/password) into the named Secret. The same password is read by the
 # app from its own Vault path for its DB connection.
+# Recovery bootstrap — set enabled: true to restore from barman backup on a
+# fresh cluster. Revert to false after recovery (CNPG ignores bootstrap changes
+# on existing clusters; ArgoCD ignoreDifferences suppresses the OutOfSync diff).
+recovery:
+  enabled: true
+  sourceName: pg-shared-backup
+
 consumers:
   - name: authentik
     passwordSecret: authentik-pg-credentials
