@@ -1073,6 +1073,11 @@ services:
     volumes:
       - /media/m2/immich/uploads:/usr/src/app/upload
       - /media/m2/photos:/mnt/media/photos:ro
+    devices:
+      - /dev/dri:/dev/dri          # iGPU passthrough for VAAPI transcoding
+    group_add:
+      - "109"                      # render (host gid, owns renderD128)
+      - "44"                       # video
     depends_on:
       - immich-redis
       - immich-database
@@ -1129,6 +1134,10 @@ services:
 | `/media/m2/photos`          | `/mnt/media/photos`        | PhotoPrism originals, **read-only** |
 
 **Note:** `/media/m2/photos` is configured as an External Library in Immich (path: `/mnt/media/photos`). PhotoPrism and Immich coexist with zero interference — all Immich data stays under `/media/m2/immich/`. Credentials (`DB_PASSWORD`/`POSTGRES_PASSWORD`) are stored in the Portainer stack config; the legacy `/home/steve/immich/stack.env` is no longer used.
+
+**Hardware transcoding (VAAPI):** The external library is large (~295k assets, ~62k videos). Video transcoding originally ran in software, pegging all 12 cores (load ~17) and exhausting swap whenever the library scan (`library.scan.cronExpression: 0 */6 * * *`) re-queued missing jobs. Fixed 2026-06-08 by passing the AMD Ryzen 5600G iGPU into `immich-server` (`devices: /dev/dri`, `group_add: 109 render / 44 video`) and setting hardware acceleration to VAAPI. The accel setting is **DB-based** (no config file): `system_metadata` key `system-config` → `ffmpeg.accel = "vaapi"`, `accelDecode = false` (HW decode left off — VCN HEVC decode can be flaky). After a direct DB edit, restart `immich-immich-server-1` to reload. Verify via server logs: `Transcoding video … with VAAPI-accelerated encoding`. Result: load ~17 → ~10, server CPU 800%+ → ~450%.
+
+**Host inotify limit:** The external-library filesystem watcher (`library.watch.enabled: true`) watches ~268k files, exceeding the default `fs.inotify.max_user_watches = 65536` and spamming `ENOSPC` (500k+ errors, server restart loop). Raised on the pico host 2026-06-08 to `524288` watches / `512` instances, persisted in `/etc/sysctl.d/99-inotify.conf`. This is a **host kernel sysctl** — it cannot live in the compose stack (`fs.inotify.*` is non-namespaced and rejected by Docker `sysctls:`).
 
 ---
 
