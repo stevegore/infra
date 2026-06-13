@@ -28,9 +28,13 @@ service:
 
 # Garmin OAuth tokens live on the PVC (refreshed in place by garminconnect).
 # The init container seeds them from the Vault-synced secret only when absent.
+# oci-fss (not oci-bv): the token file is a few KB, but OCI block volumes have a
+# 50 GB minimum that counts against the 200 GB Always-Free boot+block cap. FSS
+# bills on actual usage under the separate, unused 100 GB FSS free allotment, so
+# this PVC is $0. Pod runs as root, so the FSS non-root-write gotcha doesn't bite.
 persistence:
-  size: 50Gi
-  storageClass: oci-bv
+  size: 1Gi
+  storageClass: oci-fss
 
 # VSO config — secret at kv/garmin-mcp/config with fields:
 #   GARMIN_TOKENS_JSON — contents of garmin_tokens.json produced by
