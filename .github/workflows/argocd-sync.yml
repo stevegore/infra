@@ -5,12 +5,12 @@ name: ArgoCD Sync
 # Apps already have syncPolicy.automated (selfHeal + prune), so this only
 # accelerates them — it is not the source of truth, the repo is.
 #
-# Auth: connects to argocd.stevegore.au as the ci-github-actions API account
-# (see apps/argocd/templates/argocd-cm.yaml). Requires repo secret
-# ARGOCD_AUTH_TOKEN — generate it with:
+# Auth: calls the ArgoCD REST API at argocd.stevegore.au as the
+# ci-github-actions API account (see apps/argocd/templates/argocd-cm.yaml).
+# Requires repo secret ARGOCD_AUTH_TOKEN — generate it with:
 #   argocd login argocd.stevegore.au --sso --grpc-web
 #   argocd account generate-token --account ci-github-actions
-# --grpc-web is required because Caddy terminates TLS and proxies HTTP/1.1.
+# Uses curl + jq (preinstalled on the runner) rather than the 219 MB argocd CLI.
 
 on:
   push:
@@ -33,29 +33,23 @@ jobs:
   sync:
     runs-on: ubuntu-latest
     env:
-      ARGOCD_SERVER: argocd.stevegore.au
+      ARGOCD: https://argocd.stevegore.au
       ARGOCD_AUTH_TOKEN: ${{ secrets.ARGOCD_AUTH_TOKEN }}
-      ARGOCD_OPTS: --grpc-web
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 2 # need the previous commit to diff changed paths
 
-      - name: Install argocd CLI
-        run: |
-          set -euo pipefail
-          curl -sSL -o argocd https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-amd64
-          sudo install -m 0755 argocd /usr/local/bin/argocd
-          argocd version --client
-
       - name: Determine target apps
         id: targets
         run: |
           set -euo pipefail
+          auth="Authorization: Bearer $ARGOCD_AUTH_TOKEN"
           input='${{ github.event.inputs.app }}'
 
           if [ "$input" = "all" ]; then
-            apps=$(argocd app list -o name | sed 's#.*/##' | sort -u | tr '\n' ' ')
+            apps=$(curl -sS -f -H "$auth" "$ARGOCD/api/v1/applications" \
+              | jq -r '.items[].metadata.name' | sort -u | tr '\n' ' ')
           elif [ -n "$input" ]; then
             apps="$input"
           else
@@ -84,15 +78,46 @@ jobs:
             exit 0
           fi
 
+          auth="Authorization: Bearer $ARGOCD_AUTH_TOKEN"
           rc=0
           for app in $apps; do
             echo "::group::Sync $app"
-            if argocd app get "$app" >/dev/null 2>&1; then
-              argocd app sync "$app" --timeout 300 || rc=1
-              argocd app wait "$app" --health --timeout 300 || rc=1
-            else
+
+            # App may not exist yet (brand-new dir the ApplicationSet hasn't created).
+            if ! curl -sS -f -o /dev/null -H "$auth" "$ARGOCD/api/v1/applications/$app"; then
               echo "App '$app' not found in ArgoCD yet (new app dir?). The ApplicationSet will create it on its next git poll; skipping."
+              echo "::endgroup::"
+              continue
             fi
+
+            # Trigger a sync (prune to match the automated syncPolicy).
+            curl -sS -f -o /dev/null -H "$auth" -H 'Content-Type: application/json' \
+              -X POST "$ARGOCD/api/v1/applications/$app/sync" -d '{"prune": true}'
+
+            # Wait up to 5 min for the operation to finish + app to go Healthy.
+            ok=0
+            for _ in $(seq 1 60); do
+              json=$(curl -sS -f -H "$auth" "$ARGOCD/api/v1/applications/$app")
+              sync=$(jq -r '.status.sync.status // "Unknown"' <<<"$json")
+              health=$(jq -r '.status.health.status // "Unknown"' <<<"$json")
+              phase=$(jq -r '.status.operationState.phase // "—"' <<<"$json")
+              echo "$app: sync=$sync health=$health op=$phase"
+
+              case "$phase" in
+                Failed|Error)
+                  echo "::error::$app sync operation $phase"
+                  break
+                  ;;
+              esac
+              if [ "$sync" = "Synced" ] && [ "$health" = "Healthy" ] \
+                 && { [ "$phase" = "Succeeded" ] || [ "$phase" = "—" ]; }; then
+                ok=1
+                break
+              fi
+              sleep 5
+            done
+
+            [ "$ok" = 1 ] || { echo "::error::$app did not reach Synced/Healthy in time"; rc=1; }
             echo "::endgroup::"
           done
           exit $rc
