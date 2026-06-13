@@ -10,4 +10,10 @@ data:
   policy.default: ""
   policy.csv: |
     g, {{ .Values.adminUser }}, role:admin
+    # CI deployer: may read and sync applications, nothing else. Used by the
+    # ci-github-actions API account (defined in argocd-cm) from the
+    # argocd-sync GitHub Actions workflow.
+    p, role:ci-deployer, applications, get, */*, allow
+    p, role:ci-deployer, applications, sync, */*, allow
+    g, ci-github-actions, role:ci-deployer
   scopes: "[groups, email]"

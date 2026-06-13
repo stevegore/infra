@@ -10,6 +10,13 @@ data:
   url: {{ .Values.argocd.url | quote }}
   # Disable local admin account (use GitHub SSO only)
   admin.enabled: "false"
+  # Local API-only account for CI (the GitHub Actions argocd-sync workflow).
+  # apiKey lets it carry a generated bearer token; it has no password login.
+  # Generate the token (while logged in as an SSO admin) with:
+  #   argocd login argocd.stevegore.au --sso --grpc-web
+  #   argocd account generate-token --account ci-github-actions
+  # then store it as the ARGOCD_AUTH_TOKEN repo secret. RBAC is in argocd-rbac-cm.
+  accounts.ci-github-actions: apiKey
   # Skip TLS verification for internal Dex communication (Caddy handles external TLS)
   oidc.tls.insecure.skip.verify: "true"
   dex.config: |
