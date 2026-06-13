@@ -41,9 +41,26 @@ git commit -m "Update Caddy ConfigMap: add stats.stevegore.au route"
 git push origin main
 ```
 
-### 4. Trigger ArgoCD Sync
+### 4. Sync happens automatically
 
-On OKE cluster:
+Pushing to `main` is enough. Two mechanisms converge:
+
+- **ArgoCD auto-sync** — every app has `syncPolicy.automated` (`selfHeal` +
+  `prune`, see `argocd/applicationset.yaml`), so ArgoCD reconciles on its own
+  within ~3 min of the git poll.
+- **GitHub Actions** (`.github/workflows/argocd-sync.yml`) — on every push to
+  `main` touching `apps/**`, it triggers an **immediate** `argocd app sync` for
+  the changed apps and waits for them to go Healthy, so you don't wait for the
+  poll. It authenticates as the `ci-github-actions` API account.
+
+You normally don't need to do anything after `git push`. Watch the run under the
+repo's **Actions** tab, or:
+
+```bash
+gh run watch        # from a clone of the repo
+```
+
+**Manual fallback** (CI down, or you want to force it from a shell):
 
 ```bash
 export KUBECONFIG=~/.kube/oke-homelab.config
@@ -57,6 +74,23 @@ kubectl -n argocd patch app <app-name> --type merge \
 ```bash
 kubectl get app -n argocd
 ```
+
+#### One-time CI setup
+
+The Action needs an ArgoCD token stored as the `ARGOCD_AUTH_TOKEN` repo secret.
+The `ci-github-actions` account (`apps/argocd/templates/argocd-cm.yaml`) and its
+sync-only RBAC (`apps/argocd/templates/argocd-rbac-cm.yaml`) are already in the
+repo; once they're synced, mint and store the token:
+
+```bash
+argocd login argocd.stevegore.au --sso --grpc-web
+argocd account generate-token --account ci-github-actions \
+  | gh secret set ARGOCD_AUTH_TOKEN --repo stevegore/infra
+```
+
+`--grpc-web` is required because Caddy terminates TLS and proxies HTTP/1.1.
+Trigger any app manually with `gh workflow run argocd-sync.yml -f app=<name>`
+(or `-f app=all`).
 
 ### 5. Verify Rollout
 
