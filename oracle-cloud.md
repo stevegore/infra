@@ -73,7 +73,7 @@ This was fixed on the now-terminated ampere-ubuntu instance by manually installi
 **Total Cluster:** 4 OCPU / 24 GB RAM (within Always Free tier). ~36% memory / ~11% CPU in use — roughly **12 GB RAM free** (measured 2026-06-01 via metrics-server). The cluster is *not* memory- or CPU-constrained; an earlier note here claiming "~1.5 GB available / 87% CPU-bound / pods evicting" was inaccurate and has been corrected against live `kubectl top` data.
 
 **Workload Distribution:**
-- `argocd` (2 replicas) + `vault` (1) + `vault-secrets-operator` + `caddy` (2 replicas) + `authentik` (server+worker) + `cloudnative-pg` operator (1) + `databases`/`pg-shared` Postgres (1) + `vaultwarden` (1) + `uptime-kuma` (1) + `homepage` (1) + `metrics-server` (1) + `tailscale-operator` (1)
+- `argocd` (2 replicas) + `vault` (1) + `vault-secrets-operator` + `caddy` (2 replicas) + `authentik` (server+worker) + `cloudnative-pg` operator (1) + `databases`/`pg-shared` Postgres (1) + `vaultwarden` (1) + `uptime-kuma` (1) + `garmin-mcp` (1) + `homepage` (1) + `metrics-server` (1) + `tailscale-operator` (1)
 - Top memory consumers (actual RSS): argocd-application-controller ~317 MB, uptime-kuma ~219 MB, oke-dataplane-observability-agent ~170 MB ×2, vaultwarden ~138 MB, homepage ~106 MB. caddy ~50 MB. (hermes removed 2026-06-06)
 
 **Metrics:** metrics-server is deployed (`apps/metrics-server`, wrapper over the upstream chart, `--kubelet-insecure-tls` for OKE managed kubelets). `kubectl top nodes` / `kubectl top pods -A` work cluster-wide.
@@ -181,6 +181,39 @@ oci nlb network-load-balancer delete --network-load-balancer-id <ID> --region ap
 | Name                        | State     |
 | --------------------------- | --------- |
 | ampere-ubuntu (Boot Volume) | AVAILABLE (preserved; backup taken 2026-05-26) |
+
+### Block Storage — Always Free budget (NOT $0 today)
+
+**Always Free cap is 200 GB total for boot + block storage combined.** We are
+currently **over** it. Verified against live OCI billing 2026-06-13 (~AUD
+0.31/day on Block Storage before cleanup):
+
+| Volume | GB | Notes |
+| ------ | -- | ----- |
+| 2× OKE node boot volumes | 100 | Fixed — 50 GB minimum per node, one per node |
+| `databases/pg-shared-1` PVC (oci-bv) | 50 | Postgres data |
+| `uptime-kuma/uptime-kuma-data` PVC (oci-bv) | 50 | Over-provisioned — SQLite DB uses a few GB |
+| `garmin-mcp/garmin-mcp-data` PVC (oci-bv) | 50 | Over-provisioned — tiny actual usage |
+| **Total** | **250** | **50 GB over the 200 GB free cap → ~AUD 2–3/mo** |
+
+Every `oci-bv` PVC defaults to 50 GB. Boot (100 GB) is unavoidable, so block
+PVCs must total **≤ 100 GB** to hit true $0. To get there, recreate
+`uptime-kuma` and/or `garmin-mcp` PVCs at a smaller size (block volumes can't
+shrink in place — back up data, delete PVC, recreate smaller, restore).
+
+**Orphan check:** the BV CSI driver leaves `AVAILABLE` (detached) volumes behind
+after cluster rebuilds — these keep billing. On 2026-06-13, three orphans
+(150 GB, created 2026-05-25 + 2026-06-01) from the old cluster were deleted.
+Audit periodically:
+
+```bash
+CID=ocid1.compartment.oc1..aaaaaaaays62ka24mqjmg7ej5khoswujbqjhwwlvalkjbfm7lz5pkmqugwba
+# Any AVAILABLE (detached) volume with no matching cluster PV volumeHandle is an orphan
+oci bv volume list --compartment-id "$CID" --region ap-sydney-1 --all \
+  --query "data[?\"lifecycle-state\"=='AVAILABLE'].{name:\"display-name\",gb:\"size-in-gbs\",id:id}"
+export KUBECONFIG=~/.kube/oke-homelab.config
+kubectl get pv -o jsonpath='{range .items[*]}{.spec.csi.volumeHandle}{\"\n\"}{end}'   # cross-reference
+```
 
 ### Logging
 
