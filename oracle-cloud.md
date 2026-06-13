@@ -182,24 +182,32 @@ oci nlb network-load-balancer delete --network-load-balancer-id <ID> --region ap
 | --------------------------- | --------- |
 | ampere-ubuntu (Boot Volume) | AVAILABLE (preserved; backup taken 2026-05-26) |
 
-### Block Storage — Always Free budget (NOT $0 today)
+### Block Storage — Always Free budget ($0, exactly at the cap)
 
-**Always Free cap is 200 GB total for boot + block storage combined.** We are
-currently **over** it. Verified against live OCI billing 2026-06-13 (~AUD
-0.31/day on Block Storage before cleanup):
+**Always Free cap is 200 GB total for boot + block storage combined.** As of
+2026-06-13 we sit **exactly at 200 GB → $0**. Verified against live OCI billing
+(Block Storage was ~AUD 0.31/day before the cleanup below):
 
 | Volume | GB | Notes |
 | ------ | -- | ----- |
 | 2× OKE node boot volumes | 100 | Fixed — 50 GB minimum per node, one per node |
 | `databases/pg-shared-1` PVC (oci-bv) | 50 | Postgres data |
 | `uptime-kuma/uptime-kuma-data` PVC (oci-bv) | 50 | Over-provisioned — SQLite DB uses a few GB |
-| `garmin-mcp/garmin-mcp-data` PVC (oci-bv) | 50 | Over-provisioned — tiny actual usage |
-| **Total** | **250** | **50 GB over the 200 GB free cap → ~AUD 2–3/mo** |
+| **Total** | **200** | **At the cap → $0** |
 
-Every `oci-bv` PVC defaults to 50 GB. Boot (100 GB) is unavoidable, so block
-PVCs must total **≤ 100 GB** to hit true $0. To get there, recreate
-`uptime-kuma` and/or `garmin-mcp` PVCs at a smaller size (block volumes can't
-shrink in place — back up data, delete PVC, recreate smaller, restore).
+**Key fact: OCI block volumes have a 50 GB hard minimum** — there is no small
+`oci-bv` volume. Every `oci-bv` PVC therefore burns a full 50 GB slot regardless
+of actual data. Boot (100 GB) is unavoidable, so `oci-bv` PVCs must total ≤ 100 GB
+to stay at $0. **For small persistent data, use `oci-fss` instead** — it bills on
+actual usage under the *separate, near-empty 100 GB FSS Always-Free allotment*,
+independent of this block budget. `garmin-mcp` was migrated bv→fss on 2026-06-13
+for exactly this reason (its PVC is a few-KB token file); see `apps/garmin-mcp/values.yaml`.
+Caveat: the FSS CSI driver ignores `fsGroup`, so only root (or fsGroup-tolerant)
+workloads can write to `oci-fss` — see the FSS non-root gotcha above.
+
+We're now at the cap with no headroom. Before adding another `oci-bv` PVC, either
+put it on `oci-fss` or shrink an existing volume first (block volumes can't shrink
+in place — back up data, delete PVC, recreate smaller, restore).
 
 **Orphan check:** the BV CSI driver leaves `AVAILABLE` (detached) volumes behind
 after cluster rebuilds — these keep billing. On 2026-06-13, three orphans
