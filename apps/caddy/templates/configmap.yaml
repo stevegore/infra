@@ -195,6 +195,19 @@ data:
       reverse_proxy strava-keeper.strava-keeper.svc.cluster.local:8180
     }
 
+    # Garmin MCP server for Claude (remote connector). Gated by a secret URL
+    # path instead of forward_auth — Claude's connector UI can't do OAuth
+    # against Authentik or send custom headers. {$GARMIN_MCP_PATH_SECRET} is
+    # substituted at Caddyfile parse time from the caddy-config secret
+    # (kv/caddy/config → garmin_mcp_path_secret), so it never appears in git.
+    # Connector URL: https://garmin.stevegore.au/<secret>/mcp
+    garmin.stevegore.au {
+      handle_path /{$GARMIN_MCP_PATH_SECRET}/* {
+        reverse_proxy garmin-mcp.garmin-mcp.svc.cluster.local:8080
+      }
+      respond 404
+    }
+
     stats.stevegore.au {
       reverse_proxy pico:8001
       import defaults

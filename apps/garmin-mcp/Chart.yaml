@@ -1,0 +1,6 @@
+apiVersion: v2
+name: garmin-mcp
+description: Garmin Connect MCP server (stdio) bridged to streamable HTTP for Claude
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
