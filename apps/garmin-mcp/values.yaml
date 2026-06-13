@@ -1,0 +1,45 @@
+replicaCount: 1
+
+image:
+  repository: syd.ocir.io/sdajdczqv0qo/garmin-mcp
+  tag: "0.1.0"
+  pullPolicy: IfNotPresent
+
+# OCIR pull secret — manual bootstrap once after the namespace first syncs
+# (same pattern as caddy):
+#   kubectl -n garmin-mcp create secret docker-registry ocir-creds \
+#     --docker-server=syd.ocir.io \
+#     --docker-username='sdajdczqv0qo/oracleidentitycloudservice/steve.j.gore@gmail.com' \
+#     --docker-password="$(vault kv get -field=auth_token kv/oci/ocir)"
+imagePullSecrets:
+  - name: ocir-creds
+
+resources:
+  requests:
+    memory: 128Mi
+    cpu: 25m
+  limits:
+    memory: 512Mi
+    cpu: 250m
+
+service:
+  type: ClusterIP
+  port: 8080
+
+# Garmin OAuth tokens live on the PVC (refreshed in place by garminconnect).
+# The init container seeds them from the Vault-synced secret only when absent.
+persistence:
+  size: 50Gi
+  storageClass: oci-bv
+
+# VSO config — secret at kv/garmin-mcp/config with fields:
+#   GARMIN_TOKENS_JSON — contents of garmin_tokens.json produced by
+#                        `garmin-mcp-auth` (run locally; handles MFA).
+#                        Tokens are valid ~6 months; see README.md for renewal.
+vault:
+  enabled: true
+  mount: kv
+  path: garmin-mcp/config
+  refreshAfter: 1h
+  authRole: vault-secrets-operator
+  secretName: garmin-mcp-config

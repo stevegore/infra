@@ -212,6 +212,7 @@ All services proxied through Caddy on OKE (NLB → 159.13.44.68).
 | headlamp.stevegore.au    | headlamp.headlamp:80                      | Authentik| Kubernetes web dashboard         |
 | hermes.stevegore.au      | hermes.hermes:9119                        | Authentik|                                  |
 | adminer.stevegore.au     | adminer.adminer:80                        | Authentik| DB browser — pg-shared + MySQL HeatWave |
+| garmin.stevegore.au      | garmin-mcp.garmin-mcp:8080                | Secret URL path | Garmin MCP server for Claude connectors; gated by `handle_path /{$GARMIN_MCP_PATH_SECRET}/*` (secret in `kv/caddy/config`), 404 otherwise. See `apps/garmin-mcp/README.md` |
 | stevegore.au         | ttyd.ttyd:8788                            | —        | ttyd web terminal (migrated from pico 2026-06-03) |
 
 **Via Tailscale Egress Service to pico (`pico` ExternalName svc in caddy namespace):**

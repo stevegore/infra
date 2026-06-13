@@ -131,6 +131,7 @@ See `scripts/STATS_SERVER.md` for detailed setup and troubleshooting.
 | homepage           | Homepage dashboard              | Gated by Authentik forward-auth            |
 | hermes             | Hermes                          | Gated by Authentik forward-auth            |
 | tailscale          | Tailscale operator              | Manages Egress Service for pico reachability |
+| garmin-mcp         | Garmin MCP server               | Garmin Connect data for Claude (remote MCP connector); secret-path URL via Caddy at `garmin.stevegore.au`; tokens on `oci-bv` PVC (see `apps/garmin-mcp/README.md`) |
 
 **Useful commands:**
 

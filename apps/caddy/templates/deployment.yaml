@@ -79,6 +79,13 @@ spec:
                 secretKeyRef:
                   name: {{ .Values.vault.config.secretName }}
                   key: cf_api_token
+            # Secret URL-path segment gating garmin.stevegore.au (MCP server).
+            # Parse-time {$VAR} substitution in the Caddyfile path matcher.
+            - name: GARMIN_MCP_PATH_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.vault.config.secretName }}
+                  key: garmin_mcp_path_secret
             # certmagic-s3 storage backend (Object Storage S3-compat endpoint).
             # S3 creds come from kv/oci/caddy-acme (mounted as caddy-acme-s3),
             # provisioned by scripts/provision-caddy-acme-creds.sh.

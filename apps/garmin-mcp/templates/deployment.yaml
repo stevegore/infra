@@ -1,0 +1,78 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "garmin-mcp.fullname" . }}
+  labels:
+    {{- include "garmin-mcp.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "garmin-mcp.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "garmin-mcp.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      initContainers:
+        # Seed the token file from Vault only when absent — garminconnect
+        # refreshes tokens in place on the PVC, and a stale Vault copy must
+        # not clobber a newer refreshed token.
+        - name: seed-tokens
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command:
+            - sh
+            - -c
+            - |
+              if [ ! -f /data/garmintokens/garmin_tokens.json ]; then
+                mkdir -p /data/garmintokens
+                cp /seed/GARMIN_TOKENS_JSON /data/garmintokens/garmin_tokens.json
+                echo "Seeded garmin_tokens.json from Vault secret"
+              else
+                echo "Token file already present; leaving as-is"
+              fi
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: token-seed
+              mountPath: /seed
+              readOnly: true
+      containers:
+        - name: garmin-mcp
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.service.port }}
+              protocol: TCP
+          env:
+            - name: GARMINTOKENS
+              value: /data/garmintokens
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          readinessProbe:
+            httpGet:
+              path: /status
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ include "garmin-mcp.fullname" . }}-data
+        - name: token-seed
+          secret:
+            secretName: {{ .Values.vault.secretName }}
+            items:
+              - key: GARMIN_TOKENS_JSON
+                path: GARMIN_TOKENS_JSON
