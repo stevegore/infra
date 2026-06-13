@@ -13,6 +13,8 @@ spec:
       {{- include "strava-keeper.selectorLabels" . | nindent 6 }}
   template:
     metadata:
+      annotations:
+        kubectl.kubernetes.io/restartedAt: "2026-06-13T03:31:46Z"
       labels:
         {{- include "strava-keeper.selectorLabels" . | nindent 8 }}
     spec:
