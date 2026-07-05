@@ -15,6 +15,10 @@ spec:
         spec:
           serviceAccountName: {{ include "ttyd.fullname" . }}-restarter
           restartPolicy: OnFailure
+          securityContext:
+            runAsNonRoot: true
+            seccompProfile:
+              type: RuntimeDefault
           containers:
             - name: kubectl
               image: {{ .Values.restarter.image }}
@@ -23,3 +27,7 @@ spec:
                 - rollout
                 - restart
                 - deployment/{{ include "ttyd.fullname" . }}
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop: ["ALL"]

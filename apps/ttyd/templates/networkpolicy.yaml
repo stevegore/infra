@@ -9,6 +9,10 @@
 # exists. When that engine is enabled, VERIFY ttyd still resolves DNS and can
 # reach the internet, and confirm it can no longer reach 169.254.169.254 or the
 # in-cluster/MySQL/Vault addresses.
+#
+# The ACTIVE enforcement of the same egress denies today is the egress-lockdown
+# init container in deployment.yaml (in-pod iptables). Keep both in sync via
+# .Values.denyCidrs.
 # ---------------------------------------------------------------------------
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -33,26 +37,14 @@ spec:
         - protocol: TCP
           port: 8788
   egress:
-    # DNS resolution via CoreDNS (kube-system). Kept as an explicit allow so it
-    # survives the private-CIDR denial below (egress rules are additive/OR).
-    - to:
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: kube-system
-          podSelector:
-            matchLabels:
-              k8s-app: kube-dns
-      ports:
-        - protocol: UDP
-          port: 53
-        - protocol: TCP
-          port: 53
     # Public internet only — every private/link-local range is excepted, so the
     # shell cannot pivot to cluster services, worker nodes, the MySQL/Vault
-    # backends, or the OCI instance-metadata endpoint (169.254.169.254).
+    # backends, or the OCI instance-metadata endpoint (169.254.169.254). No
+    # CoreDNS carve-out: the pod runs dnsPolicy=None with public resolvers, so
+    # DNS goes out with the rest of the internet traffic.
     - to:
         - ipBlock:
             cidr: 0.0.0.0/0
             except:
-              {{- toYaml .Values.networkPolicy.denyCidrs | nindent 14 }}
+              {{- toYaml .Values.denyCidrs | nindent 14 }}
 {{- end }}
