@@ -136,15 +136,6 @@ data:
       import defaults
     }
 
-    # Hubble UI — Cilium network-flow observability. Lives in kube-system
-    # (Cilium is CNI infra, not an apps/* workload). Gated by Authentik.
-    hubble.stevegore.au {
-      reverse_proxy /outpost.goauthentik.io/* authentik-server.authentik.svc.cluster.local:80
-      import authentik
-      reverse_proxy hubble-ui.kube-system.svc.cluster.local:80
-      import defaults
-    }
-
     # ----- Pico-hosted services (via Tailscale Egress Service) -----
     # `pico` resolves to the in-namespace ExternalName Service created by the
     # Tailscale operator (see templates/pico-egress.yaml). The operator runs a

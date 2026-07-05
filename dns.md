@@ -210,7 +210,6 @@ All services proxied through Caddy on OKE (NLB → 159.13.44.68).
 | uptime.stevegore.au      | uptime-kuma.uptime-kuma:3001             | Uptime Kuma | Full UI + status page         |
 | status.stevegore.au      | uptime-kuma.uptime-kuma:3001             | —        | Custom-domain alias for the `homelab` status page (cname row managed by `scripts/setup_status_page.py`) |
 | headlamp.stevegore.au    | headlamp.headlamp:80                      | Authentik| Kubernetes web dashboard         |
-| hubble.stevegore.au      | hubble-ui.kube-system:80                  | Authentik| Cilium Hubble network-flow observability |
 | hermes.stevegore.au      | hermes.hermes:9119                        | Authentik|                                  |
 | adminer.stevegore.au     | adminer.adminer:80                        | Authentik| DB browser — pg-shared + MySQL HeatWave |
 | garmin.stevegore.au      | garmin-mcp.garmin-mcp:8080                | Secret URL path | Garmin MCP server for Claude connectors; gated by `handle_path /{$GARMIN_MCP_PATH_SECRET}/*` (secret in `kv/caddy/config`), 404 otherwise. See `apps/garmin-mcp/README.md` |
