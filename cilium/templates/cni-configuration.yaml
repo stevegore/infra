@@ -8,6 +8,13 @@
 # Mirrors the live kube-flannel-cfg cni-conf.json (cniVersion 0.3.1, flannel
 # delegate hairpinMode + isDefaultGateway, portmap portMappings). If OKE ever
 # changes that base conf, re-sync this to match.
+#
+# CRITICAL: the top-level "name" MUST equal the existing flannel conflist name
+# ("cbr0" on OKE). flannel's host-local IPAM keys allocations by network name
+# under /var/lib/cni/networks/<name>/. A mismatched name (e.g. "generic-veth")
+# spins up a SEPARATE IPAM pool that double-allocates IPs already in use by
+# flannel's "cbr0" pool → duplicate pod IPs → a broken/flapping datapath for
+# Cilium-managed pods. This bit us on attempts 1-2; matching the name is the fix.
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -16,7 +23,7 @@ metadata:
 data:
   cni-config: |-
     {
-      "name": "generic-veth",
+      "name": "cbr0",
       "cniVersion": "0.3.1",
       "plugins": [
         {

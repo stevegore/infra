@@ -15,6 +15,7 @@ cilium:
   # tunnel/overlay of its own, and no masquerade (flannel already does it).
   routingMode: native
   enableIPv4Masquerade: false
+  enableIPv6Masquerade: false
 
   # THE FIX-FORWARD KNOB (2026-07-05, attempt 2). Without this, the first
   # generic-veth attempt had an unstable datapath: node(kubelet)->pod and
