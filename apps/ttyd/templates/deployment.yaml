@@ -14,6 +14,10 @@ spec:
       labels:
         {{- include "ttyd.selectorLabels" . | nindent 8 }}
     spec:
+      # ttyd is a public, unauthenticated terminal. It never talks to the
+      # Kubernetes API, so deny it an API credential entirely — a shell that
+      # anyone on the internet can reach must not carry a mountable SA token.
+      automountServiceAccountToken: false
       initContainers:
         # emptyDir mounts as root:root — chown so uid 222 can write
         - name: chown-home

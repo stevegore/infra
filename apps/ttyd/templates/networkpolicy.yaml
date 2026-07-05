@@ -1,0 +1,58 @@
+{{- if .Values.networkPolicy.enabled }}
+# ---------------------------------------------------------------------------
+# Containment for the public, unauthenticated ttyd shell.
+#
+# ENFORCEMENT WARNING: the OKE cluster runs kube-flannel, which ignores
+# NetworkPolicy. This object has NO effect until a policy engine (Calico in
+# policy-only mode / "Canal") is installed. It is committed so the intended
+# posture is version-controlled and activates automatically once enforcement
+# exists. When that engine is enabled, VERIFY ttyd still resolves DNS and can
+# reach the internet, and confirm it can no longer reach 169.254.169.254 or the
+# in-cluster/MySQL/Vault addresses.
+# ---------------------------------------------------------------------------
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "ttyd.fullname" . }}
+  labels:
+    {{- include "ttyd.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "ttyd.selectorLabels" . | nindent 6 }}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Only Caddy may reach the terminal; nothing else in the cluster should.
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.networkPolicy.ingressFromNamespace }}
+      ports:
+        - protocol: TCP
+          port: 8788
+  egress:
+    # DNS resolution via CoreDNS (kube-system). Kept as an explicit allow so it
+    # survives the private-CIDR denial below (egress rules are additive/OR).
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # Public internet only — every private/link-local range is excepted, so the
+    # shell cannot pivot to cluster services, worker nodes, the MySQL/Vault
+    # backends, or the OCI instance-metadata endpoint (169.254.169.254).
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              {{- toYaml .Values.networkPolicy.denyCidrs | nindent 14 }}
+{{- end }}

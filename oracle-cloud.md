@@ -400,7 +400,7 @@ OCI users are capped at 2 active Customer Secret Keys. List + delete via
 | Kubernetes version      | `v1.35.2`                                                                                            |
 | Type                    | BASIC_CLUSTER (free — Enhanced incurs ~$0.15/hr; downgrade requires full cluster rebuild)            |
 | API endpoint            | Public, NSG-restricted to home IP `159.196.97.38/32`                                                 |
-| CNI                     | FLANNEL_OVERLAY (pods 10.244.0.0/16, services 10.96.0.0/16)                                          |
+| CNI                     | FLANNEL_OVERLAY (pods 10.244.0.0/16, services 10.96.0.0/16). ⚠️ Flannel does **not** enforce NetworkPolicy — any `NetworkPolicy` object (e.g. argocd's, `apps/ttyd`'s) is inert until a policy engine (Calico policy-only / "Canal") is installed. Verify enforcement before relying on one for isolation. |
 | Node pool               | `homelab-arm`, VM.Standard.A1.Flex 2 OCPU / 12 GB, 2 nodes (FD-1 + FD-2 in Private Subnet-nebula)    |
 | Worker NSG              | `oke-workers`                                                                                        |
 | API endpoint NSG        | `oke-api-endpoint`                                                                                   |
