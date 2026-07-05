@@ -16,4 +16,3 @@ terraform/*.tfstate.*
 terraform/*.tfplan
 terraform/crash.log
 terraform/crash.*.log
-cilium/charts/
