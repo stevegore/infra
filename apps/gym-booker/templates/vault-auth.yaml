@@ -1,0 +1,13 @@
+{{- if .Values.vault.enabled }}
+apiVersion: secrets.hashicorp.com/v1beta1
+kind: VaultAuth
+metadata:
+  name: {{ include "gym-booker.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+spec:
+  method: kubernetes
+  mount: kubernetes
+  kubernetes:
+    role: {{ .Values.vault.authRole }}
+    serviceAccount: default
+{{- end }}

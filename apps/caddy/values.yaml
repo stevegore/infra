@@ -132,7 +132,6 @@ pico:
   ports:
     - { name: hass,    port: 8123  }
     - { name: desk,    port: 8111  }
-    - { name: gym,     port: 8112  }
     - { name: plex,    port: 32400 }
     - { name: immich,       port: 2283  }
     - { name: photoprism,  port: 2342  }

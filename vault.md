@@ -60,7 +60,7 @@ Used by Vault Secrets Operator and application pods to authenticate.
 **Roles:**
 | Role | Bound Service Accounts | Bound Namespaces | Policies |
 |------|------------------------|------------------|----------|
-| vault-secrets-operator | vault-secrets-operator-controller-manager, default | vault-secrets-operator, caddy, openclaw, hermes, vaultwarden, tailscale-operator, homepage, databases, authentik, adminer, strava-keeper, garmin-mcp | caddy, openclaw, hermes, vaultwarden, tailscale-operator, homepage, pg-backups, authentik, adminer, strava-keeper, garmin-mcp |
+| vault-secrets-operator | vault-secrets-operator-controller-manager, default | vault-secrets-operator, caddy, openclaw, hermes, vaultwarden, tailscale-operator, homepage, databases, authentik, adminer, strava-keeper, garmin-mcp, gym-booker | caddy, openclaw, hermes, vaultwarden, tailscale-operator, homepage, pg-backups, authentik, adminer, strava-keeper, garmin-mcp, gym-booker |
 
 To onboard a new app namespace, append it to both `bound_service_account_namespaces` and (after writing the policy) `policies`:
 ```bash
@@ -162,6 +162,7 @@ Key-value secrets engine for application credentials.
 | kv/oci/pg-backups | OCI Customer Secret Key (S3) for pg-shared WAL/base backups | pg-backups (databases ns) |
 | kv/homelab/* | Tokens synced from pico (`*.token` files) | pico-token-sync (write) |
 | kv/strava-keeper/config | Strava Keeper: STRAVA_CLIENT_ID, STRAVA_CLIENT_SECRET, STRAVA_VERIFY_TOKEN, MYSQL_DSN | strava-keeper |
+| kv/gym-booker/config | Gym Booker: USERS_YAML (full users.yaml — gym credentials, swim schedule, pushover tokens) | gym-booker |
 
 **Secrets Structure:**
 ```
