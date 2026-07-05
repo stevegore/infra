@@ -1,0 +1,18 @@
+apiVersion: v2
+name: cilium
+description: >-
+  Cilium in generic-veth CNI-chaining mode on top of OKE's kube-flannel.
+  Flannel keeps IPAM + the vxlan datapath; Cilium adds NetworkPolicy
+  ENFORCEMENT (flannel enforces none) plus Hubble observability. Deployed as a
+  standalone, prune-disabled ArgoCD Application in kube-system — NOT via the
+  apps/* ApplicationSet — because pruning the CNI would partition the cluster
+  (and ArgoCD from itself). Removal is deliberate: app delete + node CNI-conf
+  cleanup + untaint (see oracle-cloud.md / the cilium-chaining postmortem memo).
+type: application
+version: 1.0.0
+appVersion: "1.19.5"
+
+dependencies:
+  - name: cilium
+    version: 1.19.5
+    repository: https://helm.cilium.io/

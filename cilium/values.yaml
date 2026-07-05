@@ -1,0 +1,95 @@
+# Cilium wrapper overrides. Upstream chart defaults apply unless set here.
+# Values live under the `cilium:` key (the dependency's name), matching the
+# apps/vault + apps/authentik wrapper convention.
+cilium:
+  # --- CNI chaining on flannel -------------------------------------------
+  cni:
+    chainingMode: generic-veth
+    customConf: true                # use our cni-configuration ConfigMap
+    configMap: cni-configuration
+    # CRITICAL: chaining must NOT be exclusive, or cilium-agent deletes the
+    # other CNI confs (incl. flannel's) and breaks the datapath it depends on.
+    exclusive: false
+
+  # Flannel owns IPAM + the vxlan overlay; Cilium only rides on top. So no
+  # tunnel/overlay of its own, and no masquerade (flannel already does it).
+  routingMode: native
+  enableIPv4Masquerade: false
+
+  # THE FIX-FORWARD KNOB (2026-07-05, attempt 2). Without this, the first
+  # generic-veth attempt had an unstable datapath: node(kubelet)->pod and
+  # pod->cilium-pod traffic failed (health probes flapped, homepage crashlooped)
+  # while pod->flannel-pod and pod->internet worked — the classic signature of
+  # MISSING host-to-endpoint routes. In routingMode=native chaining, Cilium does
+  # not install a host route to each pod veth unless endpointRoutes is on; it
+  # assumes the primary CNI handles reachability, which flannel's cni0 bridge
+  # does not for cilium-managed endpoints. endpointRoutes installs an explicit
+  # per-endpoint route via each pod's lxc veth so the host + other pods can
+  # reach it. If the datapath is still unstable, the next knob to try is
+  # bpf.hostLegacyRouting=true (route pod traffic through the host stack).
+  endpointRoutes:
+    enabled: true
+
+  # CRITICAL: do NOT use the chart-default cluster-pool IPAM. Its default pool is
+  # 10.0.0.0/8 with /24 per node, which OVERLAPS this cluster's VCN (10.0.0.0/16,
+  # nodes at 10.0.1.x) and flannel's pod range (10.244.0.0/16). `ipam:
+  # kubernetes` makes Cilium read each node's real flannel CIDR from
+  # node.spec.podCIDR (10.244.0.0/25, 10.244.0.128/25).
+  ipam:
+    mode: kubernetes
+
+  # Keep OKE's kube-proxy authoritative. kube-proxy replacement + chaining is a
+  # far bigger, riskier change; not what we want here.
+  kubeProxyReplacement: false
+
+  # OKE nodes: eBPF + BTF present on UEK 5.15. Mount points cri-o/OL8 expose.
+  cgroup:
+    autoMount:
+      enabled: true
+
+  # Modest footprint for the free-tier 2x A1.Flex (2 OCPU / 12 GB) node pool.
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 512Mi
+  operator:
+    # Single node pool of 2 — one operator replica is enough (default is 2 with
+    # anti-affinity, which won't schedule cleanly at this size).
+    replicas: 1
+    resources:
+      requests:
+        cpu: 25m
+        memory: 128Mi
+      limits:
+        memory: 256Mi
+
+  # --- Hubble observability ----------------------------------------------
+  # relay aggregates per-node flow data; ui is the web frontend (fronted by
+  # Caddy at hubble.stevegore.au behind Authentik — added in a follow-up commit
+  # once the datapath is verified stable).
+  hubble:
+    enabled: true
+    relay:
+      enabled: true
+      resources:
+        requests:
+          cpu: 25m
+          memory: 64Mi
+        limits:
+          memory: 128Mi
+    ui:
+      enabled: true
+      resources:
+        requests:
+          cpu: 10m
+          memory: 64Mi
+        limits:
+          memory: 128Mi
+    metrics:
+      enabled:
+        - dns
+        - drop
+        - tcp
+        - flow
