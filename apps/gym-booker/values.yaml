@@ -40,8 +40,8 @@ persistence:
 #                tokens). Mounted at /config/users.yaml; the app reads it via
 #                the USERS_CONFIG env var. Deploys to change the schedule:
 #                `vault kv patch kv/gym-booker/config USERS_YAML=@users.yaml`
-#                (VSO re-syncs within refreshAfter; restart the pod to pick
-#                it up immediately).
+#                (VSO re-syncs within refreshAfter and rolloutRestartTargets
+#                restarts the Deployment automatically).
 vault:
   enabled: true
   mount: kv
