@@ -26,3 +26,8 @@ spec:
       app.kubernetes.io/part-of: argocd
   refreshAfter: 1h
   vaultAuthRef: argocd
+  # Dex reads the GitHub OAuth secret at startup — restart it on rotation.
+  # (upstream argocd chart Deployment name)
+  rolloutRestartTargets:
+    - kind: Deployment
+      name: argocd-dex-server
