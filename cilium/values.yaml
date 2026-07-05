@@ -43,16 +43,6 @@ cilium:
   # far bigger, riskier change; not what we want here.
   kubeProxyReplacement: false
 
-  # Route pod traffic through the host network stack instead of Cilium's eBPF
-  # fast-path. REQUIRED here: with kubeProxyReplacement=false we depend on
-  # kube-proxy's iptables for ClusterIP DNAT and on flannel's iptables for
-  # egress masquerade. The eBPF fast-path bypasses both, so without this,
-  # Cilium-managed pods can't reach Services or the internet (pod<->pod still
-  # works). Symptom that led here: pod->pod 200 but pod->svc / pod->internet /
-  # node->pod all failed.
-  bpf:
-    hostLegacyRouting: true
-
   # OKE nodes: eBPF + BTF present on UEK 5.15. Mount points cri-o/OL8 expose.
   cgroup:
     autoMount:
