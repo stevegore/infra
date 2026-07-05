@@ -27,10 +27,13 @@ service:
   port: 5000
 
 # Booking state (bookings.pickle, token.txt, skip_classes.txt per user),
-# previously /var/elixr on pico.
+# previously /var/elixr on pico. A few KB of data — oci-fss, not oci-bv:
+# block volumes have a 50 GB minimum and the boot+block Always-Free cap is
+# saturated (see oracle-cloud.md). FSS ignores fsGroup and the app runs as
+# gymuser (1000), so an init container chowns the export on startup.
 persistence:
-  size: 50Gi
-  storageClass: oci-bv
+  size: 1Gi
+  storageClass: oci-fss
 
 # VSO config — secret at kv/gym-booker/config with fields:
 #   USERS_YAML — full users.yaml (user credentials, swim schedule, pushover
