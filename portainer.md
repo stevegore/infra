@@ -815,7 +815,12 @@ volumes:
 
 ### gymmaster-rest
 
-**Status:** Running (healthy)  
+> **Migrated to OKE 2026-07-05** — now runs as `apps/gym-booker` (namespace
+> `gym-booker`), image built/deployed by GitHub Actions in
+> `stevegore/gym-booker`, secrets in Vault `kv/gym-booker/config`. The pico
+> container is stopped and kept only as a rollback path.
+
+**Status:** Stopped (migrated to OKE)  
 **Stack ID:** 49  
 **Project Path:** `/data/compose/49`  
 **Compose Version:** v1  

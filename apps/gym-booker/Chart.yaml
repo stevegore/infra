@@ -1,0 +1,6 @@
+apiVersion: v2
+name: gym-booker
+description: Elixr gym class auto-booker (github.com/stevegore/gym-booker)
+type: application
+version: 0.1.0
+appVersion: "latest"

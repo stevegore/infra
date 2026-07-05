@@ -158,7 +158,7 @@ data:
     gym.stevegore.au {
       reverse_proxy /outpost.goauthentik.io/* authentik-server.authentik.svc.cluster.local:80
       import authentik
-      reverse_proxy pico:8112
+      reverse_proxy gym-booker.gym-booker.svc.cluster.local:5000
       import defaults
     }
 
