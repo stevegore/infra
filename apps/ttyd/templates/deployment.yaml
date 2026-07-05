@@ -18,14 +18,46 @@ spec:
       # Kubernetes API, so deny it an API credential entirely — a shell that
       # anyone on the internet can reach must not carry a mountable SA token.
       automountServiceAccountToken: false
+      # Don't inject <SVC>_SERVICE_HOST/_PORT env vars into the visitor shell.
+      enableServiceLinks: false
+      # Public resolvers instead of CoreDNS: the shell has no legitimate need
+      # to resolve *.svc.cluster.local, so deny service enumeration via DNS.
+      dnsPolicy: None
+      dnsConfig:
+        nameservers:
+          - 1.1.1.1
+          - 8.8.8.8
+      securityContext:
+        # emptyDir volumes are group-owned by visitor's gid so uid 222 can
+        # write; replaces the old root chown init container.
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
       initContainers:
-        # emptyDir mounts as root:root — chown so uid 222 can write
-        - name: chown-home
-          image: busybox:latest
-          command: ["chown", "222:222", "/home/visitor"]
-          volumeMounts:
-            - name: homedir
-              mountPath: /home/visitor
+        # flannel ignores NetworkPolicy, so enforce the same egress denies with
+        # iptables in the pod's own network namespace. The rules outlive this
+        # container, and the ttyd container drops ALL capabilities, so a
+        # visitor cannot flush them — even as root. ESTABLISHED/RELATED is
+        # accepted first so replies to Caddy-initiated (ingress) connections
+        # still flow; only NEW connections into the denied CIDRs are refused.
+        - name: egress-lockdown
+          image: {{ .Values.egressLockdown.image }}
+          command: ["/bin/sh", "-ec"]
+          args:
+            - |
+              iptables -A OUTPUT -o lo -j ACCEPT
+              iptables -A OUTPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+              {{- range .Values.denyCidrs }}
+              iptables -A OUTPUT -d {{ . }} -j REJECT
+              {{- end }}
+              iptables -L OUTPUT -n
+          securityContext:
+            runAsUser: 0
+            runAsNonRoot: false
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+              add: ["NET_ADMIN"]
       containers:
         - name: ttyd
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
@@ -37,6 +69,16 @@ spec:
             - name: http
               containerPort: 8788
               protocol: TCP
+          securityContext:
+            runAsUser: 222
+            runAsGroup: 1000
+            runAsNonRoot: true
+            # Neuters setuid binaries (su/sudo/passwd) inside the shell.
+            allowPrivilegeEscalation: false
+            # Home, /tmp and /var/tmp stay writable via their emptyDir mounts.
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
           volumeMounts:
             - name: homedir
               mountPath: /home/visitor

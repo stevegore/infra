@@ -21,21 +21,29 @@ restarter:
   schedule: "*/30 * * * *"
   image: docker.io/bitnami/kubectl:latest
 
-# Contain the blast radius of the public, unauthenticated shell. NOTE: the OKE
-# cluster currently runs kube-flannel, which does NOT enforce NetworkPolicy —
-# these objects are inert until a policy engine (Calico/Canal) is installed.
-# They are committed so intent is version-controlled and enforcement is
-# automatic once that engine lands. See apps/ttyd/templates/networkpolicy.yaml.
+# Private/link-local CIDRs the shell must never reach: cluster pods/services,
+# nodes, the MySQL/Vault backends, and the OCI instance-metadata endpoint
+# (169.254.169.254). Egress to the public internet is still allowed (ttyd stays
+# usable), just not to anything internal. Enforced two ways:
+#   1. ACTIVE: in-pod iptables OUTPUT rules installed by the egress-lockdown
+#      init container (see deployment.yaml) — needs no NetworkPolicy engine,
+#      and the ttyd container drops ALL capabilities so a visitor cannot
+#      remove the rules.
+#   2. INERT: a NetworkPolicy object — kube-flannel does NOT enforce policy, so
+#      it has no effect today; committed so the posture activates automatically
+#      if a policy engine (Calico policy-only / "Canal") ever lands.
+denyCidrs:
+  - 10.0.0.0/8
+  - 172.16.0.0/12
+  - 192.168.0.0/16
+  - 169.254.0.0/16
+
+egressLockdown:
+  # Official Kubernetes iptables build image (what kube-proxy ships on). Pinned
+  # tag, pulled from registry.k8s.io — no Docker Hub rate-limit exposure.
+  image: registry.k8s.io/build-image/distroless-iptables:v0.9.3
+
 networkPolicy:
   enabled: true
   # Namespace hosting the Caddy pods allowed to reach ttyd on :8788.
   ingressFromNamespace: caddy
-  # Private/link-local CIDRs the shell must never reach: cluster pods/services,
-  # nodes, the MySQL/Vault backends, and the OCI instance-metadata endpoint.
-  # Egress to the public internet is still allowed (ttyd stays usable), just not
-  # to anything internal.
-  denyCidrs:
-    - 10.0.0.0/8
-    - 172.16.0.0/12
-    - 192.168.0.0/16
-    - 169.254.0.0/16
