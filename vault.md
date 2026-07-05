@@ -269,6 +269,42 @@ spec:
   vaultAuthRef: <vault-auth-name>
 ```
 
+### Auto-restarting pods on secret rotation (`rolloutRestartTargets`)
+
+By default, when VSO writes a new version of the k8s Secret, **running pods keep
+the old value** — env vars injected via `secretKeyRef`/`envFrom` are only read at
+pod start. Add `rolloutRestartTargets` to a `VaultStaticSecret` and VSO patches
+the target workload's pod-template annotation on every secret change, triggering
+a normal rolling restart:
+
+```yaml
+spec:
+  ...
+  vaultAuthRef: <vault-auth-name>
+  rolloutRestartTargets:
+    - kind: Deployment        # or StatefulSet / DaemonSet
+      name: <workload-name>
+```
+
+VSO's controller ClusterRole already grants cluster-wide `patch` on
+deployments/statefulsets/daemonsets, so no extra RBAC is needed.
+
+**Enabled on** (all env-consuming apps): `strava-keeper`, `caddy`,
+`vaultwarden`, `adminer`, `homepage` (targets are their own Deployments via
+`{{ include "<app>.fullname" . }}`), plus the upstream charts `authentik`
+(→ `authentik-server` + `authentik-worker`), `argocd` (→ `argocd-dex-server`),
+and `tailscale-operator` (→ `operator`). Upstream target names are hardcoded —
+revisit if a chart's `fullnameOverride`/naming changes.
+
+**Deliberately NOT enabled:** `garmin-mcp` — its init container seeds the token
+file only when absent because `garminconnect` refreshes tokens in place on the
+PVC; a restart-on-change would be pointless churn. Apps consuming secrets purely
+as hot-reloaded file mounts don't need it either.
+
+> These Deployments use `strategy: Recreate` (single replica), so a triggered
+> restart is a brief down-then-up, not zero-downtime. Note that a rotated Caddy
+> secret restarts the edge proxy, briefly dropping all `*.stevegore.au` traffic.
+
 ### Verifying VSO Status
 
 ```bash
