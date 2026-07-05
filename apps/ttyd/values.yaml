@@ -20,3 +20,22 @@ service:
 restarter:
   schedule: "*/30 * * * *"
   image: docker.io/bitnami/kubectl:latest
+
+# Contain the blast radius of the public, unauthenticated shell. NOTE: the OKE
+# cluster currently runs kube-flannel, which does NOT enforce NetworkPolicy —
+# these objects are inert until a policy engine (Calico/Canal) is installed.
+# They are committed so intent is version-controlled and enforcement is
+# automatic once that engine lands. See apps/ttyd/templates/networkpolicy.yaml.
+networkPolicy:
+  enabled: true
+  # Namespace hosting the Caddy pods allowed to reach ttyd on :8788.
+  ingressFromNamespace: caddy
+  # Private/link-local CIDRs the shell must never reach: cluster pods/services,
+  # nodes, the MySQL/Vault backends, and the OCI instance-metadata endpoint.
+  # Egress to the public internet is still allowed (ttyd stays usable), just not
+  # to anything internal.
+  denyCidrs:
+    - 10.0.0.0/8
+    - 172.16.0.0/12
+    - 192.168.0.0/16
+    - 169.254.0.0/16
