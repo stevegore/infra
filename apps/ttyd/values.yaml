@@ -1,3 +1,6 @@
+# Public, unauthenticated web terminal. After changing any of the containment
+# controls below (or in templates/deployment.yaml), verify them live against the
+# real ingress path with:  python3 scripts/verify-ttyd-hardening.py
 replicaCount: 1
 
 image:
