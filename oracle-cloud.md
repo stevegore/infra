@@ -400,13 +400,48 @@ OCI users are capped at 2 active Customer Secret Keys. List + delete via
 | Kubernetes version      | `v1.35.2`                                                                                            |
 | Type                    | BASIC_CLUSTER (free — Enhanced incurs ~$0.15/hr; downgrade requires full cluster rebuild)            |
 | API endpoint            | Public, NSG-restricted to home IP `159.196.97.38/32`                                                 |
-| CNI                     | FLANNEL_OVERLAY (pods 10.244.0.0/16, services 10.96.0.0/16). ⚠️ Flannel does **not** enforce NetworkPolicy — any `NetworkPolicy` object (e.g. argocd's, `apps/ttyd`'s) is inert until a policy engine (Calico policy-only / "Canal") is installed. Verify enforcement before relying on one for isolation. |
+| CNI                     | FLANNEL_OVERLAY (pods 10.244.0.0/16, services 10.96.0.0/16) + **Cilium 1.19.5 in generic-veth CNI chaining** for NetworkPolicy enforcement + Hubble (flannel enforces no policy). Flannel keeps IPAM/vxlan; Cilium rides on top. See the **Cilium** section below. |
 | Node pool               | `homelab-arm`, VM.Standard.A1.Flex 2 OCPU / 12 GB, 2 nodes (FD-1 + FD-2 in Private Subnet-nebula)    |
 | Worker NSG              | `oke-workers`                                                                                        |
 | API endpoint NSG        | `oke-api-endpoint`                                                                                   |
 | API endpoint subnet     | `oke-api-endpoint` (10.0.2.0/28)                                                                     |
 | StorageClasses          | `oci-bv` (RWO Block, FD-pinned, default), `oci-fss` (RWX File, AD-durable, Retain reclaim)           |
 | Managed by              | Terraform (`terraform/oke-*.tf`, `terraform/fss.tf`)                                                  |
+
+### Cilium (CNI chaining — NetworkPolicy enforcement + Hubble)
+
+Flannel (OKE's CNI) enforces **no** NetworkPolicy. Cilium 1.19.5 runs in
+**generic-veth chaining** mode on top of it to add enforcement + observability
+without replacing flannel: flannel keeps IPAM + the vxlan datapath, Cilium
+attaches eBPF policy/visibility to each veth.
+
+- **Chart:** `cilium/` (top-level wrapper, dep on `helm.cilium.io`), deployed by
+  the standalone `argocd/cilium-application.yaml` into `kube-system`.
+- **NOT in the `apps/*` ApplicationSet** and **prune-disabled** — the CNI is a
+  bootstrap dependency of ArgoCD itself; pruning it would partition the cluster.
+  Apply changes to the Application by hand: `kubectl apply -f argocd/cilium-application.yaml`.
+- **Key config (see `cilium/values.yaml` comments):** `cni.exclusive=false`
+  (or Cilium deletes flannel's conf), `ipam.mode=kubernetes` (uses each node's
+  real flannel `node.spec.podCIDR`; the chart-default cluster-pool `10.0.0.0/8`
+  would collide with the VCN + flannel and break networking), `routingMode=native`,
+  `enableIPv4Masquerade=false`, `kubeProxyReplacement=false` (keep kube-proxy).
+- **Enforcement is per-endpoint:** Cilium only manages pods that go through its
+  CNI ADD, i.e. those **created/restarted after** it's installed. Pre-existing
+  pods aren't policy-enforced until they cycle — `kubectl rollout restart` a
+  workload to bring it under Cilium. This is also why activation is low-risk:
+  running pods are undisturbed.
+- **Hubble UI:** `hubble.stevegore.au` (Caddy → `hubble-ui.kube-system`, behind
+  Authentik). CLI alternative: `cilium hubble ui` / `hubble observe`.
+
+**Removal (if reverting to plain flannel):**
+```bash
+kubectl -n argocd delete application cilium      # prune is off, so this alone won't remove Cilium
+helm -n kube-system uninstall cilium             # or let ArgoCD; then clean residue:
+# Roll the node pool one node at a time so fresh nodes come up flannel-only
+# (clears cilium's /etc/cni/net.d conf, eBPF programs, iptables). With 2 nodes,
+# drain+terminate sequentially to keep multi-replica apps up.
+```
+NetworkPolicies simply go inert again once Cilium is gone; no data loss.
 
 ### Kubeconfig
 
