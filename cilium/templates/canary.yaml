@@ -213,6 +213,11 @@ spec:
         - podSelector:
             matchLabels:
               cilium-canary-access: allowed
+        # Kubelet HTTP probes originate from the node address. Keep the
+        # backends Ready so the allow/deny Jobs test policy rather than an
+        # empty Service. OKE workers live in Private-Subnet-nebula.
+        - ipBlock:
+            cidr: 10.0.1.0/24
       ports:
         - protocol: TCP
           port: 8080
