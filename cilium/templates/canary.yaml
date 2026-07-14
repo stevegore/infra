@@ -39,16 +39,17 @@ spec:
             - name: http
               containerPort: 8080
               protocol: TCP
+          # In Flannel chaining, host-to-pod probes are sourced from cni0's
+          # per-node gateway and look like ordinary CIDR traffic to Cilium.
+          # Keep process health local; the Jobs below test the real datapath.
           readinessProbe:
-            httpGet:
-              path: /
-              port: http
+            exec:
+              command: ["/bin/sh", "-ec", "test -s /www/index.html && kill -0 1"]
             initialDelaySeconds: 1
             periodSeconds: 3
           livenessProbe:
-            httpGet:
-              path: /
-              port: http
+            exec:
+              command: ["/bin/sh", "-ec", "test -s /www/index.html && kill -0 1"]
             periodSeconds: 10
           resources:
             requests:
@@ -152,7 +153,7 @@ spec:
           command: ["/bin/sh", "-ec"]
           args:
             - |
-              sleep 5
+              sleep 10
               echo "client node=$NODE_NAME pod=$HOSTNAME"
 
               nslookup kubernetes.default.svc.cluster.local
@@ -213,11 +214,6 @@ spec:
         - podSelector:
             matchLabels:
               cilium-canary-access: allowed
-        # Kubelet HTTP probes originate from the node address. Keep the
-        # backends Ready so the allow/deny Jobs test policy rather than an
-        # empty Service. OKE workers live in Private-Subnet-nebula.
-        - ipBlock:
-            cidr: 10.0.1.0/24
       ports:
         - protocol: TCP
           port: 8080
@@ -250,7 +246,7 @@ spec:
           command: ["/bin/sh", "-ec"]
           args:
             - |
-              sleep 5
+              sleep 10
               if wget -qO- -T 3 http://cilium-canary.kube-system.svc.cluster.local:8080/; then
                 echo "ERROR: unlabelled client reached the policy-protected canary" >&2
                 exit 1
