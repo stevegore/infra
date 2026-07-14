@@ -7,13 +7,13 @@
 variable "oke_kubernetes_version" {
   description = "OKE control-plane version. Bump deliberately; node pool image OCID below must match."
   type        = string
-  default     = "v1.35.2"
+  default     = "v1.36.1"
 }
 
 variable "oke_node_image_ocid" {
-  description = "OKE-prebuilt ARM image OCID matching var.oke_kubernetes_version. Currently: Oracle-Linux-8.10-aarch64-2026.04.30-3-OKE-1.35.2-1462. Re-query via: oci ce node-pool-options get --node-pool-option-id all --query 'data.sources[?contains(\"source-name\", `OKE-1.35.2`)]'"
+  description = "OKE-prebuilt ARM image OCID matching var.oke_kubernetes_version. Currently: Oracle-Linux-8.10-aarch64-2026.06.15-0-OKE-1.36.1-1505. Re-query via: oci ce node-pool-options get --node-pool-option-id all --query 'data.sources[?contains(\"source-name\", `OKE-1.36.1`)]'"
   type        = string
-  default     = "ocid1.image.oc1.ap-sydney-1.aaaaaaaamfls6ukb66gz775gtxjokdguhhxzgxxpbjuh3vlrkdmdglfb2z5q"
+  default     = "ocid1.image.oc1.ap-sydney-1.aaaaaaaar3qfio6v3bjh5vpl4h26ebqgjblg7gvepng2kh7puhuick3hmrxq"
 }
 
 resource "oci_containerengine_cluster" "homelab" {
