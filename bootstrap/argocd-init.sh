@@ -60,6 +60,63 @@ else
   skip "argocd-server already deployed"
 fi
 
+# Cilium generic-veth sees OKE/Flannel kubelet probes as traffic from cni0's
+# 10.244.x bridge gateway, not as the host. The upstream policies correctly
+# reject that source on restricted health ports. Keep the policies and move the
+# affected probes to the same localhost endpoints from inside each container.
+kubectl patch deployment argocd-repo-server -n argocd --type=strategic --patch '
+spec:
+  template:
+    spec:
+      containers:
+        - name: argocd-repo-server
+          readinessProbe:
+            httpGet: null
+            exec:
+              command:
+                - /usr/bin/bash
+                - -ec
+                - exec 3<>/dev/tcp/127.0.0.1/8084; printf "GET /healthz HTTP/1.0\r\n\r\n" >&3; read -r status <&3; [[ "$status" == *" 200 "* ]]
+          livenessProbe:
+            httpGet: null
+            exec:
+              command:
+                - /usr/bin/bash
+                - -ec
+                - exec 3<>/dev/tcp/127.0.0.1/8084; printf "GET /healthz?full=true HTTP/1.0\r\n\r\n" >&3; read -r status <&3; [[ "$status" == *" 200 "* ]]
+' >/dev/null
+
+kubectl patch statefulset argocd-application-controller -n argocd --type=strategic --patch '
+spec:
+  template:
+    spec:
+      containers:
+        - name: argocd-application-controller
+          readinessProbe:
+            httpGet: null
+            exec:
+              command:
+                - /usr/bin/bash
+                - -ec
+                - exec 3<>/dev/tcp/127.0.0.1/8082; printf "GET /healthz HTTP/1.0\r\n\r\n" >&3; read -r status <&3; [[ "$status" == *" 200 "* ]]
+' >/dev/null
+
+kubectl patch deployment argocd-notifications-controller -n argocd --type=strategic --patch '
+spec:
+  template:
+    spec:
+      containers:
+        - name: argocd-notifications-controller
+          livenessProbe:
+            tcpSocket: null
+            exec:
+              command:
+                - /usr/bin/bash
+                - -ec
+                - exec 3<>/dev/tcp/127.0.0.1/9001
+' >/dev/null
+echo "✓ ArgoCD probes made Flannel/Cilium chaining-safe"
+
 # ---------- 3. ApplicationSet ----------
 log "ApplicationSet"
 kubectl apply -f "${REPO_ROOT}/argocd/applicationset.yaml"
