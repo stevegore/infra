@@ -1,0 +1,270 @@
+{{- if .Values.canary.enabled }}
+# The canary is created in a later ArgoCD sync wave, after the Cilium DaemonSet
+# is Healthy. Its pods therefore traverse the new chained CNI on both nodes.
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: cilium-canary
+  namespace: kube-system
+  annotations:
+    argocd.argoproj.io/sync-wave: "10"
+  labels:
+    app.kubernetes.io/name: cilium-canary
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: cilium-canary
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: cilium-canary
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      containers:
+        - name: server
+          image: {{ .Values.canary.image }}
+          imagePullPolicy: IfNotPresent
+          command: ["/bin/sh", "-ec"]
+          args:
+            - |
+              printf 'cilium-canary node=%s pod=%s\n' "$NODE_NAME" "$HOSTNAME" > /www/index.html
+              exec httpd -f -p 8080 -h /www
+          env:
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 1
+            periodSeconds: 3
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 5m
+              memory: 4Mi
+            limits:
+              memory: 16Mi
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65534
+            runAsGroup: 65534
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: www
+              mountPath: /www
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      volumes:
+        - name: www
+          emptyDir:
+            medium: Memory
+            sizeLimit: 1Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cilium-canary
+  namespace: kube-system
+  annotations:
+    argocd.argoproj.io/sync-wave: "10"
+spec:
+  selector:
+    app.kubernetes.io/name: cilium-canary
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+      protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cilium-canary-headless
+  namespace: kube-system
+  annotations:
+    argocd.argoproj.io/sync-wave: "10"
+spec:
+  clusterIP: None
+  publishNotReadyAddresses: false
+  selector:
+    app.kubernetes.io/name: cilium-canary
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+      protocol: TCP
+---
+# Two parallel clients are forced onto different nodes. Each checks DNS,
+# kube-proxy ClusterIP routing, direct access to both canary pod IPs (including
+# the cross-node Flannel path), the Kubernetes API Service TCP path, and public
+# internet egress. Keeping the completed hook makes its logs available for QA.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: cilium-canary-connectivity
+  namespace: kube-system
+  annotations:
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  completions: 2
+  parallelism: 2
+  backoffLimit: 1
+  activeDeadlineSeconds: 180
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: cilium-canary-connectivity
+        cilium-canary-access: allowed
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - topologyKey: kubernetes.io/hostname
+              labelSelector:
+                matchLabels:
+                  app.kubernetes.io/name: cilium-canary-connectivity
+      containers:
+        - name: check
+          image: {{ .Values.canary.image }}
+          imagePullPolicy: IfNotPresent
+          command: ["/bin/sh", "-ec"]
+          args:
+            - |
+              sleep 5
+              echo "client node=$NODE_NAME pod=$HOSTNAME"
+
+              nslookup kubernetes.default.svc.cluster.local
+              nc -z -w 5 kubernetes.default.svc.cluster.local 443
+
+              wget -qO- -T 5 http://cilium-canary.kube-system.svc.cluster.local:8080/ \
+                | grep -q '^cilium-canary '
+
+              ips="$(nslookup cilium-canary-headless.kube-system.svc.cluster.local \
+                | awk '{ for (i=1; i<=NF; i++) if ($i ~ /^10\.244\./) { sub(/:.*/, "", $i); print $i } }' \
+                | sort -u)"
+              test "$(printf '%s\n' "$ips" | sed '/^$/d' | wc -l | tr -d ' ')" -eq 2
+              for ip in $ips; do
+                wget -qO- -T 5 "http://$ip:8080/" | grep -q '^cilium-canary '
+              done
+
+              wget -qO- -T 10 http://1.1.1.1/cdn-cgi/trace | grep -q '^ip='
+              echo "all connectivity checks passed from $NODE_NAME"
+          env:
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          resources:
+            requests:
+              cpu: 5m
+              memory: 4Mi
+            limits:
+              memory: 16Mi
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65534
+            runAsGroup: 65534
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+{{- if .Values.canary.policyTestEnabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: cilium-canary
+  namespace: kube-system
+  annotations:
+    argocd.argoproj.io/sync-wave: "10"
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: cilium-canary
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              cilium-canary-access: allowed
+      ports:
+        - protocol: TCP
+          port: 8080
+---
+# This hook succeeds only when the canary NetworkPolicy blocks an unlabelled
+# client. It turns a silently inert policy engine into a failed Argo sync.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: cilium-canary-policy-deny
+  namespace: kube-system
+  annotations:
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 60
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: cilium-canary-policy-deny
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      containers:
+        - name: check-deny
+          image: {{ .Values.canary.image }}
+          imagePullPolicy: IfNotPresent
+          command: ["/bin/sh", "-ec"]
+          args:
+            - |
+              sleep 5
+              if wget -qO- -T 3 http://cilium-canary.kube-system.svc.cluster.local:8080/; then
+                echo "ERROR: unlabelled client reached the policy-protected canary" >&2
+                exit 1
+              fi
+              echo "NetworkPolicy deny check passed"
+          resources:
+            requests:
+              cpu: 5m
+              memory: 4Mi
+            limits:
+              memory: 16Mi
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65534
+            runAsGroup: 65534
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+{{- end }}
+{{- end }}

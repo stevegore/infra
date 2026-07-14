@@ -1,0 +1,110 @@
+# Cilium wrapper values. Upstream values are nested under `cilium`; the
+# top-level canary values configure this wrapper chart's connectivity checks.
+cilium:
+  # Cilium watches for OKE's existing network named `cbr0`, copies that
+  # conflist, and appends cilium-cni. This avoids a hand-maintained duplicate
+  # Flannel config and, critically, preserves host-local's `cbr0` allocation
+  # directory.
+  cni:
+    chainingMode: generic-veth
+    chainingTarget: cbr0
+    exclusive: false
+    # Flannel owns endpoint routes. Cilium still attaches the required egress
+    # BPF program, but must not replace Flannel's cni0/vxlan routing.
+    externalRouting: true
+
+  routingMode: native
+  endpointRoutes:
+    enabled: false
+
+  # Keep packets in the host network stack so OKE's kube-proxy and Flannel
+  # iptables rules continue to provide ClusterIP DNAT and outbound NAT.
+  bpf:
+    hostLegacyRouting: true
+  kubeProxyReplacement: false
+  enableIPv4Masquerade: false
+  enableIPv6Masquerade: false
+  enableIdentityMark: false
+  ipv6:
+    enabled: false
+
+  # Chained pod endpoints use the IP assigned by Flannel (ExternalIpam=true).
+  # Cilium still requires an internal node allocation pool, so give it a
+  # dedicated, non-routed range that overlaps neither the VCN (10.0/16),
+  # Flannel pods (10.244/16), Services (10.96/16), nor homelab/Tailscale routes.
+  ipam:
+    mode: cluster-pool
+    operator:
+      clusterPoolIPv4PodCIDRList:
+        - 10.245.0.0/16
+      clusterPoolIPv4MaskSize: 25
+
+  # Initial rollout mode: observe the datapath without activating existing
+  # NetworkPolicies. This is changed to `default` only after the two-node
+  # connectivity canary passes.
+  policyEnforcementMode: never
+
+  # No L7 proxy is needed for Kubernetes NetworkPolicy or L3/L4 Hubble flows.
+  # Generic-veth chaining also has limited L7 support, so omit the extra Envoy
+  # DaemonSet on these small ARM nodes.
+  l7Proxy: false
+  envoy:
+    enabled: false
+
+  cgroup:
+    autoMount:
+      enabled: true
+  waitForKubeProxy: true
+  rollOutCiliumPods: true
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 512Mi
+
+  operator:
+    replicas: 1
+    rollOutPods: true
+    resources:
+      requests:
+        cpu: 25m
+        memory: 128Mi
+      limits:
+        memory: 256Mi
+
+  hubble:
+    enabled: true
+    relay:
+      enabled: true
+      resources:
+        requests:
+          cpu: 25m
+          memory: 64Mi
+        limits:
+          memory: 128Mi
+    ui:
+      enabled: true
+      resources:
+        requests:
+          cpu: 10m
+          memory: 64Mi
+        limits:
+          memory: 128Mi
+    metrics:
+      enabled:
+        - dns
+        - drop
+        - tcp
+        - flow
+
+canary:
+  enabled: true
+  image: docker.io/library/busybox:1.37.0
+  # Enabled with policyEnforcementMode=default after connectivity passes.
+  policyTestEnabled: false
