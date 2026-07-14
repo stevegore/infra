@@ -436,9 +436,9 @@ One generic-veth detail matters for probes: OKE/Flannel sources kubelet HTTP
 probes from each node's `cni0` bridge gateway, so Cilium sees them as ordinary
 `10.244.x` CIDR traffic rather than the host identity. Policy-selected workloads
 should use local `exec` probes where practical and test network reachability
-separately, as the canary does. Existing policy-selected workloads with HTTP
-probes must be tested after they join Cilium; do not assume the node identity
-exception applies through the Flannel bridge.
+separately, as the canary does. `bootstrap/argocd-init.sh` preserves ArgoCD's
+upstream policies but rewrites its affected probes to call the same localhost
+health endpoints from inside each container.
 
 Hubble Relay and UI run in `kube-system`; the UI is available at
 `https://hubble.stevegore.au` behind Authentik. For CLI checks, run
