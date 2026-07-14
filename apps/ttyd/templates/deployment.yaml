@@ -34,12 +34,14 @@ spec:
         seccompProfile:
           type: RuntimeDefault
       initContainers:
-        # flannel ignores NetworkPolicy, so enforce the same egress denies with
-        # iptables in the pod's own network namespace. The rules outlive this
-        # container, and the ttyd container drops ALL capabilities, so a
-        # visitor cannot flush them — even as root. ESTABLISHED/RELATED is
-        # accepted first so replies to Caddy-initiated (ingress) connections
-        # still flow; only NEW connections into the denied CIDRs are refused.
+        # Second enforcement layer behind the CiliumNetworkPolicy: the same
+        # egress denies as iptables rules in the pod's own network namespace,
+        # so the lockdown survives a Cilium rollback (Flannel alone enforces
+        # nothing). The rules outlive this container, and the ttyd container
+        # drops ALL capabilities, so a visitor cannot flush them — even as
+        # root. ESTABLISHED/RELATED is accepted first so replies to
+        # Caddy-initiated (ingress) connections still flow; only NEW
+        # connections into the denied CIDRs are refused.
         - name: egress-lockdown
           image: {{ .Values.egressLockdown.image }}
           command: ["/bin/sh", "-ec"]
