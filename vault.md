@@ -19,7 +19,7 @@ HashiCorp Vault deployment on Oracle Kubernetes Engine with:
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                      OKE Cluster (homelab)                       │
-│                        (Kubernetes 1.35)                         │
+│                        (Kubernetes 1.36)                         │
 │  ┌─────────────────┐      ┌─────────────────────────────────┐  │
 │  │  Caddy (TLS)    │      │      vault namespace            │  │
 │  │                 │      │  ┌───────────────────────────┐  │  │
