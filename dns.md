@@ -21,7 +21,7 @@
 | argocd.stevegore.au      | 159.13.44.68  | No      | → OKE NLB (Caddy → ArgoCD in-cluster)       |
 | grpc.argocd.stevegore.au | 159.13.44.68  | No      | → OKE NLB (Caddy → ArgoCD gRPC in-cluster)  |
 
-`uptime.stevegore.au` is covered by the wildcard `*.stevegore.au` A record, so no separate Cloudflare DNS record is required unless we later want host-specific proxy or TTL settings.
+`uptime.stevegore.au` and `hubble.stevegore.au` are covered by the wildcard `*.stevegore.au` A record, so no separate Cloudflare DNS record is required unless we later want host-specific proxy or TTL settings.
 
 **Reserved IP:** `159.13.44.68` — OCI NLB reserved public IP (OCID in `terraform/nlb.tf`). Survives NLB recreation.
 
@@ -60,6 +60,7 @@ Internet
     │                                            │       ├─► vaultwarden.vaultwarden:80
     │                                            │       ├─► homepage.homepage:3000
     │                                            │       ├─► uptime-kuma.uptime-kuma:3001
+    │                                            │       ├─► hubble-ui.kube-system:80
     │                                            │       ├─► headlamp.headlamp:80
     │                                            │       ├─► adminer.adminer:80
     │                                            │       └─► hermes.hermes:9119
@@ -204,6 +205,7 @@ All services proxied through Caddy on OKE (NLB → 159.13.44.68).
 | healthz.stevegore.au     | —                                         | —        | Caddy `respond "OK"`             |
 | argocd.stevegore.au      | argocd-server.argocd:80 (HTTP, insecure)  | ArgoCD   | ArgoCD in `--insecure` mode      |
 | grpc.argocd.stevegore.au | argocd-server.argocd:80 (h2c)             | ArgoCD   | ArgoCD gRPC                      |
+| hubble.stevegore.au      | hubble-ui.kube-system:80                   | Authentik| Cilium network-flow observability |
 | vault.stevegore.au       | vault.vault:8200                          | Vault UI | Vault handles own auth           |
 | bw.stevegore.au          | vaultwarden.vaultwarden:80 / :3012        | —        | Vaultwarden + WebSocket hub      |
 | homepage.stevegore.au    | homepage.homepage:3000                    | Authentik| Homepage dashboard               |

@@ -108,6 +108,10 @@ data:
             href: https://argocd.stevegore.au
             description: GitOps — OKE
             icon: argocd.png
+        - Hubble:
+            href: https://hubble.stevegore.au
+            description: Network flows — Cilium
+            icon: cilium.png
         - Duplicati:
             href: http://pico:8200
             description: Backup & Recovery

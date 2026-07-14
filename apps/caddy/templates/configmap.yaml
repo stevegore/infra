@@ -136,6 +136,14 @@ data:
       import defaults
     }
 
+    # Cilium network-flow observability. Hubble UI has no native authentication.
+    hubble.stevegore.au {
+      reverse_proxy /outpost.goauthentik.io/* authentik-server.authentik.svc.cluster.local:80
+      import authentik
+      reverse_proxy hubble-ui.kube-system.svc.cluster.local:80
+      import defaults
+    }
+
     # ----- Pico-hosted services (via Tailscale Egress Service) -----
     # `pico` resolves to the in-namespace ExternalName Service created by the
     # Tailscale operator (see templates/pico-egress.yaml). The operator runs a

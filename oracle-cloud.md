@@ -93,8 +93,11 @@ This was fixed on the now-terminated ampere-ubuntu instance by manually installi
 | Uptime Kuma | 2.3.2 | — | SQLite backend on 50GB OCI block volume; monitors pico+external services |
 | Homepage | 0.10.9 | — | Service dashboard (gated by Authentik) |
 | metrics-server | 0.8.0 (chart 3.13.0) | kubernetes-sigs | `kubectl top` / HPA metrics; `--kubelet-insecure-tls` |
+| Cilium + Hubble | 1.20.0-rc.0 | Cilium | Policy-only generic-veth chaining over OKE Flannel; Hubble Relay/UI enabled |
 
-All Helm charts are defined in `apps/` and synced via ArgoCD. See `argocd/applicationset.yaml` for the ApplicationSet (`infra-apps`).
+ApplicationSet-managed Helm charts are defined in `apps/`; Cilium is the
+prune-disabled standalone exception in `cilium/`. See
+`argocd/applicationset.yaml` for the `infra-apps` ApplicationSet.
 
 ---
 
@@ -400,13 +403,50 @@ OCI users are capped at 2 active Customer Secret Keys. List + delete via
 | Kubernetes version      | `v1.36.1` (control plane + workers upgraded in-place 2026-07-14; workers cycled via drain + `delete-node --is-decrement-size false`) |
 | Type                    | BASIC_CLUSTER (free — Enhanced incurs ~$0.15/hr; downgrade requires full cluster rebuild)            |
 | API endpoint            | Public, NSG-restricted to home IP `159.196.97.38/32`                                                 |
-| CNI                     | FLANNEL_OVERLAY (pods 10.244.0.0/16, services 10.96.0.0/16). ⚠️ Flannel does **not** enforce NetworkPolicy — any `NetworkPolicy` object (e.g. argocd's, `apps/ttyd`'s) is inert until a policy engine (Calico policy-only / "Canal") is installed. Verify enforcement before relying on one for isolation. ttyd's egress denial is instead enforced **in-pod**: an `egress-lockdown` init container (NET_ADMIN) installs iptables OUTPUT REJECTs for private/link-local CIDRs in the pod netns; the main container drops ALL caps so the rules can't be removed. |
+| CNI                     | OKE `FLANNEL_OVERLAY` remains the primary CNI (pods 10.244.0.0/16, services 10.96.0.0/16); Cilium 1.20.0-rc.0 is chained in policy-only `generic-veth` mode and now enforces NetworkPolicy and supplies Hubble observability. |
 | Node pool               | `homelab-arm`, VM.Standard.A1.Flex 2 OCPU / 12 GB, 2 nodes (FD-1 + FD-2 in Private Subnet-nebula)    |
 | Worker NSG              | `oke-workers`                                                                                        |
 | API endpoint NSG        | `oke-api-endpoint`                                                                                   |
 | API endpoint subnet     | `oke-api-endpoint` (10.0.2.0/28)                                                                     |
 | StorageClasses          | `oci-bv` (RWO Block, AD-pinned — attaches to any node in AD-1, either FD; default), `oci-fss` (RWX File, AD-durable, Retain reclaim) |
 | Managed by              | Terraform (`terraform/oke-*.tf`, `terraform/fss.tf`)                                                  |
+
+### Cilium and Hubble
+
+Cilium is deployed by the standalone, prune-disabled ArgoCD application in
+`argocd/cilium-application.yaml`. It uses the 1.20 release line because this
+cluster runs Kubernetes 1.36; move from `1.20.0-rc.0` to the final 1.20 release
+once published and after the canary sync succeeds.
+
+The installation deliberately augments rather than replaces OKE networking:
+
+- `generic-veth` dynamically copies OKE's live `cbr0` Flannel conflist and
+  appends Cilium. Flannel retains pod IPAM, VXLAN, routes, and outbound NAT.
+- `externalRouting=true`, endpoint routes disabled, legacy host routing,
+  kube-proxy replacement disabled, and Cilium masquerading disabled keep packets in
+  the existing Flannel/kube-proxy datapath.
+- Cilium's required internal node allocation uses `10.245.0.0/16`; chained pod
+  endpoints continue to receive their real addresses from Flannel's
+  `10.244.0.0/16` range.
+- A DaemonSet canary runs on both nodes. PostSync jobs verify DNS, ClusterIP,
+  same-node and cross-node pod traffic, API access, internet egress, and a real
+  NetworkPolicy deny before ArgoCD reports the application healthy.
+
+One generic-veth detail matters for probes: OKE/Flannel sources kubelet HTTP
+probes from each node's `cni0` bridge gateway, so Cilium sees them as ordinary
+`10.244.x` CIDR traffic rather than the host identity. Policy-selected workloads
+should use local `exec` probes where practical and test network reachability
+separately, as the canary does. The upstream ArgoCD bootstrap policies are
+removed for this reason; they were inert under Flannel alone and could otherwise
+break ArgoCD after a restart.
+
+Hubble Relay and UI run in `kube-system`; the UI is available at
+`https://hubble.stevegore.au` behind Authentik. For CLI checks, run
+`cilium-dbg status --brief` or `hubble status` inside a Cilium agent pod.
+
+Rollback is deliberately manual: deleting the ArgoCD `cilium` Application does
+not prune its resources. Remove Cilium only during a maintenance window, then
+recycle both worker nodes so OKE recreates a pristine Flannel-only CNI state.
 
 ### Upgrading Kubernetes (done 2026-07-14, v1.35.2 → v1.36.1)
 
