@@ -60,16 +60,6 @@ else
   skip "argocd-server already deployed"
 fi
 
-# The upstream manifest's NetworkPolicies assume the kubelet retains a native
-# host identity. With OKE Flannel + Cilium generic-veth chaining, HTTP probes
-# arrive from cni0's 10.244.x bridge gateway and can be denied as CIDR traffic.
-# These policies were inert before Cilium and are not part of this repo's
-# security model, so keep ArgoCD's effective pre-Cilium exposure rather than
-# risk breaking it on the next pod restart.
-kubectl delete networkpolicy -n argocd \
-  -l app.kubernetes.io/part-of=argocd \
-  --ignore-not-found
-
 # ---------- 3. ApplicationSet ----------
 log "ApplicationSet"
 kubectl apply -f "${REPO_ROOT}/argocd/applicationset.yaml"
