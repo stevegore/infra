@@ -16,3 +16,6 @@ terraform/*.tfstate.*
 terraform/*.tfplan
 terraform/crash.log
 terraform/crash.*.log
+
+# Helm dependencies are fetched from Chart.lock during rendering.
+cilium/charts/

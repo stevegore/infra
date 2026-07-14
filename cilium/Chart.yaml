@@ -1,0 +1,14 @@
+apiVersion: v2
+name: cilium
+description: >-
+  Cilium chained onto OKE's existing Flannel CNI. Flannel remains responsible
+  for pod IPAM and VXLAN routing; Cilium adds NetworkPolicy enforcement and
+  Hubble observability.
+type: application
+version: 2.0.0
+appVersion: "1.20.0-rc.0"
+
+dependencies:
+  - name: cilium
+    version: 1.20.0-rc.0
+    repository: https://helm.cilium.io/
