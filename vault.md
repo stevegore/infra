@@ -60,7 +60,7 @@ Used by Vault Secrets Operator and application pods to authenticate.
 **Roles:**
 | Role | Bound Service Accounts | Bound Namespaces | Policies |
 |------|------------------------|------------------|----------|
-| vault-secrets-operator | vault-secrets-operator-controller-manager, default | vault-secrets-operator, caddy, openclaw, hermes, vaultwarden, tailscale-operator, homepage, databases, authentik, adminer, strava-keeper, garmin-mcp, gym-booker | caddy, openclaw, hermes, vaultwarden, tailscale-operator, homepage, pg-backups, authentik, adminer, strava-keeper, garmin-mcp, gym-booker |
+| vault-secrets-operator | vault-secrets-operator-controller-manager, default | vault-secrets-operator, caddy, openclaw, hermes, vaultwarden, tailscale-operator, homepage, databases, authentik, adminer, strava-keeper, garmin-mcp, gym-booker, argocd, uptime-kuma | caddy, openclaw, hermes, vaultwarden, tailscale-operator, homepage, pg-backups, authentik, adminer, strava-keeper, garmin-mcp, gym-booker, argocd, uptime-kuma |
 
 To onboard a new app namespace, append it to both `bound_service_account_namespaces` and (after writing the policy) `policies`:
 ```bash
