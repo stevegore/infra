@@ -63,12 +63,12 @@ This was fixed on the now-terminated ampere-ubuntu instance by manually installi
 
 ## OKE Cluster Health & Capacity (homelab)
 
-**Cluster Status:** ACTIVE (v1.35.2)
+**Cluster Status:** ACTIVE (v1.36.1, upgraded 2026-07-14 — node IPs change every rebuild/cycle; treat these as point-in-time)
 
 | Node | Internal IP | Status | Capacity | Mem used | CPU used |
 |------|-------------|--------|----------|----------|----------|
-| FD-1 (10.0.1.146) | 10.0.1.146 | Ready | 2 OCPU / 12 GB RAM | 3.9 GB (41%) | 12% |
-| FD-2 (10.0.1.138) | 10.0.1.138 | Ready | 2 OCPU / 12 GB RAM | 2.8 GB (30%) | 11% |
+| FD-1 (10.0.1.32)  | 10.0.1.32  | Ready | 2 OCPU / 12 GB RAM | 4.1 GB (44%) | 16% |
+| FD-2 (10.0.1.166) | 10.0.1.166 | Ready | 2 OCPU / 12 GB RAM | 1.0 GB (10%) | 2%  |
 
 **Total Cluster:** 4 OCPU / 24 GB RAM (within Always Free tier). ~36% memory / ~11% CPU in use — roughly **12 GB RAM free** (measured 2026-06-01 via metrics-server). The cluster is *not* memory- or CPU-constrained; an earlier note here claiming "~1.5 GB available / 87% CPU-bound / pods evicting" was inaccurate and has been corrected against live `kubectl top` data.
 
@@ -397,7 +397,7 @@ OCI users are capped at 2 active Customer Secret Keys. List + delete via
 | Property                | Value                                                                                                |
 | ----------------------- | ---------------------------------------------------------------------------------------------------- |
 | OCID                    | `ocid1.cluster.oc1.ap-sydney-1.aaaaaaaayyadaznxbxlzv7qz6drid3w3erh3yunv2zp7wdqzjclxsok2k6nq`         |
-| Kubernetes version      | `v1.35.2`                                                                                            |
+| Kubernetes version      | `v1.36.1` (control plane + workers upgraded in-place 2026-07-14; workers cycled via drain + `delete-node --is-decrement-size false`) |
 | Type                    | BASIC_CLUSTER (free — Enhanced incurs ~$0.15/hr; downgrade requires full cluster rebuild)            |
 | API endpoint            | Public, NSG-restricted to home IP `159.196.97.38/32`                                                 |
 | CNI                     | FLANNEL_OVERLAY (pods 10.244.0.0/16, services 10.96.0.0/16). ⚠️ Flannel does **not** enforce NetworkPolicy — any `NetworkPolicy` object (e.g. argocd's, `apps/ttyd`'s) is inert until a policy engine (Calico policy-only / "Canal") is installed. Verify enforcement before relying on one for isolation. ttyd's egress denial is instead enforced **in-pod**: an `egress-lockdown` init container (NET_ADMIN) installs iptables OUTPUT REJECTs for private/link-local CIDRs in the pod netns; the main container drops ALL caps so the rules can't be removed. |
@@ -405,8 +405,20 @@ OCI users are capped at 2 active Customer Secret Keys. List + delete via
 | Worker NSG              | `oke-workers`                                                                                        |
 | API endpoint NSG        | `oke-api-endpoint`                                                                                   |
 | API endpoint subnet     | `oke-api-endpoint` (10.0.2.0/28)                                                                     |
-| StorageClasses          | `oci-bv` (RWO Block, FD-pinned, default), `oci-fss` (RWX File, AD-durable, Retain reclaim)           |
+| StorageClasses          | `oci-bv` (RWO Block, AD-pinned — attaches to any node in AD-1, either FD; default), `oci-fss` (RWX File, AD-durable, Retain reclaim) |
 | Managed by              | Terraform (`terraform/oke-*.tf`, `terraform/fss.tf`)                                                  |
+
+### Upgrading Kubernetes (done 2026-07-14, v1.35.2 → v1.36.1)
+
+1. `oci ce cluster get --cluster-id <id>` → `available-kubernetes-upgrades`.
+2. Find the matching ARM node image:
+   `oci ce node-pool-options get --node-pool-option-id all --query 'data.sources[?contains("source-name", \`OKE-<ver>\`)]'` (pick the `aarch64` OL 8.x one).
+3. Bump `oke_kubernetes_version` + `oke_node_image_ocid` defaults in `terraform/oke-cluster.tf`; local plan must show exactly 2 in-place changes; push → ORM plan → ORM apply (upgrades the control plane in-place; node pool change only affects future nodes).
+4. BASIC_CLUSTER has **no managed node cycling** — replace workers one at a time:
+   - `kubectl cordon <node>`; move `pg-shared` first with `kubectl delete pod pg-shared-1 -n databases` (its CNPG PDB allows 0 disruptions, so `drain` alone hangs forever; deletion bypasses the PDB and CNPG reschedules it — the `oci-bv` PV is AD-pinned, not FD-pinned, so it attaches to the other node).
+   - `kubectl drain <node> --ignore-daemonsets --delete-emptydir-data`
+   - `oci ce node-pool delete-node --node-pool-id <id> --node-id <instance-ocid> --is-decrement-size false --force` → pool backfills a node on the new version/image. Watch for A1 out-of-capacity on the backfill before touching the second node.
+5. Expect ~5–10 min of pod churn after each replacement (1.3 GB authentik image pull is the slowest; Vault auto-unseals via KMS).
 
 ### Kubeconfig
 
