@@ -68,6 +68,8 @@ spec:
             - name: www
               mountPath: /www
       securityContext:
+        fsGroup: 65534
+        fsGroupChangePolicy: OnRootMismatch
         seccompProfile:
           type: RuntimeDefault
       volumes:
