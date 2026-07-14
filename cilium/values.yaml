@@ -39,10 +39,10 @@ cilium:
         - 10.245.0.0/16
       clusterPoolIPv4MaskSize: 25
 
-  # Initial rollout mode: observe the datapath without activating existing
-  # NetworkPolicies. This is changed to `default` only after the two-node
-  # connectivity canary passes.
-  policyEnforcementMode: never
+  # Phase-one connectivity passed on both OKE nodes. Use Cilium's normal
+  # per-endpoint policy mode: pods are unrestricted until selected by a
+  # NetworkPolicy, then the selected ingress/egress directions are enforced.
+  policyEnforcementMode: default
 
   # No L7 proxy is needed for Kubernetes NetworkPolicy or L3/L4 Hubble flows.
   # Generic-veth chaining also has limited L7 support, so omit the extra Envoy
@@ -106,5 +106,5 @@ cilium:
 canary:
   enabled: true
   image: docker.io/library/busybox:1.37.0
-  # Enabled with policyEnforcementMode=default after connectivity passes.
-  policyTestEnabled: false
+  # The PostSync deny hook proves that NetworkPolicy is actually enforced.
+  policyTestEnabled: true
