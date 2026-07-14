@@ -440,6 +440,15 @@ separately, as the canary does. `bootstrap/argocd-init.sh` preserves ArgoCD's
 upstream policies but rewrites its affected probes to call the same localhost
 health endpoints from inside each container.
 
+The first workload policy is the `apps/ttyd` CiliumNetworkPolicy guarding the
+public shell: ingress only from the Caddy pods on :8788, egress only to the
+public internet (`toCIDRSet 0.0.0.0/0` minus `denyCidrs` — RFC1918, link-local
+metadata, the Tailscale CGNAT range, and the kube API's public endpoint
+`140.238.193.94/32`; in-cluster identities are unmatchable by CIDR rules
+anyway). It replaced the previously inert k8s NetworkPolicy; the in-pod
+iptables egress lockdown stays as the engine-independent backstop. Verify live
+with `python3 scripts/verify-ttyd-hardening.py`.
+
 Hubble Relay and UI run in `kube-system`; the UI is available at
 `https://hubble.stevegore.au` behind Authentik. For CLI checks, run
 `cilium-dbg status --brief` or `hubble status` inside a Cilium agent pod.

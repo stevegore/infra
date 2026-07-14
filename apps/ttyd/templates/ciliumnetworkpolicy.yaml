@@ -1,0 +1,51 @@
+{{- if .Values.networkPolicy.enabled }}
+# ---------------------------------------------------------------------------
+# Containment for the public, unauthenticated ttyd shell, enforced by Cilium
+# (policy-only generic-veth chaining over OKE Flannel — see cilium/).
+#
+# Selecting the pod makes both directions default-deny; the rules below are
+# the only traffic allowed:
+#
+#   Ingress: the Caddy reverse-proxy pods on :8788, nothing else.
+#   Egress:  public internet only. Cilium CIDR rules can only ever match
+#            traffic to destinations OUTSIDE the cluster (reserved:world), so
+#            pods, nodes, and the kube-apiserver identity are unreachable by
+#            construction — no except entry needed for them. The except list
+#            blocks the "local" surfaces that ARE world-routable from the
+#            pod: the OCI instance-metadata endpoint, homelab/tailnet ranges,
+#            and the OKE API server's public endpoint. No CoreDNS carve-out:
+#            the pod runs dnsPolicy=None with public resolvers, so DNS goes
+#            out with the rest of the internet traffic.
+#
+# The same egress denies are also enforced by the egress-lockdown init
+# container in deployment.yaml (in-pod iptables), which survives a Cilium
+# rollback. Keep both in sync via .Values.denyCidrs. After changing either,
+# verify live with: python3 scripts/verify-ttyd-hardening.py
+# ---------------------------------------------------------------------------
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: {{ include "ttyd.fullname" . }}
+  labels:
+    {{- include "ttyd.labels" . | nindent 4 }}
+spec:
+  endpointSelector:
+    matchLabels:
+      {{- include "ttyd.selectorLabels" . | nindent 6 }}
+  ingress:
+    - fromEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: {{ .Values.networkPolicy.ingressFromNamespace }}
+            {{- range $key, $value := .Values.networkPolicy.ingressFromPodLabels }}
+            k8s:{{ $key }}: {{ $value }}
+            {{- end }}
+      toPorts:
+        - ports:
+            - port: "8788"
+              protocol: TCP
+  egress:
+    - toCIDRSet:
+        - cidr: 0.0.0.0/0
+          except:
+            {{- toYaml .Values.denyCidrs | nindent 12 }}
+{{- end }}

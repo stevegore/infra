@@ -18,7 +18,8 @@ Controls asserted (see apps/ttyd/templates/deployment.yaml):
   - runs as non-root uid 222 (securityContext)
   - read-only root filesystem, with home still writable (emptyDir)
   - dnsPolicy None -> public resolvers, no CoreDNS
-  - egress-lockdown iptables blocks OCI metadata / kube API / CoreDNS
+  - CiliumNetworkPolicy + egress-lockdown iptables block OCI metadata,
+    kube API (ClusterIP and public endpoint), CoreDNS, and the tailnet
   - public internet + DNS still reachable (shell stays usable)
   - visitor cannot flush the rules (no iptables) or escalate (no sudo)
 
@@ -148,6 +149,8 @@ PROBE = (
     'echo "[resolv]"; cat /etc/resolv.conf; '
     'echo "[metadata]"; timeout 4 bash -c "echo>/dev/tcp/169.254.169.254/80" 2>&1 || echo metadata_blocked; '
     'echo "[kubeapi]"; timeout 4 bash -c "echo>/dev/tcp/10.96.0.1/443" 2>&1 || echo kubeapi_blocked; '
+    'echo "[kubeapipub]"; timeout 4 bash -c "echo>/dev/tcp/140.238.193.94/6443" 2>&1 || echo kubeapi_public_blocked; '
+    'echo "[tailnet]"; timeout 4 bash -c "echo>/dev/tcp/100.100.100.100/53" 2>&1 || echo tailnet_blocked; '
     'echo "[coredns]"; timeout 4 bash -c "echo>/dev/tcp/10.96.0.10/53" 2>&1 || echo coredns_blocked; '
     'echo "[internet]"; timeout 6 bash -c "echo>/dev/tcp/1.1.1.1/443" && echo internet_ok; '
     'echo "[curl]"; timeout 8 curl -sI https://example.com 2>&1 | head -1; '
@@ -164,6 +167,8 @@ CHECKS = [
     ("public resolvers (no CoreDNS)", "nameserver 1.1.1.1"),
     ("OCI metadata 169.254.169.254 blocked", "metadata_blocked"),
     ("kube API 10.96.0.1 blocked", "kubeapi_blocked"),
+    ("kube API public 140.238.193.94 blocked", "kubeapi_public_blocked"),
+    ("tailnet 100.64.0.0/10 blocked", "tailnet_blocked"),
     ("CoreDNS 10.96.0.10 blocked", "coredns_blocked"),
     ("public internet reachable", "internet_ok"),
     ("outbound TLS/DNS works (curl)", "200"),

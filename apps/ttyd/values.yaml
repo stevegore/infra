@@ -24,22 +24,25 @@ restarter:
   schedule: "*/30 * * * *"
   image: docker.io/bitnami/kubectl:latest
 
-# Private/link-local CIDRs the shell must never reach: cluster pods/services,
-# nodes, the MySQL/Vault backends, and the OCI instance-metadata endpoint
-# (169.254.169.254). Egress to the public internet is still allowed (ttyd stays
-# usable), just not to anything internal. Enforced two ways:
-#   1. ACTIVE: in-pod iptables OUTPUT rules installed by the egress-lockdown
-#      init container (see deployment.yaml) — needs no NetworkPolicy engine,
-#      and the ttyd container drops ALL capabilities so a visitor cannot
-#      remove the rules.
-#   2. INERT: a NetworkPolicy object — kube-flannel does NOT enforce policy, so
-#      it has no effect today; committed so the posture activates automatically
-#      if a policy engine (Calico policy-only / "Canal") ever lands.
+# CIDRs the shell must never reach: cluster pods/services, nodes, the
+# MySQL/Vault backends, the OCI instance-metadata endpoint (169.254.169.254),
+# the tailnet, and the OKE API server's PUBLIC endpoint (which no private
+# range covers). Egress to the rest of the public internet is still allowed
+# (ttyd stays usable), just nothing local. Enforced two ways:
+#   1. CiliumNetworkPolicy (templates/ciliumnetworkpolicy.yaml) — Cilium is
+#      chained over Flannel in policy-only mode and enforces it at the
+#      datapath.
+#   2. In-pod iptables OUTPUT rules installed by the egress-lockdown init
+#      container (see deployment.yaml) — engine-independent backstop that
+#      survives a Cilium rollback, and the ttyd container drops ALL
+#      capabilities so a visitor cannot remove the rules.
 denyCidrs:
-  - 10.0.0.0/8
+  - 10.0.0.0/8        # VCN, Flannel pods, ClusterIP services (incl. kube API 10.96.0.1)
   - 172.16.0.0/12
-  - 192.168.0.0/16
-  - 169.254.0.0/16
+  - 192.168.0.0/16    # homelab LAN
+  - 169.254.0.0/16    # OCI instance metadata
+  - 100.64.0.0/10     # CGNAT — Tailscale tailnet addresses
+  - 140.238.193.94/32 # OKE kube API public endpoint (kubectl config view --minify)
 
 egressLockdown:
   # Official Kubernetes iptables build image (what kube-proxy ships on). Pinned
@@ -48,5 +51,7 @@ egressLockdown:
 
 networkPolicy:
   enabled: true
-  # Namespace hosting the Caddy pods allowed to reach ttyd on :8788.
+  # Only the Caddy reverse-proxy pods may reach ttyd on :8788.
   ingressFromNamespace: caddy
+  ingressFromPodLabels:
+    app.kubernetes.io/name: caddy
