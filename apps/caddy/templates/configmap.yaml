@@ -227,3 +227,20 @@ data:
       reverse_proxy ttyd.ttyd.svc.cluster.local:8788
       import defaults
     }
+
+    # Catch-all for undefined subdomains — MUST stay last for readability, though
+    # Caddy matches on specificity rather than order, so every explicit vhost
+    # above still wins.
+    #
+    # `*.stevegore.au` is a wildcard DNS record, so a retired service (hermes,
+    # photoprism) keeps resolving here long after its vhost is gone. Without this
+    # block Caddy has no certificate for the name and aborts the TLS handshake —
+    # which reads as "the whole site is down" rather than "that service is gone".
+    # The wildcard cert is issued through the same Cloudflare DNS-01 flow.
+    #
+    # Only matches a single label: `grpc.argocd.stevegore.au` and the apex are
+    # unaffected.
+    *.stevegore.au {
+      import defaults
+      respond "Not all who wander are lost, but you probably are." 404
+    }
