@@ -21,8 +21,14 @@ service:
   type: ClusterIP
   # Caddy fronts external traffic at bw.stevegore.au; nothing else needs to
   # talk to Vaultwarden, so ClusterIP is enough.
-  webPort: 80          # main web vault + API
-  websocketPort: 3012  # notifications hub
+  #
+  # One port only. Vaultwarden used to serve the notifications hub on a separate
+  # 3012 listener; since 1.31.0 it is multiplexed onto the main HTTP port at
+  # /notifications/hub and WEBSOCKET_ENABLED is a no-op. Keeping the old port
+  # declared cost us a live outage: Caddy proxied /notifications/hub to :3012,
+  # nothing listened there, and every Bitwarden client got 502 on its sync
+  # channel while the web vault looked perfectly healthy.
+  webPort: 80          # web vault + API + notifications hub
 
 # Public URL — Vaultwarden generates email links and CORS off this.
 domain: https://bw.stevegore.au
@@ -30,7 +36,6 @@ domain: https://bw.stevegore.au
 config:
   signupsAllowed: false
   invitationsAllowed: false
-  websocketEnabled: true
   webVaultEnabled: true
   # logout-on-restart is acceptable: per §7.1 the RSA keys at /data/rsa_key.*
   # are ephemeral; clients re-auth on cutover anyway.

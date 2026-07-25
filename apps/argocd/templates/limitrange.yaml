@@ -1,0 +1,45 @@
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: argocd-defaults
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: argocd-defaults
+    app.kubernetes.io/part-of: argocd
+spec:
+  limits:
+    # ArgoCD's own Deployments are NOT managed by this chart — they were applied
+    # from the upstream install manifest, and ArgoCD does not self-manage. That
+    # leaves no place to set per-pod resources in git, and upstream ships none,
+    # so all seven pods ran as BestEffort: zero requests, first in line for
+    # eviction under node memory pressure. On a two-node cluster, evicting the
+    # controller that repairs everything else is the worst possible outcome, and
+    # there is nowhere for it to reschedule.
+    #
+    # A namespace LimitRange is the one lever that works without vendoring
+    # upstream's manifests. It applies a floor at pod admission, which moves
+    # every pod to Burstable.
+    #
+    # Sizing against observed usage (kubectl top, 2026-07-25): redis 12Mi,
+    # notifications 30Mi, dex 39Mi, appset 56Mi, server 65Mi, repo-server 69Mi,
+    # application-controller 339Mi. CPU was 1-13m across the board.
+    #
+    # 192Mi covers six of the seven with headroom. application-controller runs
+    # above it and stays a relatively early eviction candidate among Burstable
+    # pods — a uniform namespace default cannot size a 339Mi pod and a 12Mi pod
+    # correctly at once. Fixing that properly means putting upstream's install
+    # manifest in this repo; until then Burstable-but-under-requested still
+    # beats BestEffort.
+    #
+    # defaultRequest only, deliberately no `default`: adding a memory limit
+    # would turn a controller spike during a large sync into an OOM kill, and a
+    # CPU limit would throttle it. Requests guarantee scheduling; leaving limits
+    # unset lets the control plane burst into spare node capacity.
+    #
+    # NOTE: this is applied at admission, so it does not touch running pods.
+    # After a change here, restart the workloads:
+    #   kubectl rollout restart -n argocd deploy,statefulset
+    - type: Container
+      defaultRequest:
+        cpu: {{ .Values.resources.defaultRequest.cpu }}
+        memory: {{ .Values.resources.defaultRequest.memory }}

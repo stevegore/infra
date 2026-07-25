@@ -82,9 +82,11 @@ data:
       reverse_proxy http://argocd-server.argocd.svc.cluster.local:80
     }
 
-    grpc.argocd.stevegore.au {
-      reverse_proxy h2c://argocd-server.argocd.svc.cluster.local:80
-    }
+    # No grpc.argocd vhost. argocd-server (server.insecure=true) resets h2c
+    # prior-knowledge connections, so that host only ever returned 502. The
+    # supported path is gRPC-Web over the normal vhost, which works today:
+    #   argocd login argocd.stevegore.au --grpc-web
+    # Undefined subdomains land on the *.stevegore.au catch-all below.
 
     bw.stevegore.au {
       header / {
@@ -94,8 +96,11 @@ data:
         X-Robots-Tag "none"
         -Server
       }
-      reverse_proxy /notifications/hub/negotiate vaultwarden.vaultwarden.svc.cluster.local:80
-      reverse_proxy /notifications/hub vaultwarden.vaultwarden.svc.cluster.local:3012
+      # One upstream for everything, including /notifications/hub — Vaultwarden
+      # 1.31.0+ multiplexes the websocket onto the main HTTP port. The old
+      # split (hub -> :3012) silently 502'd every client's sync channel because
+      # nothing binds 3012 any more; the web vault kept working, so it looked
+      # fine. Caddy upgrades the websocket through this proxy on its own.
       reverse_proxy vaultwarden.vaultwarden.svc.cluster.local:80 {
         header_up X-Real-IP {remote_host}
       }
@@ -238,8 +243,10 @@ data:
     # which reads as "the whole site is down" rather than "that service is gone".
     # The wildcard cert is issued through the same Cloudflare DNS-01 flow.
     #
-    # Only matches a single label: `grpc.argocd.stevegore.au` and the apex are
-    # unaffected.
+    # Only matches a single label, so the apex is unaffected — and so is anything
+    # deeper like `a.b.stevegore.au`, which gets no cert and a failed handshake
+    # rather than this 404. Nothing multi-label is published; if that changes,
+    # the name needs its own vhost or a second wildcard.
     *.stevegore.au {
       import defaults
       respond "Not all who wander are lost, but you probably are." 404

@@ -19,7 +19,6 @@
 | stevegore.au             | 159.13.44.68  | No      | Root domain → OKE NLB (Caddy)               |
 | *.stevegore.au           | 159.13.44.68  | No      | Wildcard → OKE NLB (Caddy)                  |
 | argocd.stevegore.au      | 159.13.44.68  | No      | → OKE NLB (Caddy → ArgoCD in-cluster)       |
-| grpc.argocd.stevegore.au | 159.13.44.68  | No      | → OKE NLB (Caddy → ArgoCD gRPC in-cluster)  |
 
 `uptime.stevegore.au` and `hubble.stevegore.au` are covered by the wildcard `*.stevegore.au` A record, so no separate Cloudflare DNS record is required unless we later want host-specific proxy or TTL settings.
 
@@ -32,6 +31,31 @@ touching Cloudflare — removing the vhost is enough.
 
 The Phase 3 migration canary `oke-test.stevegore.au` was deleted 2026-07-25; it
 now resolves via the wildcard to the catch-all.
+
+`grpc.argocd.stevegore.au` was deleted 2026-07-25 (record and vhost). It had only
+ever returned 502: `argocd-server` runs with `server.insecure=true` and resets
+h2c prior-knowledge connections, so Caddy's `h2c://` upstream never completed a
+handshake. The supported path is gRPC-Web over the normal vhost — see
+`ARGOCD_WORKFLOW.md`.
+
+**The DNS wildcard and the Caddy wildcard cover different depths — verified
+2026-07-25.** Cloudflare answers *any* depth from the `*.stevegore.au` record,
+including multi-label names, even where a closer node exists (`a.b.stevegore.au`
+→ `159.13.44.68`, despite `argocd.stevegore.au` being a real record). Caddy's
+`*.stevegore.au` site block matches a **single** label only. So a multi-label
+name resolves, reaches Caddy, finds no vhost and no certificate, and fails the
+handshake:
+
+| Request | Result |
+| ------- | ------ |
+| `zzztest.stevegore.au` | 404, catch-all |
+| `a.b.stevegore.au`     | `tlsv1 alert internal error` |
+
+That is the outage-shaped failure the catch-all was added to prevent, so it is
+still reachable one level down. It costs nothing today because nothing
+multi-label is published — `grpc.argocd.stevegore.au` was the only one. If a
+deeper name is ever needed, give it an explicit vhost or add a
+`*.<sub>.stevegore.au` block; do not assume the catch-all covers it.
 
 **Reserved IP:** `159.13.44.68` — OCI NLB reserved public IP (OCID in `terraform/nlb.tf`). Survives NLB recreation.
 
@@ -227,10 +251,9 @@ All services proxied through Caddy on OKE (NLB → 159.13.44.68).
 | auth.stevegore.au        | authentik-server.authentik:80             | —        | Authentik IdP (GitHub-federated) + forward-auth outpost |
 | healthz.stevegore.au     | —                                         | —        | Caddy `respond "OK"`             |
 | argocd.stevegore.au      | argocd-server.argocd:80 (HTTP, insecure)  | ArgoCD   | ArgoCD in `--insecure` mode      |
-| grpc.argocd.stevegore.au | argocd-server.argocd:80 (h2c)             | ArgoCD   | ArgoCD gRPC                      |
 | hubble.stevegore.au      | hubble-ui.kube-system:80                   | Authentik| Cilium network-flow observability |
 | vault.stevegore.au       | vault.vault:8200                          | Vault UI | Vault handles own auth           |
-| bw.stevegore.au          | vaultwarden.vaultwarden:80 / :3012        | —        | Vaultwarden + WebSocket hub      |
+| bw.stevegore.au          | vaultwarden.vaultwarden:80                | —        | Vaultwarden; the notifications hub shares :80 (see below) |
 | homepage.stevegore.au    | homepage.homepage:3000                    | Authentik| Homepage dashboard               |
 | uptime.stevegore.au      | uptime-kuma.uptime-kuma:3001             | Uptime Kuma | Full UI + status page         |
 | status.stevegore.au      | uptime-kuma.uptime-kuma:3001             | —        | Custom-domain alias for the `homelab` status page (cname row managed by `scripts/setup_status_page.py`) |
@@ -239,6 +262,16 @@ All services proxied through Caddy on OKE (NLB → 159.13.44.68).
 | garmin.stevegore.au      | garmin-mcp.garmin-mcp:8080                | Secret URL path | Garmin MCP server for Claude connectors; gated by `handle_path /{$GARMIN_MCP_PATH_SECRET}/*` (secret in `kv/caddy/config`), 404 otherwise. See `apps/garmin-mcp/README.md` |
 | stevegore.au         | ttyd.ttyd:8788                            | —        | ttyd web terminal (migrated from pico 2026-06-03) |
 | gym.stevegore.au         | gym-booker.gym-booker:5000                | Authentik| Elixr gym auto-booker (migrated from pico 2026-07-05) |
+
+**Vaultwarden has one port, not two.** Until 2026-07-25 the `bw` vhost proxied
+`/notifications/hub` to `vaultwarden:3012`, matching Vaultwarden's old split
+listener. Since 1.31.0 the websocket is multiplexed onto the main HTTP port and
+`WEBSOCKET_ENABLED` does nothing, so nothing bound 3012 and every Bitwarden
+client's sync channel got a 502 — invisible from the web vault, which was
+served on :80 and looked healthy. The Service port, the containerPort and the
+special-case `reverse_proxy` lines are all gone. Symptom to recognise if it
+regresses: `dial tcp <clusterIP>:3012: connect: connection refused` in the Caddy
+error log, with clients silently failing to see each other's vault changes.
 
 **Via Tailscale Egress Service to pico (`pico` ExternalName svc in caddy namespace):**
 
