@@ -127,15 +127,17 @@ pico:
   # (suffix `chipmunk-fir.ts.net`). Confirm with `tailscale status` on pico
   # before changing — a tailnet rename would invalidate this.
   tailnetFqdn: pico.chipmunk-fir.ts.net
-  # Ports the proxy needs to forward. Keep in sync with the upstream lines
-  # in templates/configmap.yaml.
+  # The `pico` Service is type ExternalName, so this list is DESCRIPTIVE, not
+  # enforcing: kube-dns just returns a CNAME and Caddy dials the port directly,
+  # which means an undeclared port still works. Keep it in sync with the
+  # `reverse_proxy pico:<port>` lines in templates/configmap.yaml anyway — it is
+  # the only inventory of what we actually reach on pico.
   ports:
     - { name: hass,    port: 8123  }
     - { name: desk,    port: 8111  }
     - { name: plex,    port: 32400 }
-    - { name: immich,       port: 2283  }
-    - { name: photoprism,  port: 2342  }
-    - { name: port,        port: 9000  }
+    - { name: immich,  port: 2283  }
+    - { name: port,    port: 9000  }
     - { name: huginn,  port: 3000  }
     - { name: pdf,     port: 8083  }
-    - { name: strava,  port: 8180  }
+    - { name: stats,   port: 8001  }

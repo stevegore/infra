@@ -25,6 +25,20 @@
 
 **Reserved IP:** `159.13.44.68` — OCI NLB reserved public IP (OCID in `terraform/nlb.tf`). Survives NLB recreation.
 
+**Cloudflare proxy — deliberately OFF for the OKE origin (decided 2026-07-25).**
+Everything on `159.13.44.68` is DNS-only: the origin IP is public, and there is
+no Cloudflare WAF/DDoS layer in front of Caddy. This is a conscious trade, not an
+oversight — the proxy is only wanted for Vaultwarden's `bw2.stevegore.au`, where
+it comes for free because a `cfargotunnel.com` CNAME *must* be proxied.
+
+Two consequences worth remembering before changing this:
+- Earlier notes in `architecture-proposal.md` (§10 Phase 3, §12) assume the proxy
+  is on — e.g. "Cloudflare proxy hides the IP change from external clients". That
+  assumption does not hold; an NLB IP change is visible to clients.
+- The §12 mitigation "restrict 443 to Cloudflare IP ranges" is **not** available
+  while records are DNS-only — traffic arrives from real client IPs, so such a
+  rule would block everyone. Turning the proxy on is a prerequisite for it.
+
 ### CNAME Records
 
 | Name                        | Target                                                | Proxied | Notes                                        |
@@ -62,8 +76,7 @@ Internet
     │                                            │       ├─► uptime-kuma.uptime-kuma:3001
     │                                            │       ├─► hubble-ui.kube-system:80
     │                                            │       ├─► headlamp.headlamp:80
-    │                                            │       ├─► adminer.adminer:80
-    │                                            │       └─► hermes.hermes:9119
+    │                                            │       └─► adminer.adminer:80
     │                                            │
     │                                            └─► pico (via Tailscale Egress Service)
     │                                                    │  (Tailscale operator proxy pod
@@ -87,7 +100,7 @@ handled by **Authentik** (`apps/authentik`, namespace `authentik`), not Caddy:
 - `auth.stevegore.au` reverse-proxies the Authentik server (the IdP + embedded
   forward-auth outpost). Login federates to **GitHub** (OAuth App), restricted to
   Steve's GitHub identity by an expression policy on the `stevegore` application.
-- Gated vhosts (`homepage`, `headlamp`, `desk`, `gym`, `hermes`, `adminer`) use Caddy's
+- Gated vhosts (`homepage`, `headlamp`, `desk`, `gym`, `adminer`) use Caddy's
   built-in `forward_auth` to the embedded outpost (`/outpost.goauthentik.io/`),
   defined by the `(authentik)` snippet in `apps/caddy`'s Caddyfile.
 - Caddy is now **stateless** w.r.t. auth (Authentik holds all session/OAuth
@@ -212,7 +225,6 @@ All services proxied through Caddy on OKE (NLB → 159.13.44.68).
 | uptime.stevegore.au      | uptime-kuma.uptime-kuma:3001             | Uptime Kuma | Full UI + status page         |
 | status.stevegore.au      | uptime-kuma.uptime-kuma:3001             | —        | Custom-domain alias for the `homelab` status page (cname row managed by `scripts/setup_status_page.py`) |
 | headlamp.stevegore.au    | headlamp.headlamp:80                      | Authentik| Kubernetes web dashboard         |
-| hermes.stevegore.au      | hermes.hermes:9119                        | Authentik|                                  |
 | adminer.stevegore.au     | adminer.adminer:80                        | Authentik| DB browser — pg-shared + MySQL HeatWave |
 | garmin.stevegore.au      | garmin-mcp.garmin-mcp:8080                | Secret URL path | Garmin MCP server for Claude connectors; gated by `handle_path /{$GARMIN_MCP_PATH_SECRET}/*` (secret in `kv/caddy/config`), 404 otherwise. See `apps/garmin-mcp/README.md` |
 | stevegore.au         | ttyd.ttyd:8788                            | —        | ttyd web terminal (migrated from pico 2026-06-03) |
@@ -227,7 +239,6 @@ All services proxied through Caddy on OKE (NLB → 159.13.44.68).
 | plex.stevegore.au   | 32400     | —        | Plex Media Server              |
 | photos.stevegore.au        | 2283      | —        | Immich photo library (primary) |
 | immich.stevegore.au        | 2283      | —        | Immich (alias)                 |
-| photoprism.stevegore.au    | 2342      | —        | PhotoPrism                     |
 | port.stevegore.au   | 9000      | —        | Portainer                      |
 | huginn.stevegore.au | 3000      | —        | Huginn                         |
 | pdf.stevegore.au    | 8083      | —        | Stirling PDF                   |

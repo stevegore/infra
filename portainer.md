@@ -50,7 +50,7 @@ curl -s -X POST http://pico.local:9000/api/endpoints/1/docker/exec/$EXEC_ID/star
 3. [plex](#plex) - Media server  
 4. [owncloud](#owncloud) - Cloud storage (stopped)  
 5. [stevegore-au](#stevegore-au) - Web terminal and utilities (stopped — migrated to OKE)  
-6. [photoprism](#photoprism) - Photo management with AI  
+6. [photoprism](#photoprism) - Photo management with AI (**decommissioned** — superseded by Immich)  
 7. [huggin](#huggin) - Task automation  
 8. [nuraspace2](#nuraspace2) - NuraSpace application  
 9. [pdf](#pdf) - Stirling PDF document processor  
@@ -503,7 +503,20 @@ volumes:
 
 ### photoprism
 
-**Status:** Running  
+> **⚠️ DECOMMISSIONED 2026-07-25.** Sunset per the decision recorded in
+> `architecture-proposal.md` §13 ("Immich covers the use case"). Containers and
+> images removed from pico; `photoprism.stevegore.au` removed from the Caddy
+> vhosts, the Homepage dashboard, and the Uptime Kuma monitors.
+>
+> **Data retained, not deleted:** `/media/m2/photoprism/storage` (cache/sidecar)
+> and `/media/m2/photoprism/database` (MariaDB index — albums, labels, faces)
+> are still on disk. `/media/m2/photos` is the **shared originals directory and
+> is also Immich's source — never delete it.** Delete only the two
+> `photoprism/` subdirectories, and only once you're sure the index isn't wanted.
+>
+> Config below is kept for reference / rollback.
+
+**Status:** Decommissioned (was: Running)  
 **Stack ID:** 30  
 **Project Path:** `/data/compose/30`  
 **Compose Version:** v4  

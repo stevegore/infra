@@ -60,7 +60,7 @@ Used by Vault Secrets Operator and application pods to authenticate.
 **Roles:**
 | Role | Bound Service Accounts | Bound Namespaces | Policies |
 |------|------------------------|------------------|----------|
-| vault-secrets-operator | vault-secrets-operator-controller-manager, default | vault-secrets-operator, caddy, openclaw, hermes, vaultwarden, tailscale-operator, homepage, databases, authentik, adminer, strava-keeper, garmin-mcp, gym-booker, argocd, uptime-kuma | caddy, openclaw, hermes, vaultwarden, tailscale-operator, homepage, pg-backups, authentik, adminer, strava-keeper, garmin-mcp, gym-booker, argocd, uptime-kuma |
+| vault-secrets-operator | vault-secrets-operator-controller-manager, default | vault-secrets-operator, caddy, vaultwarden, tailscale-operator, homepage, databases, authentik, adminer, strava-keeper, garmin-mcp, gym-booker, argocd, uptime-kuma | caddy, vaultwarden, tailscale-operator, homepage, pg-backups, authentik, adminer, strava-keeper, garmin-mcp, gym-booker, argocd, uptime-kuma |
 
 To onboard a new app namespace, append it to both `bound_service_account_namespaces` and (after writing the policy) `policies`:
 ```bash
@@ -155,8 +155,6 @@ Key-value secrets engine for application credentials.
 **Paths:**
 | Path | Description | Access Policies |
 |------|-------------|-----------------|
-| kv/openclaw | OpenClaw AI assistant credentials | openclaw |
-| kv/hermes | Hermes Agent credentials | hermes |
 | kv/authentik/config | Authentik: secret_key, username/password (pg-shared role), bootstrap_password/token, github_client_id/secret | authentik (authentik ns), pg-backups+authentik (databases ns) |
 | kv/argocd | GitHub OAuth App client secret for Dex SSO | argocd (argocd ns) |
 | kv/oci/pg-backups | OCI Customer Secret Key (S3) for pg-shared WAL/base backups | pg-backups (databases ns) |
@@ -164,17 +162,10 @@ Key-value secrets engine for application credentials.
 | kv/strava-keeper/config | Strava Keeper: STRAVA_CLIENT_ID, STRAVA_CLIENT_SECRET, STRAVA_VERIFY_TOKEN, MYSQL_DSN | strava-keeper |
 | kv/gym-booker/config | Gym Booker: USERS_YAML (full users.yaml — gym credentials, swim schedule, pushover tokens) | gym-booker |
 
-**Secrets Structure:**
-```
-kv/
-├── openclaw/
-│   ├── ANTHROPIC_API_KEY
-│   ├── OPENCLAW_GATEWAY_TOKEN
-│   └── TELEGRAM_BOT_TOKEN
-└── hermes/
-    ├── ANTHROPIC_API_KEY (or OPENROUTER_API_KEY)
-    └── TELEGRAM_BOT_TOKEN
-```
+> **Decommissioned:** `kv/openclaw` and `kv/hermes` (plus their `openclaw` /
+> `hermes` policies and the matching VSO namespace bindings) were removed
+> 2026-07-25 — both services are gone (hermes since 2026-06-06). See
+> "Removing a decommissioned app" below.
 
 ---
 
@@ -188,26 +179,28 @@ path "*" {
 }
 ```
 
-### openclaw
-Read-only access to OpenClaw secrets.
-```hcl
-path "kv/data/openclaw" {
-  capabilities = ["read"]
-}
-path "kv/metadata/openclaw" {
-  capabilities = ["read"]
-}
-```
+### Removing a decommissioned app
 
-### hermes
-Read-only access to Hermes Agent secrets.
-```hcl
-path "kv/data/hermes" {
-  capabilities = ["read"]
-}
-path "kv/metadata/hermes" {
-  capabilities = ["read"]
-}
+When an app is retired, its Vault footprint is three things — the kv path, the
+policy, and the VSO role binding. Miss the third and the role keeps granting a
+policy that no longer exists. Full removal (example: `hermes`):
+
+```bash
+export VAULT_ADDR=https://vault.stevegore.au
+export VAULT_TOKEN=$(cat vault-root.token)
+
+vault kv get -format=json kv/hermes > /tmp/vault-backup-hermes.json   # back up first
+vault kv metadata delete kv/hermes
+vault policy delete hermes
+
+# Re-write the VSO role WITHOUT the dead namespace and policy. `vault write`
+# replaces the whole role, so both lists must be restated in full.
+vault read auth/kubernetes/role/vault-secrets-operator   # copy current lists
+vault write auth/kubernetes/role/vault-secrets-operator \
+  bound_service_account_names="vault-secrets-operator-controller-manager,default" \
+  bound_service_account_namespaces="<list minus the dead ns>" \
+  policies="<list minus the dead policy>" \
+  ttl=1h
 ```
 
 ---
@@ -369,12 +362,16 @@ path "kv/metadata/<app-name>" {
 EOF
 ```
 
-2. Update VSO role (if needed):
+2. Update VSO role (if needed). `vault write` **replaces** the role, so read the
+   current lists first and restate them in full plus your additions — otherwise
+   you silently revoke every other app:
 ```bash
+vault read auth/kubernetes/role/vault-secrets-operator   # copy the current lists
+
 vault write auth/kubernetes/role/vault-secrets-operator \
-  bound_service_account_names=vault-secrets-operator-controller-manager \
-  bound_service_account_namespaces=vault-secrets-operator \
-  policies="openclaw,hermes,<app-name>" \
+  bound_service_account_names="vault-secrets-operator-controller-manager,default" \
+  bound_service_account_namespaces="<current list>,<app-namespace>" \
+  policies="<current list>,<app-name>" \
   ttl=1h
 ```
 
