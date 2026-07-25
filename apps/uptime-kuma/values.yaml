@@ -5,6 +5,19 @@
 # SETUP (first install or after MySQL DB loss): create admin at
 # https://uptime.stevegore.au, then run scripts/setup_uptime_kuma.py.
 
+# Stays at 1, and gets no PodDisruptionBudget.
+#
+# Uptime Kuma has no clustering. Every replica runs the full monitor scheduler,
+# so 2 pods means every check fires twice, every notification is sent twice, and
+# both write heartbeats into the same MySQL tables. The /app/data PVC below is
+# `oci-bv`, which is ReadWriteOnce block storage and can only attach to one node
+# at a time, so a second replica could not schedule onto the other worker even
+# if the app tolerated it.
+#
+# No PDB: minAvailable: 1 over a single replica permits zero voluntary
+# disruptions, so a node drain would block forever waiting for an eviction that
+# can never be allowed. Ironically that would stall the very node upgrade this
+# monitor is watching. Downtime here is a gap in graphs, not an outage.
 replicaCount: 1
 
 image:

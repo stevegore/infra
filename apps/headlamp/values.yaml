@@ -1,5 +1,47 @@
 headlamp:
-  replicaCount: 1
+  # 2 replicas. Headlamp's backend is a stateless API-server proxy here: it runs
+  # with `-in-cluster`, the browser holds the ServiceAccount token from
+  # templates/sa-token.yaml and presents it on every request, there is no OIDC
+  # flow whose in-flight state could be pinned to one pod, and no PVC (plugins
+  # ship in the image; the chart's optional plugin PVC is not enabled). So both
+  # pods answer identically and either can serve any request.
+  #
+  # This is also the dashboard you most want working *during* a node
+  # replacement, which is the argument for spending the second pod on it.
+  replicaCount: 2
+
+  # Force the 2 replicas onto different nodes. Note this is a spread constraint
+  # rather than the `required` podAntiAffinity that apps/caddy uses: this is an
+  # upstream chart with no knob for the Deployment's rollout strategy, so we
+  # cannot set maxSurge=0, and a surge pod can never satisfy a required
+  # anti-affinity term on a 2-node cluster — the rollout would wedge with a
+  # permanently Pending pod. maxSkew=1 still guarantees 1-per-node in steady
+  # state (2-on-1-node is skew 2) while allowing the 3-pod 2/1 split a rolling
+  # update needs.
+  #
+  # topologyKey is the hostname, not topology.kubernetes.io/zone: both workers
+  # sit in AP-SYDNEY-1-AD-1 and only differ by fault domain, so a zone-based
+  # constraint is a no-op here.
+  topologySpreadConstraints:
+    - maxSkew: 1
+      topologyKey: kubernetes.io/hostname
+      whenUnsatisfiable: DoNotSchedule
+      labelSelector:
+        matchLabels:
+          app.kubernetes.io/name: headlamp
+          app.kubernetes.io/instance: headlamp
+
+  # Only correct because replicaCount is 2 above. A minAvailable: 1 PDB over a
+  # single replica permits no voluntary disruption at all and makes `kubectl
+  # drain` hang forever, which would break the node-replacement runbook in
+  # oracle-cloud.md. If the replica count is ever reduced, set enabled: false in
+  # the same commit.
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 1
+    # The chart renders both keys when both are set; null keeps maxUnavailable
+    # out of the manifest (the API rejects a PDB that specifies both).
+    maxUnavailable: null
 
   image:
     # Chart appVersion omits the 'v' but GHCR tags have it

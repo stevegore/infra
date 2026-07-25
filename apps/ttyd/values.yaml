@@ -5,7 +5,15 @@ replicaCount: 1
 
 image:
   repository: docker.io/stevegore/ttyd
-  tag: "latest"
+  # Pinned to the git-SHA tag that `latest` currently resolves to (pushed
+  # 2026-06-03, index digest sha256:3527815b…). This image *is* the public
+  # shell, so a floating `latest` would silently change what internet visitors
+  # land in — and the restarter CronJob below re-pulls every 30 min, which
+  # would deploy an unreviewed rebuild without anyone touching git. Bump this
+  # SHA deliberately after rebuilding. Multi-arch: the index carries a
+  # linux/arm64 manifest (sha256:aa25746c…), required by the aarch64 A1.Flex
+  # worker nodes.
+  tag: "ec6ffa5cb3ead6eabf09fb96d9e6ed58a8a66579"
   pullPolicy: Always
 
 resources:
@@ -22,7 +30,24 @@ service:
 
 restarter:
   schedule: "*/30 * * * *"
-  image: docker.io/bitnami/kubectl:latest
+  # Official upstream kubectl, same registry as the egress-lockdown image below
+  # (no Docker Hub rate-limit exposure). Replaces docker.io/bitnami/kubectl:latest:
+  # Bitnami froze its public Docker Hub catalog in 2025 and that repo now only
+  # publishes `latest` plus digest-style tags, so it cannot be version-pinned at
+  # all. v1.36.3 is the newest patch of the cluster's own minor (server is
+  # v1.36.1) — keep this on the cluster's minor when OKE is upgraded.
+  # Verified linux/arm64 manifest (sha256:3a0ec5de…) for the A1.Flex nodes.
+  #
+  # NOTE: this image is distroless — it contains /bin/kubectl and nothing else,
+  # no /bin/sh. That is fine because templates/cronjob.yaml execs kubectl
+  # directly via exec-form `command:`. Never rewrite that into `sh -c`.
+  image: registry.k8s.io/kubectl:v1.36.3
+  # The image's Dockerfile USER is 0, so the pod's runAsNonRoot: true would fail
+  # admission on its own. 65532/65532 is the `nonroot` account baked into the
+  # image's /etc/passwd, and it owns a writable HOME (/home/nonroot) for
+  # kubectl's discovery cache. Re-check these if the image above changes.
+  runAsUser: 65532
+  runAsGroup: 65532
 
 # CIDRs the shell must never reach: cluster pods/services, nodes, the
 # MySQL/Vault backends, the OCI instance-metadata endpoint (169.254.169.254),

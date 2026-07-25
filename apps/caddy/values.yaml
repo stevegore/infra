@@ -115,6 +115,12 @@ podAntiAffinity:
   # to fail to schedule rather than silently land both on the same node.
   enabled: true
 
+# Voluntary-disruption protection. Only correct because replicaCount is 2 —
+# see the reasoning in templates/pdb.yaml before changing either value.
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+
 # Pico reachability via the Tailscale Operator's Egress Service pattern.
 # Creates a Service named `pico` in this namespace. The operator watches for
 # the `tailscale.com/tailnet-fqdn` annotation, spawns a proxy pod that joins

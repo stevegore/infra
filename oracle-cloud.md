@@ -457,6 +457,54 @@ Rollback is deliberately manual: deleting the ArgoCD `cilium` Application does
 not prune its resources. Remove Cilium only during a maintenance window, then
 recycle both worker nodes so OKE recreates a pristine Flannel-only CNI state.
 
+### Availability posture: replicas and PodDisruptionBudgets
+
+Almost everything in this cluster is a single-replica Deployment, and that is
+mostly deliberate — 2 worker nodes and 12 GB each does not leave room to double
+every workload, and most of these apps are single-writer anyway.
+
+The rule this repo follows: **a PDB is only ever added alongside 2+ replicas.**
+A `minAvailable: 1` PDB over a single replica permits zero voluntary
+disruptions, so `kubectl drain` blocks forever and step 4 below never finishes.
+That is strictly worse than having no PDB, so single-replica charts get a
+comment in their `values.yaml` explaining why they stay at 1 instead.
+
+Workloads that are 2 replicas + PDB:
+
+| Workload           | Why it earns the second pod                                                                   |
+| ------------------ | --------------------------------------------------------------------------------------------- |
+| `caddy`            | Only ingress path for every public hostname; stateless since Authentik took over auth and certs moved to Object Storage. |
+| `authentik-server` | Every protected vhost forward_auths to it, so it is a dependency of all the others; session/cache/queue all live in pg-shared. |
+| `homepage`         | Stateless — config is a ConfigMap copied into emptyDir, no PVC, no server-side session.        |
+| `headlamp`         | Stateless in-cluster API proxy, and it is the dashboard you want working *during* a node replacement. |
+
+Spreading is done with `topologySpreadConstraints` (`maxSkew: 1`,
+`topologyKey: kubernetes.io/hostname`, `DoNotSchedule`) rather than a required
+`podAntiAffinity`, except on `caddy` which predates this and pairs required
+anti-affinity with `maxSurge: 0`. The difference matters on 2 nodes: a required
+anti-affinity term can never be satisfied by a rolling update's surge pod, so
+any chart whose strategy we cannot override (the upstream headlamp and authentik
+charts) would wedge with a permanently Pending pod. A skew constraint still
+guarantees 1-per-node in steady state while allowing the transient 2/1 split.
+
+`topology.kubernetes.io/zone` is useless as a topology key here — both workers
+are in `AP-SYDNEY-1-AD-1` and differ only by fault domain.
+
+Notable workloads deliberately left at 1 replica with **no** PDB: `vaultwarden`
+(no native HA, one writer), `uptime-kuma` (no clustering — every replica runs
+the full monitor scheduler; RWO `oci-bv` PVC), `gym-booker` (timer-driven
+booker, duplicate runs would double-book), `garmin-mcp` (rotates its Garmin
+OAuth refresh token in place on the PVC), `adminer` (credentials live in a
+server-side PHP session on the pod's own filesystem), `ttyd` (per-pod terminal
+sessions), `strava-keeper`, `authentik-worker`, and the leader-elected
+singletons (`cloudnative-pg`, `vault-secrets-operator`, `tailscale-operator`,
+`metrics-server`, `cilium-operator`).
+
+ArgoCD's own seven pods are out of reach from git — they come from the upstream
+install manifest and ArgoCD does not self-manage (see the same note in
+`apps/argocd/templates/limitrange.yaml`). They have no replicas or PDBs and a
+drain takes them all out; they come back on the replacement node.
+
 ### Upgrading Kubernetes (done 2026-07-14, v1.35.2 → v1.36.1)
 
 1. `oci ce cluster get --cluster-id <id>` → `available-kubernetes-upgrades`.
@@ -466,8 +514,11 @@ recycle both worker nodes so OKE recreates a pristine Flannel-only CNI state.
 4. BASIC_CLUSTER has **no managed node cycling** — replace workers one at a time:
    - `kubectl cordon <node>`; move `pg-shared` first with `kubectl delete pod pg-shared-1 -n databases` (its CNPG PDB allows 0 disruptions, so `drain` alone hangs forever; deletion bypasses the PDB and CNPG reschedules it — the `oci-bv` PV is AD-pinned, not FD-pinned, so it attaches to the other node).
    - `kubectl drain <node> --ignore-daemonsets --delete-emptydir-data`
+   - The `caddy` / `authentik-server` / `homepage` / `headlamp` PDBs allow exactly 1 disruption each, so the *first* drain proceeds normally. Their evicted pods stay **Pending** — the spread constraint counts a cordoned node as a domain, so they will not double up on the survivor — which is expected; `drain` only has to evict, not reschedule.
    - `oci ce node-pool delete-node --node-pool-id <id> --node-id <instance-ocid> --is-decrement-size false --force` → pool backfills a node on the new version/image. Watch for A1 out-of-capacity on the backfill before touching the second node.
+   - **Wait for those Pending pods to go Ready on the replacement node before draining the second one.** If you don't, the second drain will sit retrying evictions instead of completing — that block is the PDBs doing their job, not a hang. `kubectl get pdb -A` shows `ALLOWED DISRUPTIONS 0` while it is unsafe to proceed.
 5. Expect ~5–10 min of pod churn after each replacement (1.3 GB authentik image pull is the slowest; Vault auto-unseals via KMS).
+6. `authentik-server` / `authentik-worker` may sit in `Init:0/1` for a while — that is the `wait-for-postgres` init container doing its job, not a hang. Authentik's bootstrap gives up and exits 1 after exactly 30 s without a database, and on the 2026-07-14 rebuild `pg-shared` came back *last*, costing 5 restarts and an 8-minute CrashLoopBackOff. The init container converts that into a clean wait. Check it with `kubectl logs -n authentik <pod> -c wait-for-postgres`; it prints one line per attempt and clears itself the moment the DB answers. Since `pg-shared` is single-instance, moving it first (step 4) still shortens the wait.
 
 ### Kubeconfig
 

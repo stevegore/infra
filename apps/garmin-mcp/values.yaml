@@ -1,3 +1,16 @@
+# Stays at 1, and gets no PodDisruptionBudget.
+#
+# Single-writer by construction: python-garminconnect refreshes the Garmin OAuth
+# tokens *in place* on the PVC below, and Garmin rotates the refresh token on
+# every use. Two pods refreshing against the same garmin_tokens.json would
+# invalidate each other's token and lock the integration out until it is
+# re-seeded by hand (see README.md — renewal needs an interactive MFA prompt).
+# The PVC is also claimed ReadWriteOnce, so a second pod would not schedule to
+# the other node anyway.
+#
+# No PDB: minAvailable: 1 on one replica means no eviction is ever permitted and
+# node drains hang. This is an on-demand MCP endpoint; a gap while it moves
+# nodes costs nothing.
 replicaCount: 1
 
 image:

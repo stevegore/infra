@@ -1,7 +1,14 @@
 # Homepage — OKE replica of the pico dashboard. External users hit this one
 # via Caddy → homepage.stevegore.au; pico's copy remains for LAN.
 
-replicaCount: 1
+# 2 replicas. Homepage is genuinely stateless: the whole configuration arrives
+# as a ConfigMap that an initContainer copies into an emptyDir, /app/config/logs
+# is emptyDir, there is no PVC, and there is no server-side session — auth is
+# terminated upstream by Caddy + Authentik forward_auth, so a request landing on
+# either pod behaves identically. The only cost of the second replica is that
+# the Portainer widget is polled twice as often, which is a handful of requests
+# a minute against pico.
+replicaCount: 2
 
 image:
   repository: ghcr.io/gethomepage/homepage
@@ -32,6 +39,28 @@ pico:
   tailnetFqdn: pico.chipmunk-fir.ts.net
   ports:
     - { name: portainer, port: 9000 }
+
+# Pod-level placement and voluntary-disruption protection. These two go
+# together and are only correct while replicaCount >= 2; if this ever drops back
+# to 1, turn the PDB off in the same commit or `kubectl drain` will block
+# forever on a workload that cannot benefit from being protected.
+topologySpread:
+  # Force the 2 replicas onto different nodes. caddy uses `required`
+  # podAntiAffinity for this and pays for it with maxSurge=0, because a third
+  # (surge) pod can never satisfy a required anti-affinity term on a 2-node
+  # cluster. A maxSkew=1 spread constraint gets the same guaranteed 1-per-node
+  # placement in steady state — putting both replicas on one node would be
+  # skew 2 — while still admitting the surge pod during a rolling update
+  # (3 pods split 2/1 is skew 1). So this keeps the default rollout strategy.
+  enabled: true
+podDisruptionBudget:
+  # Stops a second node drain from taking the last Homepage pod while the first
+  # node's replacement is still coming up. During the documented one-node-at-a-
+  # time replacement (oracle-cloud.md) the evicted pod stays Pending — the
+  # spread constraint counts a cordoned node as a domain, so it will not double
+  # up on the survivor — and schedules once the fresh node joins.
+  enabled: true
+  minAvailable: 1
 
 # Vault — pulls the Portainer API token in as a Secret that the homepage
 # container envFroms (HOMEPAGE_VAR_PORTAINER_TOKEN).

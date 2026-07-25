@@ -1,0 +1,17 @@
+{{- if .Values.podDisruptionBudget.enabled }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "homepage.fullname" . }}
+  labels:
+    {{- include "homepage.labels" . | nindent 4 }}
+spec:
+  # Safe only because replicaCount is 2. With a single replica, minAvailable: 1
+  # allows zero voluntary disruptions and every `kubectl drain` on this pod's
+  # node hangs indefinitely — strictly worse than no PDB. Keep this and
+  # values.yaml `replicaCount` in step.
+  minAvailable: {{ .Values.podDisruptionBudget.minAvailable }}
+  selector:
+    matchLabels:
+      {{- include "homepage.selectorLabels" . | nindent 6 }}
+{{- end }}
