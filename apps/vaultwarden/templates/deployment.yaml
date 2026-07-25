@@ -23,11 +23,10 @@ spec:
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
+            # Single listener — the notifications hub shares this port, see
+            # values.yaml. Do not re-add 3012; nothing binds it.
             - name: web
               containerPort: 80
-              protocol: TCP
-            - name: websocket
-              containerPort: 3012
               protocol: TCP
           env:
             - name: DATABASE_URL
@@ -47,8 +46,6 @@ spec:
               value: {{ .Values.config.signupsAllowed | quote }}
             - name: INVITATIONS_ALLOWED
               value: {{ .Values.config.invitationsAllowed | quote }}
-            - name: WEBSOCKET_ENABLED
-              value: {{ .Values.config.websocketEnabled | quote }}
             - name: WEB_VAULT_ENABLED
               value: {{ .Values.config.webVaultEnabled | quote }}
             - name: LOG_LEVEL

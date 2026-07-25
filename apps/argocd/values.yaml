@@ -9,3 +9,12 @@ github:
 
 # Users with admin access (GitHub usernames)
 adminUser: stevegore
+
+# Namespace-wide resource floor applied via templates/limitrange.yaml. Upstream
+# ArgoCD ships no resource requests and its Deployments are not managed from
+# this repo, so this is the only place to stop them running as BestEffort.
+# See the comments in that template before changing these numbers.
+resources:
+  defaultRequest:
+    cpu: 25m
+    memory: 192Mi
