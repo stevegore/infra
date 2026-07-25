@@ -49,7 +49,6 @@ pico:
     - { name: flaresolverr, port: 8191  }
     - { name: duplicati,    port: 8200  }
     - { name: stravabot,    port: 8082  }
-    - { name: photoprism,   port: 2342  }
     - { name: homepage,     port: 8080  }
     - { name: phpmyadmin,   port: 3011  }
 

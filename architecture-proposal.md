@@ -448,7 +448,7 @@ All provisioning via TF (`terraform/oke-networking.tf`, `terraform/oke-cluster.t
 - [x] Build Caddy container image: `bash scripts/build-push-caddy.sh` (reads `apps-oke/caddy/values.yaml` for repo + tag; xcaddy build with `caddy-security` + `certmagic-s3`; pushes to OCIR).
 - [x] `apps-oke/caddy/` Helm chart deployed: Deployment (2 replicas), Service type `LoadBalancer` with `oci.oraclecloud.com/load-balancer-type: "nlb"`, ConfigMap (Caddyfile + `storage s3` global option), VaultStaticSecret for OAuth + JWT keys + S3 credentials, and `pico-egress.yaml` (Tailscale Egress Service so Caddyfile upstreams use `pico:<port>`). ArgoCD on OKE syncs it; the OCI CCM provisions the NLB. **Known issue:** Service currently uses ephemeral IP `152.69.170.137`; NLB annotation form needs correcting for reserved IP attachment (see notes below).
 - [x] Provision reserved public IP via TF (`terraform/nlb.tf`) — OCID stashed in `apps-oke/caddy/values.yaml`. Address: `159.13.44.68`. **Outstanding:** The classic OCI LB annotation `service.beta.kubernetes.io/oci-load-balancer-reserved-ip` does NOT apply to NLB; must use the NLB-specific form (per OCI docs). Remedy: update Service annotation to the NLB-correct form and let the CCM reattach, OR delete + recreate Service with correct annotation. After fixed, Cloudflare DNS `*.stevegore.au` will continue to work transparently (Cloudflare proxy hides the IP change from external clients).
-- [ ] Verify NLB is using reserved IP `159.13.44.68` and ACME challenges are driving cleanly (challenges will only succeed after Phase 5 DNS cutover).
+- [x] Verify NLB is using reserved IP `159.13.44.68` and ACME challenges are driving cleanly. **Confirmed 2026-07-25** — all `stevegore.au` records resolve to `159.13.44.68` and certs are issuing via DNS-01. The "Outstanding" NLB reserved-IP annotation note above is resolved.
 - [x] Point a **test** subdomain (e.g. `oke-test.stevegore.au`) at the reserved IP in Cloudflare (after NLB IP is fixed) — verify Caddy + cert issuance work end-to-end before touching real records.
 
 ### Phase 4 — Tailscale rollout (✅ complete — 2026-05-25)
@@ -457,7 +457,7 @@ All provisioning via TF (`terraform/oke-networking.tf`, `terraform/oke-cluster.t
 - [x] `apps-oke/tailscale-operator/` deployed: Tailscale K8s Operator (Helm dependency) + OKE-side `Connector` CRD. Operator pod joins the tailnet using OAuth secret from Vault (via VSO).
 - [x] `pico.tailnetFqdn` in `apps-oke/caddy/values.yaml` set to `pico.chipmunk-fir.ts.net`. The `pico` Egress Service in the caddy namespace proxies through the operator; Caddy upstreams (`pico:<port>`) work.
 - [x] Verify end-to-end: `kubectl exec -n caddy <pod> -- curl -sI http://pico:8123` returns 200. (Pending until Caddy pod stabilizes; low priority given uptime-kuma is already healthily connected.)
-- [ ] Optional only if later needed: advertise `192.168.4.0/24` from pico and approve that route in the Tailscale admin so OKE can reach other home LAN devices behind pico.
+- [x] Advertise `192.168.4.0/24` from pico and approve that route in the Tailscale admin so OKE can reach other home LAN devices behind pico. **Done** — pico advertises `10.20.30.0/24` + `192.168.4.0/24`.
 - [x] Old WG hub on ampere-ubuntu stays up during the transition — pico still has the WG peer in `wg0.conf`; can revert if Tailscale misbehaves.
 - [ ] After 1 week of clean operation (~2026-06-01), remove the WG peer from pico's `wg0.conf` (and the now-orphaned WG hub pod on ampere) at decommission time (Phase 7).
 
@@ -518,7 +518,7 @@ No data migration — the new Vault pod uses the same `vault-storage` bucket and
 
 ### Remaining
 1. **Client re-auth** — First login to `bw.stevegore.au` will prompt re-auth once (fresh OKE RSA keys). Expected, not a regression.
-2. **Homepage config** — `apps-oke/homepage/` still has placeholder config; pull real config from pico's Docker volume when convenient.
+2. ~~**Homepage config** — `apps-oke/homepage/` still has placeholder config.~~ **Done** — `apps/homepage/templates/configmap.yaml` carries the real service list.
 
 ### Documentation updates completed (2026-05-25 – 2026-05-26)
 - ✅ `vault.md` — Tailscale path for vault-token-sync, CIDR restriction rationale

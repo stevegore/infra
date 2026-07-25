@@ -62,8 +62,6 @@ GROUPS = [
     ("Photos", [
         "Immich",
         "Immich (direct)",
-        "PhotoPrism",
-        "PhotoPrism (local)",
     ]),
     ("Media", [
         "Plex",
