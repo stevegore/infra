@@ -37,13 +37,36 @@ config:
   signupsAllowed: false
   invitationsAllowed: false
   webVaultEnabled: true
-  # logout-on-restart is acceptable: per §7.1 the RSA keys at /data/rsa_key.*
-  # are ephemeral; clients re-auth on cutover anyway.
   logLevel: info
+
+# JWT signing key persistence.
+#
+# Vaultwarden signs client access/refresh tokens with /data/rsa_key.pem and
+# generates a new one whenever the file is missing. With /data on an emptyDir
+# (§7.1) that happened on every single pod start, so every Helm change logged
+# every device out of every Bitwarden client. §7.1 accepted a one-off re-auth
+# "on cutover"; what it missed is that a rollout is not a rare event.
+#
+# Rather than reintroduce the 50 GB block-volume PVC that §7.1 deliberately
+# gave up (the whole file is 1675 bytes), the key is stored as the `rsa_key`
+# field of kv/vaultwarden/config and restored by an init container. That also
+# makes it survive node loss and full cluster rebuilds, which a PVC would not.
+#
+# To seed or rotate it (rotating logs everyone out once, by design):
+#   export VAULT_ADDR=https://vault.stevegore.au
+#   openssl genrsa -traditional -out rsa_key.pem 2048   # PKCS#1, as VW writes
+#   vault kv patch kv/vaultwarden/config rsa_key=@rsa_key.pem && rm rsa_key.pem
+# `patch`, never `put` — put would drop database_url and admin_token.
+#
+# Safe to leave true when Vault has no key: the mount is optional, so the pod
+# still starts and simply falls back to generating an ephemeral one.
+jwtKey:
+  restoreFromVault: true
 
 # VSO config — secrets live at kv/vaultwarden/config with fields:
 #   database_url  — mysql://vaultwarden:<pw>@<mysql-private-endpoint>:3306/vaultwarden
 #   admin_token   — argon2-hashed token for /admin (optional)
+#   rsa_key       — PEM (PKCS#1) JWT signing key, see jwtKey above (optional)
 vault:
   enabled: true
   mount: kv

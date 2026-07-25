@@ -18,6 +18,64 @@ spec:
       labels:
         {{- include "vaultwarden.selectorLabels" . | nindent 8 }}
     spec:
+      {{- if .Values.jwtKey.restoreFromVault }}
+      initContainers:
+        # Restore the JWT signing key from Vault before Vaultwarden starts.
+        #
+        # Vaultwarden signs every client access/refresh token with the RSA key
+        # at $DATA_FOLDER/rsa_key.pem, and generates a fresh one if the file is
+        # absent. Because /data is an emptyDir (§7.1), *every* pod restart minted
+        # a new key, which invalidated every device's refresh token and forced a
+        # re-login on all clients. §7.1 priced that as "clients re-auth once" on
+        # a rebuild, but a rollout happens on any values change, so in practice
+        # it fired constantly. Observed 2026-07-26; the tell is this at boot:
+        #   [vaultwarden::auth][INFO] Private key '/data/rsa_key.pem' created correctly
+        #
+        # The key is not vault *content* — the vault is end-to-end encrypted
+        # under each user's master key, which never reaches the server. This key
+        # only signs session tokens, so its blast radius is auth-token forgery,
+        # putting it in the same class as admin_token, which already lives in
+        # the same Vault path.
+        #
+        # Copied into the emptyDir rather than mounted at /data/rsa_key.pem
+        # directly: a Secret mount is read-only, and Vaultwarden opens this file
+        # read-write on the first attempt. `install -m 600` also drops the
+        # world-readable 0444 that Secret volumes default to.
+        #
+        # Uses the Vaultwarden image itself so there is no second image to pull
+        # or version to bump — it is guaranteed present because the main
+        # container needs it (same reasoning as authentik's wait-for-postgres).
+        - name: restore-rsa-key
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command:
+            - sh
+            - -c
+            - |
+              if [ -s /vault-rsa/rsa_key.pem ]; then
+                install -m 600 /vault-rsa/rsa_key.pem "$DATA_FOLDER/rsa_key.pem"
+                echo "restored JWT signing key from Vault; existing client sessions stay valid"
+              else
+                echo "WARNING: no rsa_key in the ${SECRET_NAME} Secret - Vaultwarden will generate an"
+                echo "WARNING: ephemeral key and every client will be logged out on this start."
+                echo "WARNING: see apps/vaultwarden/values.yaml (jwtKey) to seed it into Vault."
+              fi
+          env:
+            - name: DATA_FOLDER
+              value: /data
+            - name: SECRET_NAME
+              value: {{ .Values.vault.secretName | quote }}
+          volumeMounts:
+            - name: rsa-key
+              mountPath: /vault-rsa
+              readOnly: true
+            - name: data
+              mountPath: /data
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+      {{- end }}
       containers:
         - name: vaultwarden
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
@@ -52,7 +110,8 @@ spec:
               value: {{ .Values.config.logLevel | quote }}
             - name: ROCKET_PORT
               value: "80"
-            # /data still has to exist for Vaultwarden to start — emptyDir per §7.1.
+            # /data is an emptyDir per §7.1 — nothing here survives a restart
+            # except rsa_key.pem, which the init container restores from Vault.
             - name: DATA_FOLDER
               value: /data
           volumeMounts:
@@ -74,7 +133,26 @@ spec:
             {{- toYaml .Values.resources | nindent 12 }}
       volumes:
         # Per §7.1: /data holds nothing durable. db.sqlite3 is unused (MySQL
-        # holds state), rsa_key.* regenerate (clients re-auth once), icon_cache
-        # rebuilds, sends/ + config.json are unused.
+        # holds state), icon_cache rebuilds, sends/ + config.json are unused.
+        # rsa_key.pem was the one exception — see the init container above.
         - name: data
           emptyDir: {}
+        {{- if .Values.jwtKey.restoreFromVault }}
+        # Projects only the rsa_key field, so the init container never sees
+        # database_url or admin_token.
+        #
+        # optional: true covers the Secret missing *and* the field missing —
+        # with `items`, kubelet skips an absent key rather than failing the
+        # mount (verified against a probe pod, 2026-07-26). That matters: it
+        # means this rollout cannot wedge in ContainerCreating if Vault has not
+        # been seeded yet, it just degrades to the old regenerate-on-boot
+        # behaviour and says so in the init container log.
+        - name: rsa-key
+          secret:
+            secretName: {{ .Values.vault.secretName }}
+            optional: true
+            defaultMode: 0400
+            items:
+              - key: rsa_key
+                path: rsa_key.pem
+        {{- end }}
