@@ -23,6 +23,16 @@
 
 `uptime.stevegore.au` and `hubble.stevegore.au` are covered by the wildcard `*.stevegore.au` A record, so no separate Cloudflare DNS record is required unless we later want host-specific proxy or TTL settings.
 
+**Undefined subdomains** land on Caddy's `*.stevegore.au` catch-all and get a
+404 — *"Not all who wander are lost, but you probably are."* Before that block
+existed (added 2026-07-25), a name covered by the wildcard record but with no
+matching vhost had no certificate, so Caddy aborted the TLS handshake and the
+name looked like a total outage. Retiring a service therefore no longer requires
+touching Cloudflare — removing the vhost is enough.
+
+The Phase 3 migration canary `oke-test.stevegore.au` was deleted 2026-07-25; it
+now resolves via the wildcard to the catch-all.
+
 **Reserved IP:** `159.13.44.68` — OCI NLB reserved public IP (OCID in `terraform/nlb.tf`). Survives NLB recreation.
 
 **Cloudflare proxy — deliberately OFF for the OKE origin (decided 2026-07-25).**
