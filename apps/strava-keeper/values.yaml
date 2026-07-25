@@ -2,7 +2,13 @@ replicaCount: 1
 
 image:
   repository: docker.io/stevegore/stravakeeper
-  tag: "latest"
+  # Pinned to the git-SHA tag that `latest` currently resolves to (pushed
+  # 2026-06-13, index digest sha256:a2590377…). Rebuilds push a commit-SHA tag
+  # alongside `latest`, so pinning here means a pod reschedule can't quietly
+  # swap in an untested build — bump the SHA when you actually want the new one.
+  # The index is arm64-only (manifest sha256:db35efab…), which is what the
+  # aarch64 A1.Flex worker nodes need; do not assume amd64 exists.
+  tag: "90f6c41c9df5d5203e49759e5641449bb6eb46dc"
   pullPolicy: Always
 
 resources:

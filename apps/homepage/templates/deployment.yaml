@@ -17,6 +17,20 @@ spec:
         checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
     spec:
       serviceAccountName: {{ include "homepage.fullname" . }}
+      {{- if .Values.topologySpread.enabled }}
+      topologySpreadConstraints:
+        # One pod per node. DoNotSchedule (not ScheduleAnyway) on purpose: on a
+        # 2-node cluster, silently co-locating both replicas would leave a
+        # single node drain taking the whole service down, which is exactly the
+        # failure this replica is here to prevent. Better to sit Pending and be
+        # visible.
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels:
+              {{- include "homepage.selectorLabels" . | nindent 14 }}
+      {{- end }}
       initContainers:
         - name: copy-config
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"

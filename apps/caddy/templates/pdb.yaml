@@ -1,0 +1,30 @@
+{{- if .Values.podDisruptionBudget.enabled }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "caddy.fullname" . }}
+  labels:
+    {{- include "caddy.labels" . | nindent 4 }}
+spec:
+  # minAvailable: 1 is only safe because replicaCount is 2. On a single-replica
+  # Deployment the same value permits zero voluntary disruptions and `kubectl
+  # drain` hangs forever — worse than having no PDB at all. If replicaCount ever
+  # goes back to 1, delete this PDB in the same commit.
+  #
+  # What this buys us: Caddy is the only ingress path for every public hostname,
+  # so losing both pods at once is a total outage. The documented worker-node
+  # replacement procedure (oracle-cloud.md, "Upgrading Kubernetes") drains one
+  # node, deletes it, waits for the pool to backfill, and only then touches the
+  # second. This PDB makes that ordering enforced rather than remembered: the
+  # eviction API refuses to take the last healthy Caddy pod, so draining node B
+  # before node A's replacement is Ready blocks instead of dropping ingress.
+  #
+  # Expected drain behaviour, and why it is not a hang: the pod anti-affinity is
+  # `required`, so the evicted pod cannot land on the surviving node and sits
+  # Pending until the replacement node joins. `drain` only has to evict, not
+  # reschedule, so the first drain still completes.
+  minAvailable: {{ .Values.podDisruptionBudget.minAvailable }}
+  selector:
+    matchLabels:
+      {{- include "caddy.selectorLabels" . | nindent 6 }}
+{{- end }}

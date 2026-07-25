@@ -1,3 +1,17 @@
+# Stays at 1, and gets no PodDisruptionBudget.
+#
+# Adminer is not stateless despite looking like it: it keeps the connected
+# credentials in a server-side PHP session ($_SESSION["pwds"]), and PHP's
+# default session handler writes those files to the container's own filesystem.
+# Caddy round-robins per request across the backing Service, so with 2 replicas
+# roughly every other click would land on the pod that has never seen your
+# session and bounce you back to the login form mid-query. Sticky sessions would
+# be the fix, and they are not worth wiring up for a debugging tool.
+#
+# No PDB either: with one replica, minAvailable: 1 permits zero voluntary
+# disruptions, so `kubectl drain` would hang forever on whichever node this pod
+# is on. Adminer being briefly unavailable during a node replacement is fine —
+# blocking the node replacement is not.
 replicaCount: 1
 
 image:

@@ -17,6 +17,12 @@ spec:
           restartPolicy: OnFailure
           securityContext:
             runAsNonRoot: true
+            # The upstream distroless kubectl image declares USER 0, so
+            # runAsNonRoot alone would be rejected at admission ("container has
+            # runAsNonRoot and image will run as root"). Run as the image's own
+            # `nonroot` account instead — see the comment on restarter.image.
+            runAsUser: {{ .Values.restarter.runAsUser }}
+            runAsGroup: {{ .Values.restarter.runAsGroup }}
             seccompProfile:
               type: RuntimeDefault
           containers:

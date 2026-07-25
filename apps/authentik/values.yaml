@@ -111,8 +111,108 @@ authentik:
     configMaps:
       - authentik-blueprints
 
+  # Hold both the server and the worker in Init: until pg-shared actually
+  # answers on 5432.
+  #
+  # Why this exists: authentik's own bootstrap retries Postgres roughly once a
+  # second and then gives up and exits 1 after exactly 30 seconds. On
+  # 2026-07-14 the cluster rebuild rescheduled the database *last*, so
+  # authentik-server came up 7 minutes before pg-shared-1 existed and burned 5
+  # restarts in a CrashLoopBackOff, recovering only once the DB appeared. The
+  # log signature is a wall of:
+  #   PostgreSQL connection failed, retrying... connection to server at
+  #   "10.96.x.x", port 5432 failed: Connection refused
+  # "Connection refused" rather than a timeout is the tell: the Service had no
+  # ready endpoints, so kube-proxy rejected outright.
+  #
+  # pg-shared is a single-instance CNPG cluster, so this is not a one-off — any
+  # minor-version bump, node drain or OKE upgrade takes Postgres away for longer
+  # than 30s and reproduces it. An init container converts that from a
+  # crash-loop with an 8-minute outage into a clean wait that clears by itself.
+  #
+  # Deliberately waits forever rather than timing out: a pod parked in Init: is
+  # a far better signal than an escalating backoff, and it recovers unattended
+  # the moment the database returns.
+  #
+  # Uses the authentik image itself, not a postgres image. That is the whole
+  # point — the failure mode being fixed is a cluster rebuild, and pulling a
+  # second ~400MB image on that exact path would add a new way to fail. This
+  # image is guaranteed to be on the node already because the main container
+  # needs it. It has no pg_isready (checked), but it does have python3 on PATH,
+  # and a TCP connect is the right test anyway: CNPG only publishes endpoints
+  # for the -rw Service when the primary is ready, so "port open" and "ready for
+  # queries" are the same event here.
+  #
+  # The image expression mirrors the chart's own so there is no second version
+  # to remember to bump; `initContainers` is rendered through `tpl`.
+  initContainerWaitForDB: &waitForDB
+    - name: wait-for-postgres
+      image: "{{ .Values.global.image.repository }}:{{ include \"authentik.defaultTag\" . }}"
+      imagePullPolicy: IfNotPresent
+      command:
+        - python3
+        - -c
+        - |
+          import socket, sys, time
+          host, port = "pg-shared-rw.databases.svc.cluster.local", 5432
+          while True:
+              try:
+                  with socket.create_connection((host, port), timeout=3):
+                      print(f"{host}:{port} is accepting connections", flush=True)
+                      sys.exit(0)
+              except OSError as err:
+                  print(f"waiting for {host}:{port} - {err}", flush=True)
+                  time.sleep(2)
+      resources:
+        requests:
+          cpu: 10m
+          memory: 32Mi
+
   server:
-    replicas: 1
+    initContainers: *waitForDB
+
+    # 2 replicas. Authentik's server is the front door for *every* protected
+    # vhost — Caddy's `import authentik` snippet forward_auths each request to
+    # authentik-server.authentik.svc, so if this Deployment is down, homepage,
+    # adminer, headlamp, hubble and the rest all return errors even though their
+    # own pods are healthy. It is the single highest-value thing in this cluster
+    # to make survive a node drain.
+    #
+    # Nothing in the server holds node-local state: as of 2026.5 the session
+    # store, cache and task queue are all in pg-shared (see the note at the top
+    # of this file — there is no Redis any more), /media is the RWX oci-fss PVC
+    # so both pods can mount it, and the embedded outpost re-registers itself
+    # over its own websocket per pod. The blueprint applier lives in the worker,
+    # not here, so a second server cannot race it.
+    replicas: 2
+
+    # Force the 2 replicas onto different nodes. maxSkew=1 spread rather than
+    # the chart's `hard` podAntiAffinity preset for two reasons: the preset's
+    # preferred term keys on topology.kubernetes.io/zone, which is a no-op here
+    # because both workers sit in AP-SYDNEY-1-AD-1 and differ only by fault
+    # domain; and its required term on the hostname would leave the rolling
+    # update's surge pod permanently Pending on a 2-node cluster. A skew
+    # constraint still guarantees 1-per-node in steady state (both on one node
+    # is skew 2) while allowing the transient 3-pod 2/1 split.
+    topologySpreadConstraints:
+      - maxSkew: 1
+        topologyKey: kubernetes.io/hostname
+        whenUnsatisfiable: DoNotSchedule
+        labelSelector:
+          matchLabels:
+            app.kubernetes.io/name: authentik
+            app.kubernetes.io/instance: authentik
+            app.kubernetes.io/component: server
+
+    # Only correct because replicas is 2 above. minAvailable: 1 over a single
+    # replica permits zero voluntary disruptions and wedges `kubectl drain`
+    # forever, which would break the node-replacement runbook in
+    # oracle-cloud.md. Drop this to enabled: false if the count ever returns
+    # to 1.
+    pdb:
+      enabled: true
+      minAvailable: 1
+
     resources:
       requests:
         cpu: 100m
@@ -121,6 +221,28 @@ authentik:
         memory: 1Gi
 
   worker:
+    # Same database wait as the server. The worker only escaped the 2026-07-14
+    # crash-loop by luck of ordering — it had finished bootstrapping before the
+    # database went away, and its liveness endpoint is served without touching
+    # Postgres. Start it after the DB on a rebuild and it hits the identical
+    # 30-second bootstrap limit.
+    initContainers: *waitForDB
+
+    # Deliberately left at 1, and deliberately without a PDB.
+    #
+    # The worker is not on any request path — it runs the Postgres-backed task
+    # queue (emails, outpost reconciliation, blueprint application) — so losing
+    # it during a drain delays background work rather than causing an outage,
+    # and it picks the queue straight back up on the new node. That alone makes
+    # the second 512Mi pod poor value on a 2-node, 12 GB-per-node cluster.
+    #
+    # It is also the component that applies templates/blueprints.yaml on
+    # startup. Two workers booting simultaneously against the same blueprint
+    # ConfigMap is an untested race we have no reason to take on for a
+    # non-user-facing queue runner.
+    #
+    # A PDB here would be actively harmful: with one replica, minAvailable: 1
+    # means no eviction is ever allowed and node drains hang.
     replicas: 1
     resources:
       requests:

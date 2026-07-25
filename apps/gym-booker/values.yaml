@@ -1,3 +1,15 @@
+# Stays at 1, and gets no PodDisruptionBudget.
+#
+# This is a scheduler, not a web service: it books classes on a timer and
+# records what it did in bookings.pickle on the PVC below. Two replicas would
+# each run the same schedule, so every class would be attempted twice, and both
+# would rewrite the same pickle with no locking. Duplicate bookings against a
+# real gym account are not a recoverable kind of bug. The PVC is claimed
+# ReadWriteOnce as well.
+#
+# No PDB: with one replica, minAvailable: 1 forbids all voluntary disruption and
+# `kubectl drain` never completes. A few minutes offline while it reschedules is
+# acceptable — the booking window is checked continuously, not once.
 replicaCount: 1
 
 image:
