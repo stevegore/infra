@@ -27,6 +27,16 @@ spec:
         - maxSkew: 1
           topologyKey: kubernetes.io/hostname
           whenUnsatisfiable: DoNotSchedule
+          # Scope the skew maths to this ReplicaSet only. Without it, the old
+          # revision's pods are counted during a rolling update and both new
+          # pods can legally land on one node: with old on A and new-1 on B the
+          # skew is 0, so new-2 may also pick B (A=1 old, B=2 new is skew 1,
+          # still legal) — and once the old pod goes away you are left at skew 2
+          # with no rebalancing, because the constraint is only ever evaluated
+          # at scheduling time. Observed exactly that on 2026-07-25: both
+          # homepage pods ended up on 10.0.1.166.
+          matchLabelKeys:
+            - pod-template-hash
           labelSelector:
             matchLabels:
               {{- include "homepage.selectorLabels" . | nindent 14 }}
