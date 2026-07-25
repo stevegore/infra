@@ -262,6 +262,34 @@ spec:
   vaultAuthRef: <vault-auth-name>
 ```
 
+### Forcing an immediate resync (don't wait out `refreshAfter`)
+
+`refreshAfter: 1h` means a value written to Vault can take up to an hour to
+appear in the k8s Secret. Editing the `VaultStaticSecret` to hurry it along is a
+trap — every VSS is ArgoCD-managed, so selfHeal reverts the edit. Restart the
+controller instead; it reconciles every `VaultStaticSecret` on startup:
+
+```bash
+kubectl delete pod -n vault-secrets-operator \
+  -l app.kubernetes.io/name=vault-secrets-operator
+kubectl wait --for=condition=Ready pod -n vault-secrets-operator \
+  -l app.kubernetes.io/name=vault-secrets-operator --timeout=180s
+```
+
+Safe: VSO is a leader-elected singleton that holds no state of its own, and it
+re-derives every destination Secret from Vault. Resync lands within ~10 s.
+
+**This ordering matters** when a workload is about to consume a brand-new field.
+Write to Vault → force the resync → *confirm the field is in the Secret* → only
+then let the deploy roll. Confirm with:
+
+```bash
+kubectl get secret <name> -n <ns> -o go-template='{{range $k,$v := .data}}{{$k}}{{"\n"}}{{end}}'
+```
+
+Getting this backwards is how the Vaultwarden JWT key change (2026-07-26) would
+have logged every device out on the very rollout that was meant to stop it.
+
 ### Auto-restarting pods on secret rotation (`rolloutRestartTargets`)
 
 By default, when VSO writes a new version of the k8s Secret, **running pods keep
