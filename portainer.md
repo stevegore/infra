@@ -508,11 +508,20 @@ volumes:
 > images removed from pico; `photoprism.stevegore.au` removed from the Caddy
 > vhosts, the Homepage dashboard, and the Uptime Kuma monitors.
 >
-> **Data retained, not deleted:** `/media/m2/photoprism/storage` (cache/sidecar)
-> and `/media/m2/photoprism/database` (MariaDB index — albums, labels, faces)
-> are still on disk. `/media/m2/photos` is the **shared originals directory and
-> is also Immich's source — never delete it.** Delete only the two
-> `photoprism/` subdirectories, and only once you're sure the index isn't wanted.
+> **Data retained, not deleted — but it is large.** `/media/m2/photoprism/`
+> holds **455 GB**, on the 3.6 TB M.2 (not the root disk):
+>
+> | Path | Size | Value now PhotoPrism is gone |
+> | --- | --- | --- |
+> | `storage/cache` | 266 GB | **None** — regenerable thumbnails |
+> | `storage/sidecar` | 181 GB | Low — derived `.yml` + converted RAW/HEIC |
+> | `storage/backup` | 8.6 GB | Index backups |
+> | `database/` | 173 MB | MariaDB index — labels, faces |
+> | `storage/albums` | 46 MB | **Album definitions — the one thing worth keeping** |
+>
+> Deleting `storage/cache` + `storage/sidecar` reclaims ~447 GB and keeps
+> everything meaningful. `/media/m2/photos` is the **shared originals directory
+> and is also Immich's source — never delete it.**
 >
 > Config below is kept for reference / rollback.
 
