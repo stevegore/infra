@@ -8,9 +8,12 @@ links back to its original Instagram post.
 No runtime, no JS framework, no external requests -- just files nginx can serve.
 
 Usage:
-    build-gallery.py SOURCE_DIR OUTPUT_DIR [--title TITLE] [--width PX] [--jobs N]
+    build-gallery.py SOURCE_DIR OUTPUT_DIR [--title TITLE] [--width PX]
+                     [--jobs N] [--hidden-list PATH]
 
-Requires ffmpeg on PATH (used for both image resizing and video poster frames).
+Requires ffmpeg on PATH when generating thumbnails (image resizing and video
+poster frames). HTML-only rebuilds can reuse a complete thumbnail cache without
+it.
 """
 
 import argparse
@@ -19,15 +22,17 @@ import html
 import json
 import math
 import pathlib
+import re
 import shutil
 import subprocess
 import sys
 
 CAPTION_CHARS = 400
 
-# Number of leading tiles loaded eagerly at high priority. Native lazy-loading
-# defers everything including the first screenful, which leaves the top of the
-# page visibly empty on arrival; these cover roughly one 4-column viewport.
+# Number of leading visible tiles promoted to eager/high priority. Public tiles
+# start lazy so hidden.css can prevent hidden thumbnails from being fetched;
+# after the blocking stylesheet has applied, a tiny script promotes only visible
+# tiles. Admin tiles can be eager immediately because it deliberately shows all.
 EAGER_TILES = 12
 
 # Masonry geometry. CSS multi-column (`columns: 320px`) cannot be used here: for
@@ -44,6 +49,7 @@ EAGER_TILES = 12
 COLUMN_PX = 320   # exact rendered tile width; span maths depends on it
 ROW_UNIT_PX = 2   # grid-auto-rows; finer = tighter packing, more spanned rows
 GAP_PX = 14
+ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 
 
 def parse_args():
@@ -62,6 +68,9 @@ def parse_args():
                    help="re-encode thumbnails that already exist (needed after "
                         "changing --width or --quality, since existing files are "
                         "otherwise skipped)")
+    p.add_argument("--hidden-list", type=pathlib.Path,
+                   help="optional hidden.txt; omit its IDs from index.html "
+                        "(admin.html still includes every item)")
     return p.parse_args()
 
 
@@ -89,6 +98,7 @@ def load_items(source):
 
         items.append({
             "media": media,
+            "id": media.stem,
             "is_video": media.suffix.lower() == ".mp4",
             "post_url": meta["post_url"],
             "shortcode": meta.get("post_shortcode", ""),
@@ -163,7 +173,7 @@ def post_link(item):
     return item["post_url"]
 
 
-def render_tile(item, index):
+def render_tile(item, index, admin=False):
     desc = item["description"].replace("\r", " ")
     if len(desc) > CAPTION_CHARS:
         desc = desc[:CAPTION_CHARS].rstrip() + "…"
@@ -184,7 +194,7 @@ def render_tile(item, index):
 
     badge = '<span class="badge" aria-hidden="true">▶</span>' if item["is_video"] else ''
 
-    if index < EAGER_TILES:
+    if admin and index < EAGER_TILES:
         loading = 'loading="eager" fetchpriority="high"'
     else:
         loading = 'loading="lazy" fetchpriority="low"'
@@ -194,7 +204,15 @@ def render_tile(item, index):
     tile_px = COLUMN_PX * item["height"] / item["width"]
     span = math.ceil((tile_px + GAP_PX) / ROW_UNIT_PX)
 
-    return f'''      <figure class="tile" style="grid-row:span {span}">
+    button = ""
+    if admin:
+        button = (
+            f'\n        <button class="hide-btn" type="button" '
+            f'aria-pressed="false" aria-label="Hide {html.escape(label)}">'
+            f"Hide</button>"
+        )
+
+    return f'''      <figure class="tile" data-id="{html.escape(item['id'])}" style="grid-row:span {span}">
         <a href="{html.escape(post_link(item))}" target="_blank" rel="noopener noreferrer"
            aria-label="{html.escape(label)}">
           <img src="{html.escape(item['thumb'])}" alt="{html.escape(alt)}"
@@ -202,12 +220,12 @@ def render_tile(item, index):
                {loading} decoding="async" />
           {badge}
           {caption}
-        </a>
+        </a>{button}
       </figure>'''
 
 
-def render_page(items, title):
-    tiles = "\n".join(render_tile(i, n) for n, i in enumerate(items))
+def render_page(items, title, admin=False):
+    tiles = "\n".join(render_tile(i, n, admin) for n, i in enumerate(items))
     photos = sum(1 for i in items if not i["is_video"])
     videos = len(items) - photos
     posts = len({i["shortcode"] for i in items})
@@ -216,6 +234,159 @@ def render_page(items, title):
         summary += f" · {videos:,} videos"
     summary += f" · {posts:,} posts"
 
+    hidden_stylesheet = (
+        "" if admin else '<link rel="stylesheet" href="hidden.css" />\n'
+    )
+    admin_css = """
+  body.admin header { padding-bottom: 16px; }
+  .admin-toolbar {
+    position: sticky;
+    z-index: 10;
+    top: 0;
+    max-width: 1700px;
+    margin: 0 auto 20px;
+    padding: 10px 12px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px 18px;
+    border: 1px solid #34343d;
+    border-radius: 8px;
+    background: rgba(16, 16, 19, 0.94);
+    backdrop-filter: blur(8px);
+  }
+  .admin-toolbar label { cursor: pointer; }
+  .admin-status { flex: 1 1 240px; color: var(--muted); }
+  .admin-status.error { color: #ff8f8f; }
+  .tile { position: relative; }
+  .tile.is-hidden > a { opacity: .22; filter: grayscale(1); }
+  .hide-btn {
+    position: absolute;
+    z-index: 2;
+    top: 9px;
+    left: 9px;
+    padding: 6px 10px;
+    border: 1px solid rgba(255,255,255,.45);
+    border-radius: 6px;
+    background: rgba(16,16,19,.88);
+    color: var(--fg);
+    font: inherit;
+    font-size: .8125rem;
+    font-weight: 600;
+    cursor: pointer;
+    opacity: .55;
+    transition: opacity 160ms ease, background 160ms ease;
+  }
+  .tile:hover .hide-btn, .tile:focus-within .hide-btn,
+  .tile.is-hidden .hide-btn { opacity: 1; }
+  .hide-btn:hover, .hide-btn:focus-visible { background: #34343d; }
+  .hide-btn:focus-visible { outline: 2px solid #6ea8ff; outline-offset: 2px; }
+  .hide-btn:disabled { cursor: wait; }
+  body.only-hidden .tile:not(.is-hidden) { display: none; }
+""" if admin else ""
+    toolbar = """
+  <section class="admin-toolbar" aria-label="Gallery administration">
+    <strong><span id="hidden-count">0</span> hidden</strong>
+    <label><input id="only-hidden" type="checkbox" /> Show only hidden</label>
+    <span id="admin-status" class="admin-status" role="status" aria-live="polite">Loading hide list…</span>
+  </section>""" if admin else ""
+    body_class = ' class="admin"' if admin else ""
+    public_script = f"""
+<script>
+  [...document.querySelectorAll(".tile")]
+    .filter(tile => getComputedStyle(tile).display !== "none")
+    .slice(0, {EAGER_TILES})
+    .forEach(tile => {{
+      const image = tile.querySelector("img");
+      image.loading = "eager";
+      image.fetchPriority = "high";
+    }});
+</script>""" if not admin else ""
+    admin_script = """
+<script>
+(() => {
+  const count = document.querySelector("#hidden-count");
+  const status = document.querySelector("#admin-status");
+  const onlyHidden = document.querySelector("#only-hidden");
+  const key = new URLSearchParams(location.search).get("key");
+
+  function apiUrl(path) {
+    const url = new URL(path, location.origin);
+    if (key !== null) url.searchParams.set("key", key);
+    return url;
+  }
+
+  function setStatus(message, error = false) {
+    status.textContent = message;
+    status.classList.toggle("error", error);
+  }
+
+  function updateTile(tile, hidden) {
+    tile.classList.toggle("is-hidden", hidden);
+    const button = tile.querySelector(".hide-btn");
+    button.textContent = hidden ? "Unhide" : "Hide";
+    button.setAttribute("aria-pressed", String(hidden));
+    button.setAttribute(
+      "aria-label",
+      `${hidden ? "Unhide" : "Hide"} ${tile.querySelector("a").getAttribute("aria-label")}`
+    );
+  }
+
+  function updateCount() {
+    count.textContent = document.querySelectorAll(".tile.is-hidden").length;
+  }
+
+  onlyHidden.addEventListener("change", () => {
+    document.body.classList.toggle("only-hidden", onlyHidden.checked);
+  });
+
+  document.querySelectorAll(".hide-btn").forEach(button => {
+    button.addEventListener("click", async () => {
+      const tile = button.closest(".tile");
+      const previous = tile.classList.contains("is-hidden");
+      const next = !previous;
+      updateTile(tile, next);
+      updateCount();
+      button.disabled = true;
+      setStatus(`${next ? "Hiding" : "Unhiding"} ${tile.dataset.id}…`);
+      try {
+        const response = await fetch(apiUrl("/api/hide"), {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({id: tile.dataset.id, hidden: next})
+        });
+        if (!response.ok) throw new Error(`request failed (${response.status})`);
+        const result = await response.json();
+        updateTile(tile, result.hidden);
+        updateCount();
+        setStatus(`${tile.dataset.id} ${result.hidden ? "hidden" : "visible"}.`);
+      } catch (error) {
+        updateTile(tile, previous);
+        updateCount();
+        setStatus(`Could not update ${tile.dataset.id}: ${error.message}`, true);
+      } finally {
+        button.disabled = false;
+      }
+    });
+  });
+
+  fetch(apiUrl("/api/hidden"), {cache: "no-store"})
+    .then(response => {
+      if (!response.ok) throw new Error(`request failed (${response.status})`);
+      return response.json();
+    })
+    .then(result => {
+      const hidden = new Set(result.hidden);
+      document.querySelectorAll(".tile").forEach(tile => {
+        updateTile(tile, hidden.has(tile.dataset.id));
+      });
+      updateCount();
+      setStatus("Hide list loaded.");
+    })
+    .catch(error => setStatus(`Could not load hide list: ${error.message}`, true));
+})();
+</script>""" if admin else ""
+
     return f'''<!doctype html>
 <html lang="en">
 <head>
@@ -223,7 +394,7 @@ def render_page(items, title):
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <meta name="robots" content="noindex, nofollow" />
 <title>{html.escape(title)}</title>
-<style>
+{hidden_stylesheet}<style>
   *, *::before, *::after {{ box-sizing: border-box; }}
   :root {{
     --bg: #101013;
@@ -266,6 +437,7 @@ def render_page(items, title):
   .tile {{
     margin: 0 0 var(--gap);
     min-width: 0;
+    position: relative;
   }}
 
   /* Below two columns the fixed-width grid would leave a lopsided single
@@ -336,25 +508,45 @@ def render_page(items, title):
     .tile img, figcaption {{ transition: none; }}
     .tile a:hover img {{ transform: none; }}
   }}
-</style>
+{admin_css}</style>
 </head>
-<body>
+<body{body_class}>
   <header>
     <h1>{html.escape(title)}</h1>
     <p class="count">{summary} · tap any image to open the original post</p>
   </header>
+{toolbar}
   <main class="grid">
 {tiles}
   </main>
+{public_script}
+{admin_script}
 </body>
 </html>
 '''
 
 
+def load_hidden_list(path):
+    if path is None:
+        return set()
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError as exc:
+        sys.exit(f"cannot read hidden list {path}: {exc}")
+    ids = set()
+    for line in lines:
+        value = line.strip()
+        if not value or value.startswith("#"):
+            continue
+        if not ID_RE.fullmatch(value):
+            print(f"  ! ignoring invalid hidden id: {value!r}", file=sys.stderr)
+            continue
+        ids.add(value)
+    return ids
+
+
 def main():
     args = parse_args()
-    if not shutil.which("ffmpeg"):
-        sys.exit("ffmpeg not found on PATH")
     if not args.source.is_dir():
         sys.exit(f"source directory not found: {args.source}")
 
@@ -365,6 +557,15 @@ def main():
 
     thumbdir = args.output / "thumbs"
     thumbdir.mkdir(parents=True, exist_ok=True)
+    needs_ffmpeg = args.force or any(
+        not (thumbdir / (item["media"].stem + ".jpg")).exists()
+        or (thumbdir / (item["media"].stem + ".jpg")).stat().st_size == 0
+        for item in items
+    )
+    if needs_ffmpeg and not shutil.which("ffmpeg"):
+        sys.exit(
+            "ffmpeg not found on PATH and one or more thumbnails need encoding"
+        )
 
     counts = {"ok": 0, "cached": 0, "failed": 0}
     with concurrent.futures.ThreadPoolExecutor(max_workers=args.jobs) as pool:
@@ -376,12 +577,20 @@ def main():
                 print(f"  thumbnails {n}/{len(items)}")
 
     good = [i for i in items if (thumbdir / (i["media"].stem + ".jpg")).exists()]
+    hidden = load_hidden_list(args.hidden_list)
+    public_items = [item for item in good if item["id"] not in hidden]
     index = args.output / "index.html"
-    index.write_text(render_page(good, args.title), encoding="utf-8")
+    admin = args.output / "admin.html"
+    index.write_text(render_page(public_items, args.title), encoding="utf-8")
+    admin.write_text(render_page(good, f"{args.title} — Admin", admin=True),
+                     encoding="utf-8")
 
     print(f"\nthumbnails: {counts['ok']} new, {counts['cached']} cached, "
           f"{counts['failed']} failed")
-    print(f"wrote {index} with {len(good)} tiles")
+    print(f"wrote {index} with {len(public_items)} tiles")
+    if hidden:
+        print(f"  baked out {len(good) - len(public_items)} hidden tiles")
+    print(f"wrote {admin} with {len(good)} tiles")
     return 1 if counts["failed"] else 0
 
 
