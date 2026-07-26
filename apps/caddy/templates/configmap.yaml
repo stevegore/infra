@@ -240,7 +240,11 @@ data:
       # rename) if you ever need viewers to pick up changed pixels sooner.
       header /thumbs/* Cache-Control "public, max-age=2592000"
       # The HTML itself must stay fresh: it is how new photos become visible.
-      header /index.html Cache-Control "no-cache"
+      # Needs to match bare `/` too — nginx resolves that to index.html
+      # internally, but Caddy matches on the request path, so a `/index.html`
+      # matcher alone never fires for a normal visit.
+      @html path / /index.html
+      header @html Cache-Control "no-cache"
       reverse_proxy pico:8090
       import defaults
     }
