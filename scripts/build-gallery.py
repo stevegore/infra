@@ -22,8 +22,12 @@ import shutil
 import subprocess
 import sys
 
-THUMB_QUALITY = "3"  # ffmpeg -q:v, 2-5 is visually fine for grid thumbs
 CAPTION_CHARS = 400
+
+# Number of leading tiles loaded eagerly at high priority. Native lazy-loading
+# defers everything including the first screenful, which leaves the top of the
+# page visibly empty on arrival; these cover roughly one 4-column viewport.
+EAGER_TILES = 12
 
 
 def parse_args():
@@ -33,7 +37,15 @@ def parse_args():
     p.add_argument("--title", default="Instagram Collection")
     p.add_argument("--width", type=int, default=600,
                    help="thumbnail width in px (default 600, ~2x a 300px column)")
+    p.add_argument("--quality", default="6",
+                   help="ffmpeg -q:v for thumbnails, lower is bigger/better "
+                        "(default 6; q3 is ~35%% larger for no visible gain at "
+                        "this display size)")
     p.add_argument("--jobs", type=int, default=8)
+    p.add_argument("--force", action="store_true",
+                   help="re-encode thumbnails that already exist (needed after "
+                        "changing --width or --quality, since existing files are "
+                        "otherwise skipped)")
     return p.parse_args()
 
 
@@ -72,12 +84,16 @@ def load_items(source):
             "height": height,
         })
 
-    # Newest post first; carousel siblings stay in shot order within a post.
-    items.sort(key=lambda i: (i["date"], i["shortcode"], i["num"]), reverse=True)
+    # Newest post first, but carousel siblings in original shot order (_01 first).
+    # These need opposite directions, and a single reverse=True sort would flip
+    # `num` too -- which showed image 6 of a carousel before image 1. Python's
+    # sort is stable, so sort by num ascending first, then by post descending.
+    items.sort(key=lambda i: i["num"])
+    items.sort(key=lambda i: (i["date"], i["shortcode"]), reverse=True)
     return items
 
 
-def thumb_cmd(item, dest, width, seek=None):
+def thumb_cmd(item, dest, width, quality, seek=None):
     """ffmpeg invocation producing a single JPEG thumbnail."""
     # -vf scale: -2 keeps aspect ratio and forces even dimensions (JPEG-safe).
     scale = f"scale={width}:-2:flags=lanczos"
@@ -87,28 +103,28 @@ def thumb_cmd(item, dest, width, seek=None):
     cmd += ["-i", str(item["media"])]
     if item["is_video"]:
         cmd += ["-frames:v", "1"]
-    cmd += ["-vf", scale, "-q:v", THUMB_QUALITY, str(dest)]
+    cmd += ["-vf", scale, "-q:v", str(quality), str(dest)]
     return cmd
 
 
-def run_thumb(item, dest, width, seek):
-    result = subprocess.run(thumb_cmd(item, dest, width, seek),
+def run_thumb(item, dest, width, quality, seek):
+    result = subprocess.run(thumb_cmd(item, dest, width, quality, seek),
                             capture_output=True, text=True)
     ok = result.returncode == 0 and dest.exists() and dest.stat().st_size > 0
     return ok, result.stderr.strip()
 
 
-def make_thumb(item, thumbdir, width):
+def make_thumb(item, thumbdir, width, quality, force):
     dest = thumbdir / (item["media"].stem + ".jpg")
     item["thumb"] = f"thumbs/{dest.name}"
-    if dest.exists() and dest.stat().st_size > 0:
+    if not force and dest.exists() and dest.stat().st_size > 0:
         return "cached"
 
     # Videos: seek ~1s in, since the first frame is often black. Clips shorter
     # than that yield no frame, so fall back to seeking from the very start.
     seeks = [1, None] if item["is_video"] else [None]
     for seek in seeks:
-        ok, stderr = run_thumb(item, dest, width, seek)
+        ok, stderr = run_thumb(item, dest, width, quality, seek)
         if ok:
             return "ok"
 
@@ -117,7 +133,7 @@ def make_thumb(item, thumbdir, width):
     return "failed"
 
 
-def render_tile(item):
+def render_tile(item, index):
     desc = item["description"].replace("\r", " ")
     if len(desc) > CAPTION_CHARS:
         desc = desc[:CAPTION_CHARS].rstrip() + "…"
@@ -136,12 +152,17 @@ def render_tile(item):
 
     badge = '<span class="badge" aria-hidden="true">▶</span>' if item["is_video"] else ''
 
+    if index < EAGER_TILES:
+        loading = 'loading="eager" fetchpriority="high"'
+    else:
+        loading = 'loading="lazy" fetchpriority="low"'
+
     return f'''      <figure class="tile">
         <a href="{html.escape(item['post_url'])}" target="_blank" rel="noopener noreferrer"
            aria-label="{html.escape(label)}">
           <img src="{html.escape(item['thumb'])}" alt="{html.escape(alt)}"
                width="{item['width']}" height="{item['height']}"
-               loading="lazy" decoding="async" />
+               {loading} decoding="async" />
           {badge}
           {caption}
         </a>
@@ -149,7 +170,7 @@ def render_tile(item):
 
 
 def render_page(items, title):
-    tiles = "\n".join(render_tile(i) for i in items)
+    tiles = "\n".join(render_tile(i, n) for n, i in enumerate(items))
     photos = sum(1 for i in items if not i["is_video"])
     videos = len(items) - photos
     posts = len({i["shortcode"] for i in items})
@@ -296,7 +317,8 @@ def main():
 
     counts = {"ok": 0, "cached": 0, "failed": 0}
     with concurrent.futures.ThreadPoolExecutor(max_workers=args.jobs) as pool:
-        futures = {pool.submit(make_thumb, i, thumbdir, args.width): i for i in items}
+        futures = {pool.submit(make_thumb, i, thumbdir, args.width,
+                               args.quality, args.force): i for i in items}
         for n, future in enumerate(concurrent.futures.as_completed(futures), 1):
             counts[future.result()] += 1
             if n % 100 == 0 or n == len(items):
