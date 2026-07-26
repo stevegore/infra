@@ -239,12 +239,12 @@ data:
       # A rebuild that changes an image reuses its filename, so bump this (or
       # rename) if you ever need viewers to pick up changed pixels sooner.
       header /thumbs/* Cache-Control "public, max-age=2592000"
-      # The HTML itself must stay fresh: it is how new photos become visible.
-      # Needs to match bare `/` too — nginx resolves that to index.html
-      # internally, but Caddy matches on the request path, so a `/index.html`
-      # matcher alone never fires for a normal visit.
-      @html path / /index.html
-      header @html Cache-Control "no-cache"
+      # HTML and the hide-list stylesheet must stay fresh: they are how new
+      # photos become visible and curated photos disappear. Needs to match bare
+      # `/` too — nginx resolves that to index.html internally, but Caddy
+      # matches on the request path, so `/index.html` alone misses normal visits.
+      @nocache path / /index.html /admin.html /hidden.css
+      header @nocache Cache-Control "no-cache"
       reverse_proxy pico:8090
       import defaults
     }

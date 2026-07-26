@@ -1329,15 +1329,17 @@ namespace — **not** from a container on pico.
 
 ### ig-gallery
 
-**Status:** Running  
+**Status:** Running (public gallery + hide-list admin)
+
 **Stack ID:** 64  
 **Created:** 2026-07-26
 
 **Containers:**
 
-| Container  | Image                | Status  |
-| ---------- | -------------------- | ------- |
-| ig-gallery | nginx:1.31.3-alpine  | Running |
+| Container     | Image                | Status  |
+| ------------- | -------------------- | ------- |
+| ig-gallery    | nginx:1.31.3-alpine  | Running |
+| gallery-admin | python:3.13.14-alpine | Running |
 
 **Docker Compose:**
 
@@ -1352,17 +1354,44 @@ services:
     volumes:
       # Static output of build-gallery.py. Read-only: nginx never writes here.
       - /media/m2/ig-gallery:/usr/share/nginx/html:ro
+      - /media/m2/ig-gallery-state:/state:ro
+      - /media/m2/ig-gallery-admin/nginx.conf.template:/etc/nginx/templates/default.conf.template:ro
     environment:
       TZ: Australia/Sydney
+      NGINX_ENVSUBST_FILTER: "^GALLERY_"
+      GALLERY_ADMIN_KEY: ${GALLERY_ADMIN_KEY}
+    depends_on:
+      - gallery-admin
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://localhost/index.html"]
       interval: 30s
       timeout: 5s
       retries: 3
+
+  gallery-admin:
+    image: python:3.13.14-alpine
+    container_name: gallery-admin
+    restart: unless-stopped
+    # No published port: nginx is the authenticated route to this service.
+    volumes:
+      - /media/m2/ig-gallery-admin/gallery-admin.py:/app/gallery-admin.py:ro
+      - /media/m2/ig-gallery-state:/state
+    environment:
+      TZ: Australia/Sydney
+      GALLERY_STATE_DIR: /state
+      PYTHONUNBUFFERED: "1"
+    command: ["python3", "/app/gallery-admin.py"]
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/healthz', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
 ```
 
-**Purpose:** Serves a static masonry grid of a saved Instagram collection. Pure
-files — no database, no runtime, no JS framework.  
+**Purpose:** Serves a static masonry grid of a saved Instagram collection. The
+public path stays static; a stdlib-only Python sidecar manages the admin hide
+list. There is no database or JS framework.
+
 **Ports:** 8090 (HTTP)  
 **Domain:** `gallery.stevegore.au` — via Caddy → `pico:8090`. **Public, no
 Authentik.** Caddy sets `X-Robots-Tag: noindex, nofollow` because the content is
@@ -1373,9 +1402,11 @@ links back to its post.
 | Host Path              | Container Path          | Notes                          |
 | ---------------------- | ----------------------- | ------------------------------ |
 | `/media/m2/ig-gallery` | `/usr/share/nginx/html` | Generated site, **read-only**  |
+| `/media/m2/ig-gallery-state` | `/state` | `hidden.txt` + generated `hidden.css`; nginx RO, sidecar RW |
+| `/media/m2/ig-gallery-admin` | `/app` and nginx template | Sidecar/config source, **read-only** |
 
 **Content as of 2026-07-26:** 2,572 photos + 538 videos across 1,256 posts =
-3,110 tiles. 211 MB of thumbnails, 2.8 MB `index.html`.
+3,110 tiles. 137 MB of thumbnails, 3.0 MB `index.html`.
 
 **Regenerating.** Two stages, both re-runnable:
 
@@ -1393,6 +1424,44 @@ python3 scripts/build-gallery.py ~/Pictures/ig-export ~/Pictures/ig-gallery \
   --title "Renovation"
 rsync -a ~/Pictures/ig-gallery/ pico.local:/media/m2/ig-gallery/
 ```
+
+To bake the current curation out of the public HTML while keeping every tile in
+the admin view, copy the authoritative list from pico and pass it to the build:
+
+```sh
+scp pico.local:/media/m2/ig-gallery-state/hidden.txt \
+  ~/Pictures/ig-gallery-hidden.txt
+python3 scripts/build-gallery.py ~/Pictures/ig-export ~/Pictures/ig-gallery \
+  --title "Renovation" --hidden-list ~/Pictures/ig-gallery-hidden.txt
+rsync -a ~/Pictures/ig-gallery/ pico.local:/media/m2/ig-gallery/
+```
+
+**Hide-list administration.** `/admin.html` is available without a key from the
+home public IP and from direct LAN/tailnet requests to pico. From elsewhere, use
+`https://gallery.stevegore.au/admin.html?key=<key>`. The key is generated with
+`openssl rand -hex 24`, stored in Vaultwarden, and configured only as the
+Portainer stack environment variable `GALLERY_ADMIN_KEY`; it is never committed.
+nginx returns 404 for unauthenticated admin/API requests. The sidecar has no
+published port and also requires nginx's `X-Gallery-Auth: ok` header.
+
+The authoritative state is `/media/m2/ig-gallery-state/hidden.txt`, one media ID
+per line. It is deliberately outside the rsync target. Hand edits are supported:
+`gallery-admin` notices them within about five seconds and atomically regenerates
+`hidden.css`. To deploy the admin components:
+
+```sh
+ssh pico.local 'mkdir -p /media/m2/ig-gallery-state /media/m2/ig-gallery-admin'
+scp scripts/gallery-admin.py pico.local:/media/m2/ig-gallery-admin/
+scp scripts/ig-gallery-nginx.conf.template \
+  pico.local:/media/m2/ig-gallery-admin/nginx.conf.template
+```
+
+Then redeploy Portainer stack 64 with the compose above. On first deployment,
+temporarily leave `GALLERY_ADMIN_KEY` empty and verify in `docker logs
+ig-gallery` that nginx rejects the duplicate empty map key and refuses to start;
+then restore the real key. This is the fail-closed check that prevents an empty
+key from authenticating every keyless request. After deployment, verify public,
+home-IP, LAN, and keyed access independently before curating images.
 
 The `metadata` post-processor in `scripts/ig-gallery.conf.json` is **load-bearing**
 — it writes the `<media>.json` sidecars that `build-gallery.py` reads for
