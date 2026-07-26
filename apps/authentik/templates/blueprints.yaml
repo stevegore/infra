@@ -1,16 +1,16 @@
 # Authentik blueprints, mounted via authentik.blueprints.configMaps in values.yaml.
 # The worker auto-discovers each data key and applies it on startup (idempotent).
 #
-# PHASE 2 (this file): a GitHub OAuth Source so users can "Sign in with GitHub".
+# A GitHub OAuth Source, a GitHub-only authentication flow for forward-auth,
+# the domain-level forward-auth provider/application, and its embedded outpost.
 # consumer_key/secret are read from env (AUTHENTIK_GITHUB_CLIENT_ID/SECRET,
 # injected from the authentik-config Secret via global.env). The default
 # source authentication/enrollment flows shipped by Authentik are referenced
 # with !Find.
 #
-# PHASE 3 (forward-auth.yaml): the domain-level forward-auth Proxy Provider
-# (external host auth.stevegore.au, cookie domain stevegore.au), its Application,
-# and assignment to the embedded outpost. Verified live before the Caddy
-# forward_auth cutover.
+# Everything is in one blueprint document so !KeyOf dependencies are applied in
+# order. Authentik does not guarantee the application order of separate mounted
+# blueprint files.
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -20,12 +20,13 @@ metadata:
     app.kubernetes.io/name: authentik
     app.kubernetes.io/component: blueprints
 data:
-  github-source.yaml: |
+  stevegore-auth.yaml: |
     version: 1
     metadata:
-      name: github-oauth-source
+      name: stevegore-auth
     entries:
       - model: authentik_sources_oauth.oauthsource
+        id: github-source
         identifiers:
           slug: github
         attrs:
@@ -37,6 +38,43 @@ data:
           user_matching_mode: email_link
           authentication_flow: !Find [authentik_flows.flow, [slug, default-source-authentication]]
           enrollment_flow: !Find [authentik_flows.flow, [slug, default-source-enrollment]]
+      # Protected applications use this provider-specific authentication flow.
+      # With no user fields and exactly one source, the Identification stage
+      # immediately redirects to GitHub instead of rendering a login screen.
+      # Direct visits to auth.stevegore.au still use the Brand's default
+      # authentication flow, which retains local password login for akadmin.
+      - model: authentik_flows.flow
+        id: github-forward-auth-flow
+        identifiers:
+          slug: github-forward-authentication
+        attrs:
+          name: GitHub forward-auth authentication
+          title: Signing in with GitHub
+          designation: authentication
+      - model: authentik_stages_identification.identificationstage
+        id: github-forward-auth-identification
+        identifiers:
+          name: github-forward-auth-identification
+        attrs:
+          user_fields: []
+          sources:
+            - !KeyOf github-source
+      - model: authentik_stages_user_login.userloginstage
+        id: github-forward-auth-login
+        identifiers:
+          name: github-forward-auth-login
+        attrs:
+          session_duration: seconds=0
+      - model: authentik_flows.flowstagebinding
+        identifiers:
+          target: !KeyOf github-forward-auth-flow
+          stage: !KeyOf github-forward-auth-identification
+          order: 10
+      - model: authentik_flows.flowstagebinding
+        identifiers:
+          target: !KeyOf github-forward-auth-flow
+          stage: !KeyOf github-forward-auth-login
+          order: 100
       # Show GitHub as a login button on the default authentication flow — a new
       # source isn't surfaced until it's added to the identification stage's
       # sources list (which ships empty). Password login still works alongside.
@@ -45,12 +83,7 @@ data:
           name: default-authentication-identification
         attrs:
           sources:
-            - !Find [authentik_core.source, [slug, github]]
-  forward-auth.yaml: |
-    version: 1
-    metadata:
-      name: stevegore-forward-auth
-    entries:
+            - !KeyOf github-source
       # Domain-level forward-auth Proxy Provider for *.stevegore.au.
       - model: authentik_providers_proxy.proxyprovider
         id: provider
@@ -61,6 +94,7 @@ data:
           external_host: https://auth.stevegore.au
           cookie_domain: stevegore.au
           access_token_validity: hours=24
+          authentication_flow: !KeyOf github-forward-auth-flow
           authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
           invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
       # Application bound to the provider.
