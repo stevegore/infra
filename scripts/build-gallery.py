@@ -17,6 +17,7 @@ import argparse
 import concurrent.futures
 import html
 import json
+import math
 import pathlib
 import shutil
 import subprocess
@@ -28,6 +29,21 @@ CAPTION_CHARS = 400
 # defers everything including the first screenful, which leaves the top of the
 # page visibly empty on arrival; these cover roughly one 4-column viewport.
 EAGER_TILES = 12
+
+# Masonry geometry. CSS multi-column (`columns: 320px`) cannot be used here: for
+# a container this tall the browser *balances* the columns, so column 1 holds
+# items 0-742, column 2 holds 743-1462 and so on. That puts four unrelated eras
+# side by side in the top row, makes chronological reading require a 97,000px
+# scroll down one column, and spreads the lazy-load frontier across four distant
+# document regions at once (~250 images fetched on arrival).
+#
+# CSS Grid with an explicit `grid-row: span N` per tile gives true row-major
+# order instead. N is computed here from each image's real aspect ratio, which
+# requires the column width to be *fixed* rather than fluid -- a `1fr` column
+# would render taller than the span reserved and tiles would overlap.
+COLUMN_PX = 320   # exact rendered tile width; span maths depends on it
+ROW_UNIT_PX = 2   # grid-auto-rows; finer = tighter packing, more spanned rows
+GAP_PX = 14
 
 
 def parse_args():
@@ -157,7 +173,12 @@ def render_tile(item, index):
     else:
         loading = 'loading="lazy" fetchpriority="low"'
 
-    return f'''      <figure class="tile">
+    # Rows to span = rendered height + the gap that follows it, in row units.
+    # Ceil so the track is never shorter than the tile (which would overlap).
+    tile_px = COLUMN_PX * item["height"] / item["width"]
+    span = math.ceil((tile_px + GAP_PX) / ROW_UNIT_PX)
+
+    return f'''      <figure class="tile" style="grid-row:span {span}">
         <a href="{html.escape(item['post_url'])}" target="_blank" rel="noopener noreferrer"
            aria-label="{html.escape(label)}">
           <img src="{html.escape(item['thumb'])}" alt="{html.escape(alt)}"
@@ -211,17 +232,31 @@ def render_page(items, title):
   h1 {{ margin: 0; font-size: 1.5rem; font-weight: 600; letter-spacing: -0.01em; }}
   .count {{ margin: 6px 0 0; color: var(--muted); font-size: 0.875rem; }}
 
-  /* Masonry via CSS multi-column: no JS, no layout pass. */
+  /* Masonry via CSS Grid with per-tile row spans (computed from each image's
+     aspect ratio at build time). Row-major order, so reading top-to-bottom
+     follows date order. Columns are a fixed {COLUMN_PX}px because the span
+     maths depends on the exact rendered width. */
   .grid {{
-    max-width: 1600px;
+    max-width: 1700px;
     margin: 0 auto;
-    column-width: 320px;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, {COLUMN_PX}px);
+    justify-content: center;
+    grid-auto-rows: {ROW_UNIT_PX}px;
+    row-gap: 0;                 /* spacing comes from .tile margin-bottom, so a
+                                   spanned track maps to exact pixels */
     column-gap: var(--gap);
   }}
   .tile {{
     margin: 0 0 var(--gap);
-    break-inside: avoid;
-    -webkit-column-break-inside: avoid;
+    min-width: 0;
+  }}
+
+  /* Below two columns the fixed-width grid would leave a lopsided single
+     column, so fall back to plain block flow. grid-row spans are inert here,
+     and the images go full width. */
+  @media (max-width: {COLUMN_PX * 2 + GAP_PX + 40}px) {{
+    .grid {{ display: block; max-width: 560px; }}
   }}
   .tile a {{
     position: relative;
