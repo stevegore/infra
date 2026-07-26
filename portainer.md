@@ -1372,6 +1372,7 @@ services:
     image: python:3.13.14-alpine
     container_name: gallery-admin
     restart: unless-stopped
+    user: "1000:1000"
     # No published port: nginx is the authenticated route to this service.
     volumes:
       - /media/m2/ig-gallery-admin/gallery-admin.py:/app/gallery-admin.py:ro

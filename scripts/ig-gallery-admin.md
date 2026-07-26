@@ -288,6 +288,7 @@ services:
     image: python:3.13.14-alpine
     container_name: gallery-admin
     restart: unless-stopped
+    user: "1000:1000"
     # No `ports:` on purpose — nginx is the only route in, and nginx is where the
     # authentication lives.
     volumes:
