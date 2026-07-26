@@ -147,3 +147,4 @@ pico:
     - { name: huginn,  port: 3000  }
     - { name: pdf,     port: 8083  }
     - { name: stats,   port: 8001  }
+    - { name: gallery, port: 8090  }

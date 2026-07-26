@@ -77,6 +77,10 @@ data:
         - icloudpd:
             description: iCloud photo downloader (hourly sync to /media/m2/photos/iphone/steve)
             icon: mdi-apple-icloud
+        - Instagram Gallery:
+            href: https://gallery.stevegore.au
+            description: Static grid of the saved "renovation" collection
+            icon: mdi-image-multiple
 
     - Infrastructure:
         - Portainer:

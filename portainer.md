@@ -62,7 +62,8 @@ curl -s -X POST http://pico.local:9000/api/endpoints/1/docker/exec/$EXEC_ID/star
 15. [immich](#immich) - Photo management (Portainer-managed)  
 16. [icloudpd](#icloudpd) - iCloud photo downloader  
 17. [homepage](#homepage) - Application dashboard (Portainer-managed)  
-18. [uptime-kuma](#uptime-kuma) - Uptime/status monitoring
+18. [uptime-kuma](#uptime-kuma) - Uptime/status monitoring  
+19. [ig-gallery](#ig-gallery) - Static Instagram collection grid (nginx)
 
 ### Standalone Containers
 
@@ -1313,6 +1314,85 @@ docker start uptime-kuma
 
 ---
 
+### ig-gallery
+
+**Status:** Running  
+**Stack ID:** 64  
+**Created:** 2026-07-26
+
+**Containers:**
+
+| Container  | Image                | Status  |
+| ---------- | -------------------- | ------- |
+| ig-gallery | nginx:1.31.3-alpine  | Running |
+
+**Docker Compose:**
+
+```yaml
+services:
+  ig-gallery:
+    image: nginx:1.31.3-alpine
+    container_name: ig-gallery
+    restart: unless-stopped
+    ports:
+      - "8090:80"
+    volumes:
+      # Static output of build-gallery.py. Read-only: nginx never writes here.
+      - /media/m2/ig-gallery:/usr/share/nginx/html:ro
+    environment:
+      TZ: Australia/Sydney
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost/index.html"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+```
+
+**Purpose:** Serves a static masonry grid of a saved Instagram collection. Pure
+files — no database, no runtime, no JS framework.  
+**Ports:** 8090 (HTTP)  
+**Domain:** `gallery.stevegore.au` — via Caddy → `pico:8090`. **Public, no
+Authentik.** Caddy sets `X-Robots-Tag: noindex, nofollow` because the content is
+a rehost of other accounts' photos; each tile credits the original account and
+links back to its post.  
+**Storage:**
+
+| Host Path              | Container Path          | Notes                          |
+| ---------------------- | ----------------------- | ------------------------------ |
+| `/media/m2/ig-gallery` | `/usr/share/nginx/html` | Generated site, **read-only**  |
+
+**Content as of 2026-07-26:** 2,572 photos + 538 videos across 1,256 posts =
+3,110 tiles. 211 MB of thumbnails, 2.8 MB `index.html`.
+
+**Regenerating.** Two stages, both re-runnable:
+
+```sh
+# 1. Download/refresh originals (on the Mac -- needs Chrome's Instagram cookies,
+#    which must come from a NORMAL window; incognito cookies are memory-only and
+#    never hit the on-disk store that --cookies-from-browser reads).
+gallery-dl --config scripts/ig-gallery.conf.json --cookies-from-browser chrome \
+  -d ~/Pictures/ig-export \
+  "https://www.instagram.com/kellesi/saved/renovation/17857060859295814/"
+
+# 2. Rebuild the site, then ship it. Existing thumbnails are skipped, so a
+#    rebuild after adding photos only processes the new ones.
+python3 scripts/build-gallery.py ~/Pictures/ig-export ~/Pictures/ig-gallery \
+  --title "Renovation"
+rsync -a ~/Pictures/ig-gallery/ pico.local:/media/m2/ig-gallery/
+```
+
+The `metadata` post-processor in `scripts/ig-gallery.conf.json` is **load-bearing**
+— it writes the `<media>.json` sidecars that `build-gallery.py` reads for
+`post_url`, `description`, and `width`/`height`. Without them there is no link
+back to Instagram and no reflow-free layout.
+
+**Note:** originals live at `~/Pictures/ig-export` on the Mac, deliberately
+**not** under `/media/m2/photos` — that path is Immich's external library with a
+filesystem watcher, and putting them there would index 3,110 scraped files into
+the personal photo library.
+
+---
+
 ## Standalone Containers (Not in Stacks)
 
 ### Portainer
@@ -1534,6 +1614,7 @@ bash ~/code/infra/scripts/vw-mysql-to-sqlite.sh
 | 8081  | Vaultwarden HTTP      | bitwarden                         | TCP      |
 | 8082  | Strava Bot            | stravabot-rs                      | TCP      |
 | 8083  | Stirling PDF          | pdf-stirling-pdf-1                | TCP      |
+| 8090  | Instagram Gallery     | ig-gallery                        | TCP      |
 | 8191  | FlareSolverr          | flaresolverr                      | TCP      |
 | 8111  | NuraSpace             | nuraspace2-nuraspace-1            | TCP      |
 | 8112  | GymBooking            | gymmaster-rest-gymbooking-1       | TCP      |
