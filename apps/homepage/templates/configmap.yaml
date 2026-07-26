@@ -93,7 +93,8 @@ data:
               env: 1
               key: {{ "{{HOMEPAGE_VAR_PORTAINER_TOKEN}}" }}
         - Uptime Kuma:
-            href: http://pico:3001
+            # Kuma moved to OKE (2026-05); nothing listens on pico:3001 any more.
+            href: https://uptime.stevegore.au
             description: Uptime & status monitoring
             icon: uptime-kuma.png
             widget:

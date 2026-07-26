@@ -62,7 +62,7 @@ curl -s -X POST http://pico.local:9000/api/endpoints/1/docker/exec/$EXEC_ID/star
 15. [immich](#immich) - Photo management (Portainer-managed)  
 16. [icloudpd](#icloudpd) - iCloud photo downloader  
 17. [homepage](#homepage) - Application dashboard (Portainer-managed)  
-18. [uptime-kuma](#uptime-kuma) - Uptime/status monitoring  
+18. [uptime-kuma](#uptime-kuma) - Uptime/status monitoring (**migrated to OKE** — see [`apps/uptime-kuma/README.md`](apps/uptime-kuma/README.md))  
 19. [ig-gallery](#ig-gallery) - Static Instagram collection grid (nginx)
 
 ### Standalone Containers
@@ -1265,15 +1265,32 @@ services:
 
 ### uptime-kuma
 
-**Status:** Running  
-**Stack ID:** 61  
+> [!IMPORTANT]
+> **Migrated to OKE — this stack no longer exists on pico.** Uptime Kuma moved to
+> Kubernetes on 2026-05-24/25 and switched from SQLite to a **MySQL HeatWave**
+> backend on 2026-06-06. The Portainer stack (was ID 61) has been deleted; nothing
+> listens on pico:3001.
+>
+> **Authoritative docs: [`apps/uptime-kuma/README.md`](apps/uptime-kuma/README.md).**
+>
+> The provisioning runbook that used to live here — stop the container, mount
+> `uptime-kuma_uptime-kuma_data`, run python against `/app/data/kuma.db` — **does not
+> work and will fail with "No such container".** Monitor config now lives in MySQL
+> inside the OCI VCN and is written by a short-lived pod in the cluster; see the
+> README. The Docker volume `uptime-kuma_uptime-kuma_data` is still on pico but is
+> orphaned, holding the pre-migration SQLite DB that nothing reads.
+>
+> Config below is kept for reference only.
+
+**Status:** Decommissioned on pico (was: Running)  
+**Stack ID:** 61 (deleted)  
 **Created:** 2026-05-17
 
 **Containers:**
 
-| Container   | Image                       | Status  |
-| ----------- | --------------------------- | ------- |
-| uptime-kuma | louislam/uptime-kuma:1      | Running |
+| Container   | Image                       | Status              |
+| ----------- | --------------------------- | ------------------- |
+| uptime-kuma | louislam/uptime-kuma:1      | Gone (now on OKE)   |
 
 **Docker Compose:**
 
@@ -1294,23 +1311,19 @@ volumes:
   uptime-kuma_data:
 ```
 
-**Purpose:** Uptime/status monitoring (pings + heartbeat checks), accessed at `http://pico.local:3001`. Persistent data in named volume `uptime-kuma_uptime-kuma_data`.  
-**Status page:** `http://pico.local:3001/status/homelab` — three groups (Public Services, Internal, Infrastructure). Wired into Homepage as the `uptimekuma` widget on the `Uptime Kuma` tile (slug = `homelab`).  
-**Monitor set:** 35 monitors covering pings (pico, ampere-ubuntu), TCP ports (SSH, Jackett, StravaBot), Caddy-fronted public URLs (all `*.stevegore.au`), and direct pico.local backend ports. GitHub-OAuth-protected URLs use `maxredirects=0` and `accepted=["302"]` so a 302 from Caddy's auth portal counts as UP. The container has `extra_hosts: pico.local:192.168.4.120` so internal monitors can resolve.  
-**Notifications:** Pushover, configured via UI (Settings → Notifications). Default-on for all monitors.  
-**Config provisioning:** Schema-direct SQL into `/app/data/kuma.db` (Uptime Kuma 1.x has no full REST API for monitor management). Re-runnable scripts (idempotent skip-if-name-exists):
-
-```sh
-# from pico — mount the named volume into a python container
-docker stop uptime-kuma
-docker run --rm -v uptime-kuma_uptime-kuma_data:/app/data \
-  -v ~/code/infra/scripts/setup_uptime_kuma.py:/setup.py \
-  python:3.12-alpine python /setup.py
-docker run --rm -v uptime-kuma_uptime-kuma_data:/app/data \
-  -v ~/code/infra/scripts/setup_status_page.py:/setup.py \
-  python:3.12-alpine python /setup.py
-docker start uptime-kuma
-```
+**Purpose:** Uptime/status monitoring (pings + heartbeat checks). **Now at
+`https://uptime.stevegore.au`** (Authentik-protected), not `pico.local:3001`.  
+**Status page:** **`https://status.stevegore.au`** (slug `homelab`). Wired into Homepage as
+the `uptimekuma` widget, which correctly points at the in-cluster Service.  
+**Monitor set:** 40 managed monitors as of 2026-07-26 (42 rows in the DB). Still covers pings,
+TCP ports, Caddy-fronted public URLs, and pico's internal ports — but pico is now reached over
+the Tailscale egress Service (`http://pico:9092`, …), not `extra_hosts`.  
+**Notifications:** Pushover, configured via UI (Settings → Notifications). Default-on for all
+monitors.  
+**Config provisioning:** see [`apps/uptime-kuma/README.md`](apps/uptime-kuma/README.md). Short
+version: monitors live in MySQL on OCI HeatWave, which is only reachable from inside the
+cluster, so `scripts/setup_uptime_kuma.py` runs from a short-lived pod in the `uptime-kuma`
+namespace — **not** from a container on pico.
 
 ---
 
@@ -1577,7 +1590,7 @@ bash ~/code/infra/scripts/vw-mysql-to-sqlite.sh
 | transmission-wg_transmission_config | transmission-wg     | 2025-05-05 | WG Transmission config (orphaned) |
 | stravabot-rs_stravabot-rs-data      | stravabot-rs        | 2026-01-26 | Strava bot progress data          |
 | icloudpd_icloudpd_cookies           | icloudpd            | 2026-05-17 | iCloud auth session cookies       |
-| uptime-kuma_uptime-kuma_data        | uptime-kuma         | 2026-05-17 | Uptime Kuma monitor data + config |
+| uptime-kuma_uptime-kuma_data        | *(none — orphaned)* | 2026-05-17 | **Orphaned.** Pre-2026-06-06 SQLite DB from before the OKE/MySQL migration. Nothing reads it; safe to delete once you're satisfied the OKE history is intact |
 
 ### Standalone Volumes
 
@@ -1609,7 +1622,7 @@ bash ~/code/infra/scripts/vw-mysql-to-sqlite.sh
 | 3012  | Vaultwarden WebSocket | bitwarden                         | TCP      |
 | 4357  | HA Observer           | hassio_observer                   | TCP      |
 | 7878  | Radarr                | radarr                            | TCP      |
-| 3001  | Uptime Kuma           | uptime-kuma                       | TCP      |
+| ~~3001~~ | ~~Uptime Kuma~~    | *(migrated to OKE — port free)*   | —        |
 | 8080  | Homepage              | homepage                          | TCP      |
 | 8081  | Vaultwarden HTTP      | bitwarden                         | TCP      |
 | 8082  | Strava Bot            | stravabot-rs                      | TCP      |
