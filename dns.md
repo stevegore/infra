@@ -287,6 +287,7 @@ error log, with clients silently failing to see each other's vault changes.
 | pdf.stevegore.au    | 8083      | —        | Stirling PDF                   |
 | strava.stevegore.au | 8180      | —        | Stravakeeper (OKE, strava-keeper ns) |
 | stats.stevegore.au  | 8001      | —        | Stats server — public JSON + HTML dashboard (`scripts/STATS_SERVER.md`) |
+| gallery.stevegore.au       | 8090      | —        | Static Instagram collection grid (nginx on pico, `X-Robots-Tag: noindex`) |
 
 **Direct access (not via Caddy):**
 
