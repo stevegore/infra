@@ -96,6 +96,7 @@ def load_items(source):
             "description": (meta.get("description") or "").strip(),
             "date": str(meta.get("post_date") or ""),
             "num": meta.get("num") or 0,
+            "count": meta.get("count") or 1,
             "width": width,
             "height": height,
         })
@@ -149,6 +150,19 @@ def make_thumb(item, thumbdir, width, quality, force):
     return "failed"
 
 
+def post_link(item):
+    """Deep-link to this exact image, not just the post.
+
+    Instagram's `img_index` is 1-based and counts every carousel slide including
+    videos, which is precisely what gallery-dl's `num` is -- so they map
+    directly. Only added for real carousels: on a single-image post the
+    parameter is noise, and reels have no slides to index.
+    """
+    if item["count"] > 1 and item["num"]:
+        return f"{item['post_url']}?img_index={item['num']}"
+    return item["post_url"]
+
+
 def render_tile(item, index):
     desc = item["description"].replace("\r", " ")
     if len(desc) > CAPTION_CHARS:
@@ -156,6 +170,8 @@ def render_tile(item, index):
 
     user = item["username"]
     label = f"Instagram post by @{user}" if user else "Instagram post"
+    if item["count"] > 1 and item["num"]:
+        label += f" — image {item['num']} of {item['count']}"
     alt = desc[:120] if desc else label
 
     caption_parts = []
@@ -179,7 +195,7 @@ def render_tile(item, index):
     span = math.ceil((tile_px + GAP_PX) / ROW_UNIT_PX)
 
     return f'''      <figure class="tile" style="grid-row:span {span}">
-        <a href="{html.escape(item['post_url'])}" target="_blank" rel="noopener noreferrer"
+        <a href="{html.escape(post_link(item))}" target="_blank" rel="noopener noreferrer"
            aria-label="{html.escape(label)}">
           <img src="{html.escape(item['thumb'])}" alt="{html.escape(alt)}"
                width="{item['width']}" height="{item['height']}"
