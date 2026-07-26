@@ -233,6 +233,14 @@ data:
     # generated HTML also carries a robots meta tag, which crawlers may ignore.
     gallery.stevegore.au {
       header X-Robots-Tag "noindex, nofollow"
+      # Thumbnails are content-stable for a given filename, and nginx only sends
+      # ETag/Last-Modified — so without this every revisit revalidates all 3,110
+      # of them, each paying the ~95ms pico→tailscale→OKE round trip. Cache hard.
+      # A rebuild that changes an image reuses its filename, so bump this (or
+      # rename) if you ever need viewers to pick up changed pixels sooner.
+      header /thumbs/* Cache-Control "public, max-age=2592000"
+      # The HTML itself must stay fresh: it is how new photos become visible.
+      header /index.html Cache-Control "no-cache"
       reverse_proxy pico:8090
       import defaults
     }
