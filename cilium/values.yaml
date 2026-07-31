@@ -105,6 +105,6 @@ cilium:
 
 canary:
   enabled: true
-  image: docker.io/library/busybox:1.37.0
+  image: docker.io/library/busybox:1.38.0
   # The PostSync deny hook proves that NetworkPolicy is actually enforced.
   policyTestEnabled: true
