@@ -8,7 +8,8 @@
   "timezone": "Australia/Sydney",
   "description": [
     "Homelab policy: everything self-merges. Breaking changes are acceptable — Uptime Kuma is the smoke test. The ONE exception is the data layer (see the 'databases' rule below), where a bad major is painful to unwind.",
-    "No managerFilePatterns overrides here on purpose: Renovate MERGES those with its defaults rather than replacing them, so narrowing to apps/ and pico/ would have added nothing while implying a restriction that does not exist. The defaults already cover apps/*/Chart.yaml, apps/*/values.yaml, pico/*/compose.yaml, cilium/Chart.yaml, terraform/*.tf and .github/workflows/*."
+    "No managerFilePatterns overrides here on purpose: Renovate MERGES those with its defaults rather than replacing them, so narrowing to apps/ and pico/ would have added nothing while implying a restriction that does not exist. The defaults already cover apps/*/Chart.yaml, apps/*/values.yaml, pico/*/compose.yaml, cilium/Chart.yaml, terraform/*.tf and .github/workflows/*.",
+    "ignoreTests is required, not optional: this repo has no CI on the Renovate branches, and GitHub reports a combined commit status of 'pending' when a branch has ZERO checks (not 'success'). Renovate will not automerge a non-green branch, so without this nothing self-merges — the first forced run opened 22 automergeable PRs and merged none of them. platformAutomerge also cannot arm here (GitHub rejects enabling auto-merge on an already-mergeable PR with no required checks), so Renovate merges directly instead."
   ],
   "schedule": [
     "after 1am and before 6am"
@@ -19,6 +20,7 @@
   "automerge": true,
   "automergeType": "pr",
   "platformAutomerge": true,
+  "ignoreTests": true,
   "automergeSchedule": [
     "after 1am and before 6am"
   ],
