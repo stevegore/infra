@@ -142,6 +142,21 @@ volumes and bind mounts (where all pico data lives) are untouched.
 
 Dry run is the default. Every stack is snapshotted to `/tmp/portainer-rollback/`
 before deletion; restore one with `--rollback /tmp/portainer-rollback/pdf.json --apply`.
+Those snapshots contain the pre-migration inline secrets and are written `0600` —
+keep them out of the repo, and note `/tmp` does not survive the 05:00 reboot.
+
+**Stopped stacks stay stopped.** Creating a stack from a repo deploys it, so the
+script records each stack's Portainer `Status` and re-stops anything that was
+not running. Three stacks are deliberately stopped and should stay that way:
+
+| Stack | Why it is off |
+| --- | --- |
+| `stevegore-au` | A `ttyd --writable` shell on `:8788`. Superseded by the OKE ttyd, which has the CiliumNetworkPolicy, egress-lockdown init container and dropped capabilities that this one does not. |
+| `stravakeeper` | `strava.stevegore.au` is served by the OKE `strava-keeper` app. |
+| `gymmaster-rest` | Superseded by the OKE `gym-booker` app. |
+
+The first full sweep started all three before this was handled. If a future run
+brings something unexpected up, `POST /api/stacks/<id>/stop?endpointId=1`.
 
 ---
 

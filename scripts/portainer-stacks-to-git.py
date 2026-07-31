@@ -187,6 +187,7 @@ def save_rollback(stack: str, meta: dict, body: str) -> str:
         "Name": stack,
         "Env": meta.get("Env") or [],
         "EndpointId": meta.get("EndpointId", ENDPOINT_ID),
+        "Status": meta.get("Status"),  # 1 = active, 2 = stopped
         "StackFileContent": body,
         "capturedAt": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
     }
@@ -205,8 +206,17 @@ def convert(stack: str, meta: dict, env_file: dict, apply: bool) -> None:
     old_compose = api("GET", f"/stacks/{meta['Id']}/file")["StackFileContent"]
     env, derived = env_pairs(stack, meta, env_file, old_compose)
 
+    # Portainer Status: 1 = active, 2 = stopped. Creating a stack from a repo
+    # deploys it, so without re-stopping we would silently START anything the
+    # operator had deliberately turned off. That is not hypothetical: the first
+    # full sweep brought stevegore-au (a writable ttyd, superseded by the
+    # hardened one on OKE), stravakeeper and gymmaster-rest back up.
+    was_stopped = meta.get("Status") == 2
+
     print(f"\n=== {stack} (id={meta['Id']})")
     print(f"    compose : {compose_path}")
+    if was_stopped:
+        print("    state   : STOPPED before conversion — will be re-stopped after recreate")
     if env:
         for e in env:
             # Never print the value — this runs on a laptop and scrolls into
@@ -241,6 +251,10 @@ def convert(stack: str, meta: dict, env_file: dict, apply: bool) -> None:
     )
     print(f"    recreated from git as id={created.get('Id')} (autoUpdate {AUTO_UPDATE['interval']})")
 
+    if was_stopped:
+        api("POST", f"/stacks/{created['Id']}/stop?endpointId={meta['EndpointId']}")
+        print("    re-stopped — it was not running before this conversion")
+
 
 def rollback(path: str, apply: bool) -> None:
     with open(path) as fh:
@@ -254,7 +268,7 @@ def rollback(path: str, apply: bool) -> None:
     if existing:
         api("DELETE", f"/stacks/{existing['Id']}?endpointId={existing['EndpointId']}")
         print("    removed git-backed stack")
-    api(
+    restored = api(
         "POST",
         f"/stacks/create/standalone/string?endpointId={snap['EndpointId']}",
         {
@@ -264,6 +278,13 @@ def rollback(path: str, apply: bool) -> None:
         },
     )
     print("    restored pre-migration stack")
+
+    # Same trap as convert(): restoring deploys. Honour the captured state.
+    # Snapshots taken before this field existed have Status None — leave those
+    # running rather than guessing.
+    if snap.get("Status") == 2:
+        api("POST", f"/stacks/{restored['Id']}/stop?endpointId={snap['EndpointId']}")
+        print("    re-stopped — it was not running when the snapshot was taken")
 
 
 def main() -> None:
