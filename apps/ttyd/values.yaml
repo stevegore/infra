@@ -72,7 +72,7 @@ denyCidrs:
 egressLockdown:
   # Official Kubernetes iptables build image (what kube-proxy ships on). Pinned
   # tag, pulled from registry.k8s.io — no Docker Hub rate-limit exposure.
-  image: registry.k8s.io/build-image/distroless-iptables:v0.9.3
+  image: registry.k8s.io/build-image/distroless-iptables:v0.9.6
 
 networkPolicy:
   enabled: true
