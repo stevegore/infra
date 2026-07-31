@@ -57,11 +57,24 @@ Covers 67 dependencies across 43 files, via seven managers:
   Renovate to bump. These refresh when Portainer force-pulls on redeploy
   (see below), so they are muted rather than left on the dashboard forever.
 
-### Setup required
+### Auth
 
-Renovate needs one repo secret, `RENOVATE_TOKEN` — a fine-grained PAT scoped to
-`stevegore/infra` with Contents, Pull requests and Workflows all read+write.
-`GITHUB_TOKEN` will not work: PRs opened with it cannot self-merge.
+Done — `RENOVATE_TOKEN` is set on the repo. It is a fine-grained PAT scoped to
+`stevegore/infra` only, with Contents, Pull requests and Workflows read+write.
+(`GITHUB_TOKEN` cannot be used: PRs opened with it cannot self-merge.)
+
+**Vault holds the origin copy** at `kv/homelab/renovate`, field `token`. Nothing
+reads it automatically — on rotation, push it back to GitHub by hand:
+
+```bash
+export VAULT_ADDR=https://vault.stevegore.au
+export VAULT_TOKEN=$(cat vault-root.token)
+vault kv get -field=token kv/homelab/renovate | gh secret set RENOVATE_TOKEN --repo stevegore/infra
+```
+
+`platformAutomerge` also needs **Allow auto-merge** on the repo, which is now
+enabled (along with delete-branch-on-merge, since Renovate creates a lot of
+branches).
 
 Alternatively install the [Mend Renovate app](https://github.com/apps/renovate)
 and delete the workflow; `renovate.json` is read identically either way.
