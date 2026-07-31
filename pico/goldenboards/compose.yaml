@@ -1,0 +1,11 @@
+version: '3.5'
+
+services:
+  goldenboards:
+    image: goldenboards  
+    restart: unless-stopped
+    volumes:
+      - /var/goldenboards:/var/goldenboards    
+      - /etc/timezone:/etc/timezone
+      - /etc/localtime:/etc/localtime
+    

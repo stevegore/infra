@@ -1,0 +1,40 @@
+version: "3.3"
+services:
+  transmission:
+    restart: unless-stopped
+    cap_add:
+      - NET_ADMIN
+    volumes:
+      - "/var/lib/transmission/:/data"
+    environment:
+      - OPENVPN_PROVIDER=WINDSCRIBE
+      - OPENVPN_CONFIG=Sydney-OperaHouse-udp # From https://github.com/haugene/vpn-configs-contrib
+      - OPENVPN_USERNAME=${OPENVPN_USERNAME} # Credentials from https://windscribe.net/getconfig/openvpn
+      - OPENVPN_PASSWORD=${OPENVPN_PASSWORD}
+      - LOCAL_NETWORK=10.20.30.0/24
+      - TRANSMISSION_DOWNLOAD_QUEUE_SIZE=50
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+    networks:
+      - transmission
+    ports:
+      - "9093:9091"
+    image: haugene/transmission-openvpn:5.3
+    sysctls:
+      - "net.ipv6.conf.all.disable_ipv6=0"
+    security_opt:
+      - seccomp:unconfined
+  transmission-proxy:
+    image: haugene/transmission-openvpn-proxy:5.3
+    restart: unless-stopped
+    networks:
+      - transmission
+    ports:
+      - "9092:8080"
+
+networks:
+  transmission:
+    external: true
+    name: transmission_net

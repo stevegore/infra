@@ -1,0 +1,13 @@
+version: '3.5'
+
+services:
+  gymbooking:
+    image: gymbooking2
+    ports:
+      - 8112:5000    
+    restart: unless-stopped
+    volumes:
+      - /var/elixr:/var/elixr    
+      - /etc/timezone:/etc/timezone
+      - /etc/localtime:/etc/localtime
+    

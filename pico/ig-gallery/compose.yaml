@@ -1,0 +1,41 @@
+services:
+  ig-gallery:
+    image: nginx:1.31.3-alpine
+    container_name: ig-gallery
+    restart: unless-stopped
+    ports:
+      - "8090:80"
+    volumes:
+      - /media/m2/ig-gallery:/usr/share/nginx/html:ro
+      - /media/m2/ig-gallery-state:/state:ro
+      - /media/m2/ig-gallery-admin/nginx.conf.template:/etc/nginx/templates/default.conf.template:ro
+    environment:
+      TZ: Australia/Sydney
+      NGINX_ENVSUBST_FILTER: "^GALLERY_"
+      GALLERY_ADMIN_KEY: ${GALLERY_ADMIN_KEY}
+    depends_on:
+      - gallery-admin
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost/index.html"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  gallery-admin:
+    image: python:3.13.14-alpine
+    container_name: gallery-admin
+    restart: unless-stopped
+    user: "1000:1000"
+    volumes:
+      - /media/m2/ig-gallery-admin/gallery-admin.py:/app/gallery-admin.py:ro
+      - /media/m2/ig-gallery-state:/state
+    environment:
+      TZ: Australia/Sydney
+      GALLERY_STATE_DIR: /state
+      PYTHONUNBUFFERED: "1"
+    command: ["python3", "/app/gallery-admin.py"]
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/healthz', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3

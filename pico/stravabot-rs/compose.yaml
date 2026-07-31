@@ -1,0 +1,19 @@
+services:
+  stravabot-rs:
+    # build: .
+    image: stravabot-rs:latest
+    container_name: stravabot-rs
+    restart: unless-stopped
+    ports:
+      - "8082:8082"
+    environment:
+      - AUTH_TOKEN_PATH=/var/stravabot-rs/.strava-auth-token
+      - PROGRESS_MARKER_PATH=/app/data/.stravabot_progress.json
+      - DEBUG=false
+      - RUN_ON_STARTUP=false
+    volumes:
+      - stravabot-rs-data:/app/data
+      - /var/stravabot-rs/.strava-auth-token:/var/stravabot-rs/.strava-auth-token:ro
+
+volumes:
+  stravabot-rs-data:

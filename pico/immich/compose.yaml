@@ -1,0 +1,63 @@
+services:
+  immich-server:
+    image: ghcr.io/immich-app/immich-server:release
+    container_name: immich-immich-server-1
+    restart: unless-stopped
+    ports:
+      - "2283:2283"
+    environment:
+      DB_HOSTNAME: immich-database
+      DB_DATABASE_NAME: immich
+      DB_USERNAME: immich
+      DB_PASSWORD: ${DB_PASSWORD}
+      REDIS_HOSTNAME: immich-redis
+      TZ: Australia/Sydney
+    volumes:
+      - /media/m2/immich/uploads:/usr/src/app/upload
+      - /media/m2/photos:/mnt/media/photos:ro
+    devices:
+      - /dev/dri:/dev/dri
+    group_add:
+      - "109"   # render (host gid, owns renderD128)
+      - "44"    # video
+    depends_on:
+      - immich-redis
+      - immich-database
+    healthcheck:
+      disable: false
+
+  immich-machine-learning:
+    image: ghcr.io/immich-app/immich-machine-learning:release
+    container_name: immich-immich-machine-learning-1
+    restart: unless-stopped
+    environment:
+      TZ: Australia/Sydney
+    volumes:
+      - /media/m2/immich/ml-cache:/cache
+
+  immich-redis:
+    image: redis:7.2-alpine
+    container_name: immich-immich-redis-1
+    restart: unless-stopped
+    environment:
+      TZ: Australia/Sydney
+    healthcheck:
+      test: redis-cli ping || exit 1
+
+  immich-database:
+    image: ghcr.io/immich-app/postgres:14-vectorchord0.3.0-pgvectors0.2.0
+    container_name: immich-immich-database-1
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: immich
+      POSTGRES_USER: immich
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_INITDB_ARGS: --data-checksums
+      TZ: Australia/Sydney
+    volumes:
+      - /media/m2/immich/database:/var/lib/postgresql/data
+    healthcheck:
+      test: pg_isready --dbname=$${POSTGRES_DB} --username=$${POSTGRES_USER} || exit 1
+      interval: 15s
+      timeout: 5s
+      retries: 5

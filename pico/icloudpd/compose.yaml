@@ -1,0 +1,16 @@
+services:
+  icloudpd:
+    image: stevegore/icloudpd:latest
+    container_name: icloudpd
+    restart: unless-stopped
+    stdin_open: true
+    tty: true
+    environment:
+      TZ: Australia/Sydney
+    volumes:
+      - /media/m2/photos/iphone/steve:/data
+      - /home/steve/.pyicloud:/cookies
+    command: icloudpd --directory /data --username ${ICLOUD_USERNAME} --watch-with-interval 3600 --cookie-directory /cookies
+
+volumes:
+  icloudpd_cookies:

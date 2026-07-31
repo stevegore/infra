@@ -1,0 +1,42 @@
+services:
+  mysql:
+    image: mysql:8.0
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: strava_keeper
+      MYSQL_USER: strava
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "strava", "-p${MYSQL_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  stravakeeper:
+    image: stravakeeper:mysql
+    restart: unless-stopped
+    ports:
+      - 8180:8180
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      STRAVA_CLIENT_ID: "9361"
+      STRAVA_CLIENT_SECRET: ${STRAVA_CLIENT_SECRET}
+      STRAVA_REDIRECT_URL: https://strava.stevegore.au/oauth-callback
+      STRAVA_VALIDATION_URL: https://strava.stevegore.au/webhook
+      STRAVA_VERIFY_TOKEN: ${STRAVA_VERIFY_TOKEN}
+      STRAVA_SAVE_PATH: /var/stravakeeper
+      MYSQL_DSN: "strava:${MYSQL_PASSWORD}@tcp(mysql:3306)/strava_keeper?parseTime=true"
+    volumes:
+      - /var/stravakeeper:/var/stravakeeper
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+
+volumes:
+  mysql_data:
+    external: true
+    name: strava-keeper_mysql_data

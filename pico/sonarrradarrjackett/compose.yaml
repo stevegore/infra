@@ -1,0 +1,67 @@
+version: '3'
+services:
+ radarr:
+  container_name: radarr
+  restart: unless-stopped
+  networks:
+  - transmission_net
+  ports:
+   - 7878:7878
+  volumes:
+   - radarr-config:/config
+   - /var/lib/transmission:/data
+   - /srv/movies:/movies
+  environment:
+   - TZ=Australia/Sydney
+  image: linuxserver/radarr:6.1.1 # https://hub.docker.com/r/linuxserver/radarr/tags
+ 
+ sonarr:
+  container_name: sonarr
+  restart: unless-stopped
+  networks:
+  - transmission_net
+  ports:
+   - 8989:8989
+  volumes:
+   - sonarr-config:/config
+   - /var/lib/transmission:/data
+   - /srv/tv:/tv
+  environment:
+   - TZ=Australia/Sydney
+  image: linuxserver/sonarr:4.0.17  # https://hub.docker.com/r/linuxserver/sonarr/tags
+ 
+ jackett:
+  container_name: jackett
+  restart: unless-stopped
+  networks:
+  - transmission_net
+  ports:
+   - 9117:9117
+  volumes:
+   - jackett-config:/config
+  environment:
+   - TZ=Australia/Sydney
+  image: linuxserver/jackett:0.24.1985  # https://hub.docker.com/r/linuxserver/jackett/tags
+
+ flaresolverr:
+  container_name: flaresolverr
+  restart: unless-stopped
+  networks:
+  - transmission_net
+  ports:
+   - 8191:8191
+  environment:
+   - LOG_LEVEL=info
+   - LOG_HTML=false
+   - CAPTCHA_SOLVER=none
+   - TZ=Australia/Sydney
+  image: ghcr.io/flaresolverr/flaresolverr:latest
+ 
+volumes:
+  radarr-config:
+  sonarr-config:
+  jackett-config:
+
+networks:
+  transmission_net:
+    external: true
