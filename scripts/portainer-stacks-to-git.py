@@ -24,18 +24,29 @@ That still makes this a destructive-looking operation on live services, so:
 
 Secrets
 -------
-The compose files in git use ${VAR} placeholders. The real values are passed
-here as stack Env entries, which live in Portainer's own database, never in the
-repo (which is public). Supply them via --env-file: a JSON file shaped like
+The compose files in git use ${VAR} placeholders. The real values become stack
+Env entries, which live in Portainer's own database and never touch the repo
+(which is public).
+
+You do not normally have to supply those values. The script recovers each one
+from the stack's CURRENT inline definition — the very file being replaced still
+contains every secret the git version placeholders out. Values already set as
+stack Env are kept as-is.
+
+--env-file overrides that, for rotating a credential during the move:
   {"transmission": {"OPENVPN_USERNAME": "...", "OPENVPN_PASSWORD": "..."}}
-Generate a starting point with --dump-env before you convert anything.
+--dump-env prints the skeleton. Values are never echoed, only name and length.
 
 Usage
 -----
-  ./scripts/portainer-stacks-to-git.py --dump-env > /tmp/stack-env.json
-  ./scripts/portainer-stacks-to-git.py --env-file /tmp/stack-env.json --stack pdf
-  ./scripts/portainer-stacks-to-git.py --env-file /tmp/stack-env.json --stack pdf --apply
+  ./scripts/portainer-stacks-to-git.py --stack pdf              # dry run
+  ./scripts/portainer-stacks-to-git.py --stack pdf --apply
+  ./scripts/portainer-stacks-to-git.py                          # dry run, all 15
   ./scripts/portainer-stacks-to-git.py --rollback /tmp/portainer-rollback/pdf.json --apply
+
+  # only when rotating a value as part of the conversion:
+  ./scripts/portainer-stacks-to-git.py --dump-env > /tmp/stack-env.json
+  ./scripts/portainer-stacks-to-git.py --env-file /tmp/stack-env.json --stack transmission --apply
 """
 
 from __future__ import annotations
@@ -43,6 +54,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 import time
 import urllib.error
@@ -105,29 +117,72 @@ def stacks_by_name() -> dict:
     return {s["Name"]: s for s in api("GET", "/stacks")}
 
 
-def env_pairs(stack: str, meta: dict, env_file: dict) -> list:
-    # Anything already set on the live stack carries over untouched — ig-gallery
-    # for one already holds GALLERY_ADMIN_KEY, and there is no reason to make the
-    # operator dig it out again. --env-file wins on conflict.
-    merged = {e["name"]: e["value"] for e in (meta.get("Env") or [])}
+# A couple of values are not `VAR=value` in the old compose — they are CLI flags
+# on the container command. Pull those out by their own pattern.
+CLI_DERIVED = {
+    "ICLOUD_USERNAME": r"--username\s+(\S+)",
+}
+
+
+def derive_env(stack: str, old_compose: str) -> dict:
+    """Recover each required value from the stack's PRE-conversion compose file.
+
+    We are converting away from exactly that file, so it already holds every
+    secret the git version replaced with ${VAR}. Reading them back beats making
+    the operator hand-maintain a JSON of credentials that already exist.
+    """
+    found = {}
+    for var in REQUIRED_ENV.get(stack, []):
+        if var in CLI_DERIVED:
+            m = re.search(CLI_DERIVED[var], old_compose)
+            if m:
+                found[var] = m.group(1)
+            continue
+
+        # env-list form:  - VAR=value        (may carry a trailing # comment)
+        m = re.search(rf"^\s*-\s*{re.escape(var)}=(.*)$", old_compose, re.M)
+        if not m:
+            # mapping form:  VAR: value
+            m = re.search(rf"^\s*{re.escape(var)}:\s*(.*)$", old_compose, re.M)
+        if not m:
+            continue
+
+        val = re.sub(r"\s+#.*$", "", m.group(1)).strip().strip("\"'")
+        # Skip a value that is already a placeholder — that means this stack was
+        # converted before and there is nothing real left to recover here.
+        if val and not val.startswith("${"):
+            found[var] = val
+    return found
+
+
+def env_pairs(stack: str, meta: dict, env_file: dict, old_compose: str) -> tuple:
+    # Precedence, lowest to highest:
+    #   1. values recovered from the pre-conversion compose file
+    #   2. env already set on the live stack (ig-gallery holds GALLERY_ADMIN_KEY)
+    #   3. --env-file, so an operator can always override or supply a rotated value
+    derived = derive_env(stack, old_compose)
+    merged = dict(derived)
+    merged.update({e["name"]: e["value"] for e in (meta.get("Env") or [])})
     merged.update(env_file.get(stack, {}))
 
     missing = [k for k in REQUIRED_ENV.get(stack, []) if not merged.get(k)]
     if missing:
         raise SystemExit(
             f"{stack}: missing required env {missing}.\n"
-            f"Add them to --env-file (see --dump-env), or the stack will come up "
-            f"with empty credentials."
+            f"Could not recover them from the current stack definition either.\n"
+            f"Supply them via --env-file (see --dump-env), or the stack would "
+            f"come up with empty credentials."
         )
     placeholder = [k for k, v in merged.items() if v == "CHANGEME"]
     if placeholder:
         raise SystemExit(f"{stack}: --env-file still has CHANGEME for {placeholder}")
-    return [{"name": k, "value": v} for k, v in sorted(merged.items())]
+
+    pairs = [{"name": k, "value": v} for k, v in sorted(merged.items())]
+    return pairs, set(derived)
 
 
-def save_rollback(stack: str, meta: dict) -> str:
+def save_rollback(stack: str, meta: dict, body: str) -> str:
     os.makedirs(ROLLBACK_DIR, exist_ok=True)
-    body = api("GET", f"/stacks/{meta['Id']}/file")["StackFileContent"]
     snapshot = {
         "Name": stack,
         "Env": meta.get("Env") or [],
@@ -147,16 +202,25 @@ def convert(stack: str, meta: dict, env_file: dict, apply: bool) -> None:
     if not os.path.exists(os.path.join(os.path.dirname(__file__), "..", compose_path)):
         raise SystemExit(f"{stack}: {compose_path} not found in the repo")
 
-    env = env_pairs(stack, meta, env_file)
+    old_compose = api("GET", f"/stacks/{meta['Id']}/file")["StackFileContent"]
+    env, derived = env_pairs(stack, meta, env_file, old_compose)
+
     print(f"\n=== {stack} (id={meta['Id']})")
     print(f"    compose : {compose_path}")
-    print(f"    env vars: {[e['name'] for e in env] or '(none)'}")
+    if env:
+        for e in env:
+            # Never print the value — this runs on a laptop and scrolls into
+            # terminal history. Source + length is enough to sanity-check.
+            src = "recovered from current stack" if e["name"] in derived else "already set / --env-file"
+            print(f"    env     : {e['name']:<22} ({len(e['value'])} chars, {src})")
+    else:
+        print("    env     : (none)")
 
     if not apply:
         print("    DRY RUN — would snapshot, delete, and recreate from git")
         return
 
-    path = save_rollback(stack, meta)
+    path = save_rollback(stack, meta, old_compose)
     print(f"    rollback snapshot -> {path}")
 
     api("DELETE", f"/stacks/{meta['Id']}?endpointId={meta['EndpointId']}")
