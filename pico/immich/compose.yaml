@@ -45,7 +45,7 @@ services:
       test: redis-cli ping || exit 1
 
   immich-database:
-    image: ghcr.io/immich-app/postgres:14-vectorchord0.3.0-pgvectors0.2.0
+    image: ghcr.io/immich-app/postgres:16-vectorchord0.3.0-pgvectors0.2.0
     container_name: immich-immich-database-1
     restart: unless-stopped
     environment:
