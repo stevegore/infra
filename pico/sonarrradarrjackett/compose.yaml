@@ -13,7 +13,7 @@ services:
    - /srv/movies:/movies
   environment:
    - TZ=Australia/Sydney
-  image: linuxserver/radarr:6.1.1 # https://hub.docker.com/r/linuxserver/radarr/tags
+  image: linuxserver/radarr:6.3.0 # https://hub.docker.com/r/linuxserver/radarr/tags
  
  sonarr:
   container_name: sonarr
