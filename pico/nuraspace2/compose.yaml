@@ -1,0 +1,13 @@
+version: '3.5'
+
+services:
+  nuraspace:
+    image: nuraspace  # Built manually and kept local currently due to credentials
+    ports:
+      - 8111:5000
+    restart: unless-stopped
+    volumes:
+      - /var/nura:/var/nura
+      - /etc/timezone:/etc/timezone
+      - /etc/localtime:/etc/localtime
+    

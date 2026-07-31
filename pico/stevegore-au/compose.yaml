@@ -1,0 +1,47 @@
+services:
+  ttyd:
+    image: stevegore/ttyd
+    labels: 
+      - ttyd
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - "touch /home/visitor/.zshrc && exec /usr/bin/tini -- ttyd --writable -t fontSize=16 -t 'fontFamily=Consolas, Monaco, Courier New, monospace' -p 8788 zsh"
+    volumes:
+      - homedir:/home/visitor
+      - tmpdir:/tmp
+      - tmpdir:/var/tmp
+    ports:
+      - 8788:8788
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 250M
+    ulimits:
+      nproc: 250
+      nofile:
+        soft: 500
+        hard: 500
+
+  restarter:
+    # Restart every 30 mins
+    image: docker:cli
+    volumes: 
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: ["/bin/sh", "-c", "while true; do sleep 1800; for container in $$(docker ps -f label=ttyd -q); do docker restart $$container; done; done"]
+    restart: unless-stopped
+
+volumes: 
+  homedir: 
+    driver: local
+    driver_opts:
+      o: "size=500m,uid=222,gid=222"
+      device: tmpfs
+      type: tmpfs
+  tmpdir: 
+    driver: local
+    driver_opts:
+      o: "size=500m"
+      device: tmpfs
+      type: tmpfs

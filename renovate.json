@@ -1,0 +1,128 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    ":dependencyDashboard",
+    ":semanticCommitsDisabled"
+  ],
+  "timezone": "Australia/Sydney",
+  "description": [
+    "Homelab policy: everything self-merges. Breaking changes are acceptable — Uptime Kuma is the smoke test. The ONE exception is the data layer (see the 'databases' rule below), where a bad major is painful to unwind.",
+    "No managerFilePatterns overrides here on purpose: Renovate MERGES those with its defaults rather than replacing them, so narrowing to apps/ and pico/ would have added nothing while implying a restriction that does not exist. The defaults already cover apps/*/Chart.yaml, apps/*/values.yaml, pico/*/compose.yaml, cilium/Chart.yaml, terraform/*.tf and .github/workflows/*."
+  ],
+  "schedule": [
+    "after 1am and before 6am"
+  ],
+  "prConcurrentLimit": 0,
+  "prHourlyLimit": 0,
+  "rebaseWhen": "behind-base-branch",
+  "automerge": true,
+  "automergeType": "pr",
+  "platformAutomerge": true,
+  "automergeSchedule": [
+    "after 1am and before 6am"
+  ],
+  "major": {
+    "automerge": true
+  },
+  "dependencyDashboardTitle": "Renovate: homelab update dashboard",
+  "commitMessagePrefix": "chore(deps):",
+  "customManagers": [
+    {
+      "description": "Bare `image: repo:tag` lines that helm-values does not model, e.g. apps/ttyd/values.yaml (kubectl, distroless-iptables) and apps/gym-booker/templates/deployment.yaml (busybox).",
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/^apps/[^/]+/values\\.yaml$/",
+        "/^apps/[^/]+/templates/.*\\.yaml$/"
+      ],
+      "matchStrings": [
+        "image:\\s+(?<depName>(?:registry\\.k8s\\.io|docker\\.io|ghcr\\.io|quay\\.io)/[^:\\s]+|busybox):(?<currentValue>[\\w][\\w.\\-]*)\\s"
+      ],
+      "datasourceTemplate": "docker",
+      "versioningTemplate": "docker"
+    }
+  ],
+  "packageRules": [
+    {
+      "description": [
+        "1. DATA LAYER — never self-merge. A bad Postgres/MySQL/MariaDB major means a restore, not a rollback. These open a PR and wait for Steve.",
+        "Regex, not globs: depNames here are a mix of bare (`mysql`, `redis`, `cloudnative-pg`) and registry-qualified (`ghcr.io/immich-app/postgres`), and a `**mysql**` glob does not reliably match a name with no path separators. Substring regex matches both forms. Checked against the real dependency set — `phpmyadmin` does not collide."
+      ],
+      "matchDatasources": [
+        "docker",
+        "helm"
+      ],
+      "matchPackageNames": [
+        "/mysql/",
+        "/mariadb/",
+        "/postgres/",
+        "/postgis/",
+        "/redis/",
+        "/valkey/",
+        "/cloudnative-pg/"
+      ],
+      "automerge": false,
+      "addLabels": [
+        "database",
+        "manual-review"
+      ],
+      "prPriority": 10
+    },
+    {
+      "description": [
+        "2. Self-built images. Tagged with a git SHA or built by hand on pico — Renovate has no upstream to compare against and would only churn. The GitHub Actions that build them own their versioning.",
+        "Regex again — Renovate reports these fully qualified (`docker.io/stevegore/ttyd`, not `stevegore/ttyd`), so a `stevegore/**` glob anchored at the start would miss them. The bare names are images built on pico that exist in no registry at all."
+      ],
+      "matchPackageNames": [
+        "/^syd\\.ocir\\.io\\//",
+        "/(^|/)stevegore\\//",
+        "/^(stravakeeper|stravabot-rs|nuraspace|gymbooking2|goldenboards)$/"
+      ],
+      "enabled": false
+    },
+    {
+      "description": "3. Floating tags (:latest, :release, :buildx-stable-1). Nothing for Renovate to bump — these refresh when Portainer force-pulls on its redeploy cycle. Muted so they do not sit on the dashboard forever.",
+      "matchCurrentValue": "/^(latest|release|stable|main|edge)$/",
+      "enabled": false
+    },
+    {
+      "description": "4. Kubernetes-adjacent images carry ordering constraints with the OKE control plane (currently v1.36.x). Group them so kubectl/iptables/etc. move together in one PR rather than racing each other.",
+      "matchPackageNames": [
+        "/^registry\\.k8s\\.io\\//"
+      ],
+      "groupName": "kubernetes images"
+    },
+    {
+      "description": "5. Chart + image for the same app land together, so ArgoCD does one sync instead of two.",
+      "matchManagers": [
+        "helmv3",
+        "helm-values"
+      ],
+      "groupName": "{{parentDir}}",
+      "additionalBranchPrefix": "apps-"
+    },
+    {
+      "description": "6. GitHub Actions: batch into one weekly PR — the workflows are not load-bearing enough to warrant individual PRs.",
+      "matchManagers": [
+        "github-actions"
+      ],
+      "groupName": "github actions",
+      "schedule": [
+        "before 6am on monday"
+      ]
+    },
+    {
+      "description": "7. The caddy Dockerfile builds a custom binary. A base-image bump needs a manual buildx push + tag bump in values.yaml (see apps/caddy/Dockerfile), so it cannot self-merge.",
+      "matchFileNames": [
+        "apps/caddy/Dockerfile"
+      ],
+      "automerge": false,
+      "addLabels": [
+        "needs-rebuild"
+      ],
+      "prBodyNotes": [
+        ":warning: Merging this is **not** enough. Rebuild and push the image, then bump `image.tag` in `apps/caddy/values.yaml`:\n```\ndocker buildx build --platform linux/arm64 \\\n  -t syd.ocir.io/sdajdczqv0qo/caddy:<new-tag> --push apps/caddy/\n```"
+      ]
+    }
+  ]
+}

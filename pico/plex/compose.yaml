@@ -1,0 +1,32 @@
+version: '2'
+services:
+  plex:
+    container_name: plex
+    image: plexinc/pms-docker:1.43.2.10687-563d026ea  # https://hub.docker.com/r/plexinc/pms-docker/tags
+    restart: unless-stopped
+    ports:
+      - 32400:32400/tcp
+      - 3005:3005/tcp
+      - 8324:8324/tcp
+      - 32469:32469/tcp
+      - 32410:32410/udp
+      - 32412:32412/udp
+      - 32413:32413/udp
+      - 32414:32414/udp
+    environment:
+      - TZ=Australia/Sydney
+      - PLEX_CLAIM=${PLEX_CLAIM}
+      - ADVERTISE_IP=https://plex.stevegore.au:443
+      - ALLOWED_NETWORKS=192.168.0.0/16,10.0.0.0/8
+      # - NVIDIA_VISIBLE_DEVICES=all
+    hostname: PlexOnPico
+    volumes:
+      - plex-config:/config
+      - plex-temp:/transcode
+      - /srv/tv:/data/tv
+      - /srv/movies:/data/movies
+      - /dev/bus/usb:/dev/bus/usb
+
+volumes:
+  plex-config:
+  plex-temp:

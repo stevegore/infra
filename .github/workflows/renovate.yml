@@ -1,0 +1,79 @@
+name: Renovate
+
+# Self-hosted Renovate. Keeps every pinned version in this repo current:
+#   apps/*/Chart.yaml     upstream Helm chart deps      (helmv3)
+#   apps/*/values.yaml    image repository/tag pairs    (helm-values + regex)
+#   pico/*/compose.yaml   Portainer stack images        (docker-compose)
+#   .github/workflows/*   action versions               (github-actions)
+#
+# Policy lives in renovate.json, not here: everything self-merges except the
+# data layer (Postgres/MySQL/MariaDB/CNPG) and the caddy Dockerfile, which need
+# a human. See the comments in that file.
+#
+# Once a PR merges to main the existing pipelines take over with no extra glue:
+#   apps/**  -> argocd-sync.yml fires an immediate ArgoCD sync
+#   pico/**  -> Portainer polls this repo (5 min) and redeploys the stack
+#
+# Auth: repo secret RENOVATE_TOKEN — a fine-grained PAT scoped to stevegore/infra
+# with Contents: read+write, Pull requests: read+write, Workflows: read+write.
+# (GITHUB_TOKEN is deliberately not used: PRs it opens cannot self-merge.)
+#
+# Alternative if you would rather not hold a PAT: install the Mend Renovate
+# GitHub App at https://github.com/apps/renovate and delete this workflow —
+# renovate.json is read identically either way.
+
+on:
+  schedule:
+    - cron: '0 15 * * *' # 01:00 Australia/Sydney (AEDT) — renovate.json narrows further
+  push:
+    branches: [main]
+    paths:
+      - 'renovate.json'
+      - '.github/workflows/renovate.yml'
+  workflow_dispatch:
+    inputs:
+      logLevel:
+        description: 'Renovate log level'
+        required: false
+        default: 'info'
+        type: choice
+        options: [info, debug]
+      dryRun:
+        description: 'Dry run — resolve updates but open no PRs'
+        required: false
+        default: false
+        type: boolean
+
+concurrency:
+  group: renovate
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  renovate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate renovate.json
+        # Fails fast on a malformed config instead of letting Renovate silently
+        # fall back to defaults and open a surprising pile of PRs.
+        # Pinned: an unpinned `npx renovate` can resolve a years-old cached
+        # major that rejects current config keys (managerFilePatterns et al).
+        # Renovate keeps this in step with the action version below.
+        run: npx --yes --package renovate@44.4.5 -- renovate-config-validator --strict
+
+      - uses: renovatebot/github-action@v46.2.0
+        env:
+          RENOVATE_REPOSITORIES: ${{ github.repository }}
+          RENOVATE_PLATFORM: github
+          RENOVATE_ONBOARDING: 'false'
+          RENOVATE_REQUIRE_CONFIG: 'required'
+          # Renovate needs the real base branch, not a fork workflow.
+          RENOVATE_GIT_AUTHOR: 'Renovate Bot <bot@renovateapp.com>'
+          LOG_LEVEL: ${{ inputs.logLevel || 'info' }}
+          RENOVATE_DRY_RUN: ${{ inputs.dryRun && 'full' || '' }}
+        with:
+          token: ${{ secrets.RENOVATE_TOKEN }}

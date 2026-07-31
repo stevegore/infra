@@ -7,9 +7,21 @@
 **Total Containers:** 41 running  
 **Total Volumes:** 48  
 **Total Images:** 114  
-**Total Stacks:** 18 (16 active, 2 stopped)  
+**Total Stacks:** 15 (all git-backed from `pico/` in this repo)  
 **System CPU:** 12 cores  
 **System Memory:** ~31 GB
+
+> **Stacks are git-backed.** Every stack is defined by `pico/<name>/compose.yaml`
+> in this repo, not by the Portainer file editor. Portainer polls the repo every
+> 5 minutes and redeploys. **Edit the compose file and push — do not edit the
+> stack in the Portainer UI**, or the next poll reverts you. Image versions are
+> bumped automatically by Renovate. See [`AUTO_UPDATES.md`](AUTO_UPDATES.md).
+>
+> **This repo is public.** The compose snippets below use `${VAR}` for every
+> credential; the real values live in each stack's Portainer Env, never in git.
+> Anything shown as `<REDACTED>` belongs to a decommissioned stack and should be
+> treated as compromised — it was committed in plaintext before 2026-07-31 and
+> is still recoverable from git history.
 
 ---
 
@@ -115,8 +127,8 @@ services:
     environment:
       - OPENVPN_PROVIDER=WINDSCRIBE
       - OPENVPN_CONFIG=Sydney-OperaHouse-udp
-      - OPENVPN_USERNAME=***REMOVED-OPENVPN-USERNAME***
-      - OPENVPN_PASSWORD=***REMOVED-OPENVPN-PASSWORD***
+      - OPENVPN_USERNAME=${OPENVPN_USERNAME}
+      - OPENVPN_PASSWORD=${OPENVPN_PASSWORD}
       - LOCAL_NETWORK=10.20.30.0/24
       - TRANSMISSION_DOWNLOAD_QUEUE_SIZE=50
     logging:
@@ -400,7 +412,7 @@ services:
       - 32414:32414/udp
     environment:
       - TZ=Australia/Sydney
-      - PLEX_CLAIM=***REMOVED-PLEX-CLAIM***
+      - PLEX_CLAIM=${PLEX_CLAIM}
       - ADVERTISE_IP=https://plex.stevegore.au:443
       - ALLOWED_NETWORKS=192.168.0.0/16,10.0.0.0/8
       # - NVIDIA_VISIBLE_DEVICES=all
@@ -470,10 +482,10 @@ services:
       - OWNCLOUD_DB_TYPE=mysql
       - OWNCLOUD_DB_NAME=owncloud
       - OWNCLOUD_DB_USERNAME=owncloud
-      - OWNCLOUD_DB_PASSWORD=***REMOVED-OWNCLOUD-DB-PASSWORD***
+      - OWNCLOUD_DB_PASSWORD=<REDACTED>
       - OWNCLOUD_DB_HOST=mariadb
       - OWNCLOUD_ADMIN_USERNAME=steve
-      - OWNCLOUD_ADMIN_PASSWORD=***REMOVED-OWNCLOUD-ADMIN-PASSWORD***
+      - OWNCLOUD_ADMIN_PASSWORD=<REDACTED>
       - OWNCLOUD_MYSQL_UTF8MB4=true
       - OWNCLOUD_REDIS_ENABLED=true
       - OWNCLOUD_REDIS_HOST=redis
@@ -490,9 +502,9 @@ services:
     container_name: owncloud_mariadb
     restart: always
     environment:
-      - MYSQL_ROOT_PASSWORD=***REMOVED-MYSQL-ROOT-PASSWORD***
+      - MYSQL_ROOT_PASSWORD=<REDACTED>
       - MYSQL_USER=owncloud
-      - MYSQL_PASSWORD=***REMOVED-OWNCLOUD-DB-PASSWORD***
+      - MYSQL_PASSWORD=<REDACTED>
       - MYSQL_DATABASE=owncloud
     command: ["--max-allowed-packet=128M", "--innodb-log-file-size=64M"]
     healthcheck:
@@ -710,15 +722,15 @@ MARIADB_AUTO_UPGRADE=1
 MARIADB_INITDB_SKIP_TZINFO=1
 MARIADB_DATABASE=photoprism
 MARIADB_USER=photoprism
-MARIADB_PASSWORD=***REMOVED-MARIADB-PASSWORD***
-MARIADB_ROOT_PASSWORD=***REMOVED-MARIADB-PASSWORD***
+MARIADB_PASSWORD=<REDACTED>
+MARIADB_ROOT_PASSWORD=<REDACTED>
 PHOTOPRISM_DATABASE_DRIVER=mysql
 PHOTOPRISM_DATABASE_SERVER=mariadb:3306
 PHOTOPRISM_DATABASE_NAME=photoprism
 PHOTOPRISM_DATABASE_USER=photoprism
-PHOTOPRISM_DATABASE_PASSWORD=***REMOVED-MARIADB-PASSWORD***
+PHOTOPRISM_DATABASE_PASSWORD=<REDACTED>
 PHOTOPRISM_ADMIN_USER=steve
-PHOTOPRISM_ADMIN_PASSWORD=***REMOVED-PHOTOPRISM-ADMIN-PASSWORD***
+PHOTOPRISM_ADMIN_PASSWORD=<REDACTED>
 PHOTOPRISM_AUTH_MODE=password
 PHOTOPRISM_SITE_URL=<http://localhost:2342/>
 PHOTOPRISM_DISABLE_TLS=false
@@ -784,7 +796,7 @@ services:
     restart: always
     environment:
       - MYSQL_PORT_3306_TCP_ADDR=mysql
-      - MYSQL_ROOT_PASSWORD=***REMOVED-HUGINN-DB-PASSWORD***
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
     volumes:
       - mysqldata:/var/lib/mysql
 
@@ -795,11 +807,11 @@ services:
       - "3000:3000"
     environment:
       - MYSQL_PORT_3306_TCP_ADDR=mysql
-      - MYSQL_ROOT_PASSWORD=***REMOVED-HUGINN-DB-PASSWORD***
-      - HUGINN_DATABASE_PASSWORD=***REMOVED-HUGINN-DB-PASSWORD***
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+      - HUGINN_DATABASE_PASSWORD=${MYSQL_ROOT_PASSWORD}
       - HUGINN_DATABASE_USERNAME=root
       - HUGINN_DATABASE_NAME=huginn
-      - APP_SECRET_TOKEN=***REMOVED-HUGINN-APP-SECRET-TOKEN***
+      - APP_SECRET_TOKEN=${APP_SECRET_TOKEN}
     depends_on:
       - mysql
     volumes:
@@ -812,11 +824,11 @@ services:
     restart: always
     environment:
       - MYSQL_PORT_3306_TCP_ADDR=mysql
-      - MYSQL_ROOT_PASSWORD=***REMOVED-HUGINN-DB-PASSWORD***
-      - HUGINN_DATABASE_PASSWORD=***REMOVED-HUGINN-DB-PASSWORD***
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+      - HUGINN_DATABASE_PASSWORD=${MYSQL_ROOT_PASSWORD}
       - HUGINN_DATABASE_USERNAME=root
       - HUGINN_DATABASE_NAME=huginn
-      - APP_SECRET_TOKEN=***REMOVED-HUGINN-APP-SECRET-TOKEN***
+      - APP_SECRET_TOKEN=${APP_SECRET_TOKEN}
     depends_on:
       - mysql
       - web
@@ -833,7 +845,7 @@ services:
       - mysql
     environment:
       - PMA_HOST=mysql
-      - MYSQL_ROOT_PASSWORD=***REMOVED-HUGINN-DB-PASSWORD***
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
 
 volumes:
   mysqldata:
@@ -1085,9 +1097,9 @@ services:
     environment:
       - VPN_SERVICE_PROVIDER=windscribe
       - VPN_TYPE=wireguard
-      - WIREGUARD_PRIVATE_KEY=***REMOVED-WIREGUARD-PRIVATE-KEY***
+      - WIREGUARD_PRIVATE_KEY=<REDACTED-WG-PRIVATE-KEY>
       - WIREGUARD_ADDRESSES=100.103.223.63/32
-      - WIREGUARD_PUBLIC_KEY=***REMOVED-WIREGUARD-PUBLIC-KEY***
+      - WIREGUARD_PUBLIC_KEY=<REDACTED-WG-PRIVATE-KEY>
       - WIREGUARD_ENDPOINT=syd-243-wg.whiskergalaxy.com:65142
       - FIREWALL=on
       - TZ=Australia/Sydney

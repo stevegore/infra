@@ -1,0 +1,62 @@
+version: '3'
+
+services:
+  mysql:
+    image: mysql:5.7
+    restart: always
+    environment:
+      - MYSQL_PORT_3306_TCP_ADDR=mysql
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+    volumes:
+      - mysqldata:/var/lib/mysql
+
+  web:
+    image: ghcr.io/huginn/huginn-single-process
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      - MYSQL_PORT_3306_TCP_ADDR=mysql
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}    
+      - HUGINN_DATABASE_PASSWORD=${MYSQL_ROOT_PASSWORD}
+      - HUGINN_DATABASE_USERNAME=root
+      - HUGINN_DATABASE_NAME=huginn
+      - APP_SECRET_TOKEN=${APP_SECRET_TOKEN}
+    depends_on:
+      - mysql
+    volumes:
+      - /etc/timezone:/etc/timezone
+      - /etc/localtime:/etc/localtime      
+
+  threaded:
+    image: ghcr.io/huginn/huginn-single-process
+    command: /scripts/init bin/threaded.rb
+    restart: always
+    environment:
+      - MYSQL_PORT_3306_TCP_ADDR=mysql
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}    
+      - HUGINN_DATABASE_PASSWORD=${MYSQL_ROOT_PASSWORD}
+      - HUGINN_DATABASE_USERNAME=root
+      - HUGINN_DATABASE_NAME=huginn
+      - APP_SECRET_TOKEN=${APP_SECRET_TOKEN}
+    depends_on:
+      - mysql
+      - web
+    volumes:
+      - /etc/timezone:/etc/timezone
+      - /etc/localtime:/etc/localtime      
+
+
+  mysqladmin:
+    image: phpmyadmin
+    restart: always
+    ports:
+      - "3011:80"
+    depends_on:
+      - mysql
+    environment:
+      - PMA_HOST=mysql
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+
+volumes:
+  mysqldata:
