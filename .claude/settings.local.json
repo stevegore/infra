@@ -50,7 +50,12 @@
       "Bash(/home/steve/code/infra/scripts/vault-token-sync.sh)",
       "Bash(jq)",
       "Bash(git log *)",
-      "Bash(git -C /home/steve/code/infra log --all --oneline)"
+      "Bash(git -C /home/steve/code/infra log --all --oneline)",
+      "Bash(docker exec sonarr *)"
     ]
-  }
+  },
+  "enabledMcpjsonServers": [
+    "home-assistant",
+    "ha-mcp"
+  ]
 }
