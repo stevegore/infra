@@ -332,6 +332,37 @@ rather run it from systemd — `sudo cp` both into `/etc/systemd/system/`,
 Cron was used initially only because enabling the timer needs sudo and
 `Linger=no` rules out a user-level timer.
 
+#### Pushover alerting
+
+Added 2026-07-31 — the incident above went unnoticed for two months purely
+because **neither Sonarr nor Radarr had a single notification configured**.
+
+Both now have two Pushover connections against the "Homelab notification" app
+(credentials in Vault at `kv/homelab/pushover`, never on disk):
+
+| Connection | Events | Pushover priority |
+| --- | --- | --- |
+| `Pushover — Action Required` | `onManualInteractionRequired` | 1 (High) |
+| `Pushover — Health` | `onHealthIssue`, `onHealthRestored` | 0 (Normal) |
+
+`onManualInteractionRequired` is the exact event this incident was silently
+raising — Sonarr blocked an import and was waiting on a human. Split into two
+connections because priority is a per-connection setting, and "health restored"
+does not deserve to bypass quiet hours. Grab/import success notifications are
+deliberately **off** to keep the channel actionable.
+
+Sonarr v4's Pushover connection has no separate `onDownloadFailure` /
+`onImportFailure` — those are folded into `onManualInteractionRequired`.
+
+`arr-malware-watchdog.sh` also pushes its own findings, batched into one message
+per run. That overlaps slightly with the Sonarr connection for blocked imports,
+but the watchdog is the *only* thing that can alert on the disk sweep — a
+payload renamed to `.mkv` never triggers a Sonarr import warning at all. If
+Vault is unreachable the watchdog logs the finding and carries on rather than
+aborting the sweep.
+
+Creating notifications via the API needs `?forceSave=true`, same as indexers.
+
 ---
 
 ### plex
