@@ -29,10 +29,12 @@
   "commitMessagePrefix": "chore(deps):",
   "customManagers": [
     {
-      "description": "Bare `image: repo:tag` lines that helm-values does not model, e.g. apps/ttyd/values.yaml (kubectl, distroless-iptables) and apps/gym-booker/templates/deployment.yaml (busybox).",
+      "description": [
+        "Bare `image: repo:tag` lines inside chart TEMPLATES, which no built-in manager reads — currently busybox in apps/gym-booker/templates/deployment.yaml.",
+        "Scoped to templates/ only, deliberately. It used to cover apps/*/values.yaml too, but helm-values already models those (kubectl and distroless-iptables in apps/ttyd/values.yaml), so both managers found the same dep and Renovate opened two PRs for it — #23 renovate/apps-ttyd and #24 renovate/kubernetes-images."
+      ],
       "customType": "regex",
       "managerFilePatterns": [
-        "/^apps/[^/]+/values\\.yaml$/",
         "/^apps/[^/]+/templates/.*\\.yaml$/"
       ],
       "matchStrings": [
