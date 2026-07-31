@@ -24,7 +24,7 @@ spec:
         # The FSS CSI driver ignores fsGroup, so root must chown the export
         # for gymuser (uid/gid 1000) before the app can write its state.
         - name: chown-data
-          image: busybox:1.36
+          image: busybox:1.38
           command: ["chown", "1000:1000", "/var/elixr"]
           securityContext:
             runAsUser: 0
