@@ -43,6 +43,11 @@ on:
         required: false
         default: false
         type: boolean
+      ignoreSchedule:
+        description: 'Ignore the 1am-6am window and act now'
+        required: false
+        default: false
+        type: boolean
 
 concurrency:
   group: renovate
@@ -75,5 +80,11 @@ jobs:
           RENOVATE_GIT_AUTHOR: 'Renovate Bot <bot@renovateapp.com>'
           LOG_LEVEL: ${{ inputs.logLevel || 'info' }}
           RENOVATE_DRY_RUN: ${{ inputs.dryRun && 'full' || '' }}
+          # RENOVATE_FORCE overrides resolved config. Nulling both schedules
+          # makes a manual run act immediately instead of deferring to the
+          # overnight window — for catching up, or testing a config change
+          # without waiting until 1am. It does NOT override automerge, so the
+          # database and caddy-Dockerfile hold-backs still apply.
+          RENOVATE_FORCE: ${{ inputs.ignoreSchedule && '{"schedule":null,"automergeSchedule":null}' || '' }}
         with:
           token: ${{ secrets.RENOVATE_TOKEN }}
