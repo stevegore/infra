@@ -253,11 +253,84 @@ networks:
 
 **Download client categories:** Radarr uses category `radarr`, Sonarr uses category `sonarr` — completed downloads land in `/var/lib/transmission/completed/<category>/`
 
-**Jackett indexers:** 1337x, EZTV, TPB, kickasstorrents-to, kickasstorrents-ws, YTS, TorrentGalaxy, Nyaa.si, LimeTorrents, BitSearch  
+**Jackett indexers:** 1337x, EZTV, TPB, kickasstorrents-to, kickasstorrents-ws, YTS, TorrentGalaxy, Nyaa.si, torrentproject2  
 **FlareSolverr URL:** `http://flaresolverr:8191` (configured in Jackett ServerConfig.json)
 
+> **LimeTorrents was removed 2026-07-31** (Jackett + Sonarr) after it served six
+> fake torrents carrying Windows malware — see [Fake-torrent malware incident](#fake-torrent-malware-incident-2026-07-31).
+> Do not re-add it. BitSearch was also dropped from Sonarr: it had been deleted
+> from Jackett at some point, so every query returned `500 Unknown indexer`.
+
 **Radarr indexers (8):** 1337x, ETTV, TPB, kickasstorrents.to, kickasstorrents.ws, YTS, TorrentGalaxy, Nyaa.si  
-**Sonarr indexers (10):** 1337x, EZTV, Isohunt2 (dead), TPB, kickasstorrents.to, kickasstorrents.ws, TorrentGalaxy, Nyaa.si, LimeTorrents, BitSearch
+**Sonarr indexers (7):** 1337x, EZTV, TPB, kickasstorrents.to, kickasstorrents.ws, TorrentGalaxy, Nyaa.si
+
+**Indexer hygiene (set 2026-07-31, both Sonarr and Radarr):**
+
+| Setting | Value | Why |
+| --- | --- | --- |
+| `minimumSeeders` | `5` on every indexer | Fake torrents are seeded by a handful of the uploader's own hosts; real releases of anything current have hundreds. Several indexers were previously at `0`. Lower it per-indexer if an old back-catalogue grab starts failing. |
+| `priority` | `10` for EZTV / TorrentGalaxy / 1337x / TPB (and YTS / ETTV in Radarr), `40` for the kickasstorrents mirrors and Nyaa.si | Every good import in the library's history came from the first group; the mirrors are where the fakes came from. |
+
+Note that indexer edits via the API need `?forceSave=true` — otherwise Sonarr
+live-tests the indexer on save and rejects the `PUT` with a 400 if the tracker
+is momentarily unreachable.
+
+#### Fake-torrent malware incident (2026-07-31)
+
+**What happened.** Rick and Morty S09E04, E06–E10 were grabbed from **LimeTorrents**
+between June and July 2026. Each "release" was a ~1.2–1.4 GB Windows PE32 binary
+named `Rick.and.Morty.S09Exx.1080p.WEB.H264-SYLiX.exe` / `.scr` — padded to that
+size to push it past the scan limits of most AV engines. A matching `.lnk`
+dropper (invoking `%ComSpec%` with arguments) had also arrived in June 2025
+disguised as `Rick.and.Morty.S08E04...mkv/`.
+
+**What saved us.** Sonarr refuses to import files with executable extensions, so
+**nothing malicious ever reached `/srv/tv`** and nothing could run on pico
+(they're Windows binaries on a Linux host regardless). The failure was
+*operational*, not a breach.
+
+**The real problem.** The blocked items parked in the Sonarr queue as
+`importPending` warnings and nobody looked at the queue for two months, so
+Transmission kept **seeding the malware to other peers** the whole time
+(ratios had reached 0.47–1.07).
+
+**Root cause.** LimeTorrents, and only LimeTorrents. Of its nine Rick and Morty
+S09 grabs: six were the malware payloads above (E04, E06–E10), two just failed to
+download (E02, E03), and exactly one — the HiggsBoson `S09E06 MULTI` release —
+was genuine. Every other legitimate import in the series came from EZTV,
+TorrentGalaxy or 1337x/TPB. LimeTorrents' torznab feed also reported
+`seeders: null`, so the `minimumSeeders` filter could never fire on it.
+
+**Remediation applied:**
+
+1. Malware removed from disk and from Transmission; the six queue items were
+   deleted with `removeFromClient=true&blocklist=true` so the same releases can
+   never be re-grabbed.
+2. LimeTorrents deleted from **both** Jackett and Sonarr.
+3. `minimumSeeders` / `priority` hardening in the table above.
+4. `scripts/arr-malware-watchdog.sh` added (see below) so a recurrence is caught
+   within the hour instead of in two months.
+
+**How to spot a fake before grabbing.** Cross-check the advertised size against
+other indexers — real releases show the same byte size (±1%) on three or four
+trackers, while the fakes matched nothing else. Size sanity also works: a 22-min
+1080p Rick and Morty episode is ~350–900 MB, so the 1.3 GB "releases" were
+implausible on their face.
+
+**`scripts/arr-malware-watchdog.sh`** runs hourly from steve's crontab
+(`15 * * * *`, log at `~/.local/log/arr-malware-watchdog.log`). Each run it:
+
+- purges any Sonarr/Radarr queue item whose import warnings name a dangerous
+  extension — removed from the client, blocklisted, and re-searched; and
+- sweeps `/var/lib/transmission/completed` with `file(1)` for PE binaries and
+  LNK droppers, **including payloads renamed to `.mkv`/`.mp4`/`.avi`**, which
+  Sonarr's own extension check would not catch.
+
+Matching `arr-malware-watchdog.{service,timer}` units live alongside it if you'd
+rather run it from systemd — `sudo cp` both into `/etc/systemd/system/`,
+`systemctl enable --now arr-malware-watchdog.timer`, then drop the cron line.
+Cron was used initially only because enabling the timer needs sudo and
+`Linger=no` rules out a user-level timer.
 
 ---
 
