@@ -64,6 +64,7 @@ retired_monitor_names = {
     "Gym Bookings (direct)",
     "Ping ampere-ubuntu (WG)",
     "PhotoPrism",
+    "PhotoPrism (local)",
     "StravaKeeper",
 }
 
