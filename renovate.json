@@ -116,6 +116,18 @@
       "prPriority": 20
     },
     {
+      "description": "Portainer controls every git-backed pico stack. Hold all of its updates for a cold portainer_data backup and post-migration API/stack verification.",
+      "matchPackageNames": [
+        "/(^|\\/)portainer\\/portainer-ee$/"
+      ],
+      "automerge": false,
+      "addLabels": [
+        "critical",
+        "manual-review"
+      ],
+      "prPriority": 20
+    },
+    {
       "description": "Critical platform major upgrades require manual review.",
       "matchPackageNames": [
         "/(^|\\/)vault$/",

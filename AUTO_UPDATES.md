@@ -13,6 +13,7 @@ Set up 2026-07-31.
 | --- | --- | --- | --- |
 | OKE apps, Helm charts, Terraform providers, GitHub Actions | **Renovate** (`renovate.json`) | nightly 01:00–06:00 AEST | PR → automerge → `argocd-sync.yml` |
 | pico Docker stacks | **Renovate** + git-backed Portainer stacks | nightly, then Portainer polls every 5 min | PR → automerge → Portainer redeploy |
+| Portainer control plane | **Renovate**, manual review after a cold data-volume backup | nightly scan | PR → review → pico Compose deployment |
 | Home Assistant HACS integrations/cards/themes | HA automation `Auto-update: HA core, Apps and HACS` | nightly 04:00 | `update.install` |
 | Home Assistant Core, Matter and MariaDB containers | **Renovate**, manual review after a verified backup | nightly scan | PR → review → pico Compose deployment |
 | pico OS packages | `unattended-upgrades` | daily, reboot 05:00 | apt |
@@ -49,6 +50,7 @@ Terraform configuration are valid. Uptime Kuma is the post-deploy smoke test.
 | --- | --- |
 | Postgres, MySQL, MariaDB, Redis, CloudNativePG | A bad major here is a restore, not a rollback. Opens a PR labelled `database` / `manual-review` and waits. |
 | Home Assistant Core and Matter Server | Container-mode migrations need a verified snapshot and compatibility review. |
+| Portainer (all updates) | It controls every git-backed pico stack and migrates its database on startup. Back up `portainer_data`, then verify the API, environment and stack inventory. |
 | ArgoCD (all updates); Vault, VSO, Cilium, Tailscale Operator and Authentik majors | These coordinate or secure the platform and need release-note/order review. |
 | `apps/caddy/Dockerfile` | Caddy is a custom `xcaddy` build. Merging the base-image bump is not enough — the image must be rebuilt and pushed, then `image.tag` bumped in `values.yaml`. The PR body carries the buildx command. |
 | `images/garmin-mcp/Dockerfile` | The custom image must be rebuilt and its deployment tag bumped. |
@@ -178,6 +180,23 @@ reboot that morning. Ports `8180` and `8112` are closed.
 
 If a future run brings something unexpected up,
 `POST /api/stacks/<id>/stop?endpointId=1`.
+
+### Portainer itself
+
+Portainer is intentionally **not** one of the stacks it manages. Its reviewed
+source is [`pico/portainer/compose.yaml`](pico/portainer/compose.yaml), but a
+merge cannot self-deploy the control plane. Renovate holds every Portainer PR
+for manual review. After merging:
+
+1. Pull `main` on pico and pre-pull the new image.
+2. Stop Portainer and take a cold archive of the external `portainer_data`
+   volume under `~/.local/state/infra/portainer-backups/`.
+3. Run `docker compose -f ~/code/infra/pico/portainer/compose.yaml up -d`.
+4. Verify `/api/status`, the `pico-docker` environment, all stack names/statuses,
+   and both Uptime Kuma monitors.
+
+The old image is retained until verification, so rollback is: stop Portainer,
+restore the archived volume, change the Compose tag/digest back, and redeploy.
 
 ---
 

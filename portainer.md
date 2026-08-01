@@ -2,12 +2,12 @@
 
 **Endpoint:** pico-docker (Local Docker Engine)  
 **Docker Version:** 29.0.1  
-**Portainer Version:** portainer-ee 2.33.6  
-**Portainer Compose:** `/opt/portainer/docker-compose.yml` (host network mode)  
-**Total Containers:** 41 running  
+**Portainer Version:** portainer-ee 2.39.5 LTS<br>
+**Portainer Compose:** `pico/portainer/compose.yaml` (host network mode; deployed directly on pico)<br>
+**Total Containers:** 31<br>
 **Total Volumes:** 48  
 **Total Images:** 114  
-**Total Stacks:** 15 (all git-backed from `pico/` in this repo)  
+**Total Stacks:** 14 (all git-backed from `pico/` in this repo)<br>
 **System CPU:** 12 cores  
 **System Memory:** ~31 GB
 
@@ -16,6 +16,11 @@
 > 5 minutes and redeploys. **Edit the compose file and push — do not edit the
 > stack in the Portainer UI**, or the next poll reverts you. Image versions are
 > bumped automatically by Renovate. See [`AUTO_UPDATES.md`](AUTO_UPDATES.md).
+>
+> **Portainer itself is the exception:** it cannot safely use its own Git polling
+> to replace its control-plane container. Renovate tracks
+> `pico/portainer/compose.yaml` but holds every update for a cold
+> `portainer_data` backup and manual deployment.
 >
 > **This repo is public.** The compose snippets below use `${VAR}` for every
 > credential; the real values live in each stack's Portainer Env, never in git.
@@ -1604,10 +1609,10 @@ the personal photo library.
 ### Portainer
 
 **Container:** portainer-portainer-1  
-**Image:** portainer/portainer-ee:2.33.6  
-**Status:** Running (Up 45 hours)  
+**Image:** portainer/portainer-ee:2.39.5 (digest-pinned)<br>
+**Status:** Running<br>
 **Network:** host (all ports exposed directly)  
-**Compose Config:** `/opt/portainer/docker-compose.yml`  
+**Compose Config:** `~/code/infra/pico/portainer/compose.yaml`<br>
 **Command:** `/portainer`  
 **Mounts:**  
 
@@ -1617,6 +1622,15 @@ the personal photo library.
 - `/run/docker.sock` bind -> `/var/run/docker.sock`
 
 **Purpose:** Container management UI (Enterprise Edition)
+
+**Upgrade policy:** Renovate opens a `critical` / `manual-review` PR. Before
+deploying, stop Portainer and create a cold archive of the external
+`portainer_data` volume under
+`~/.local/state/infra/portainer-backups/`. Redeploy from the tracked Compose
+file, then verify `/api/status`, endpoint `pico-docker`, all 14 stack names and
+statuses, and the public/direct Uptime Kuma monitors. The pre-upgrade image and
+data archive are the rollback pair. Full commands are in
+[`AUTO_UPDATES.md`](AUTO_UPDATES.md#portainer-itself).
 
 ---
 
