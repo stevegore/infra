@@ -16,7 +16,7 @@ replicaCount: 1
 
 image:
   repository: docker.io/adminer
-  tag: "4"
+  tag: "5"
   pullPolicy: IfNotPresent
 
 resources:
