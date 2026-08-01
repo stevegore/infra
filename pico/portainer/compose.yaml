@@ -1,0 +1,16 @@
+services:
+  portainer:
+    image: portainer/portainer-ee:2.39.5@sha256:465c705cccfda51e0b5aeffbb67d36038ac07a8704aa58251c6ec544e46ec5f2
+    environment:
+      TZ: Australia/Sydney
+    network_mode: host
+    restart: always
+    volumes:
+      - /run/docker.sock:/var/run/docker.sock
+      - /etc/timezone:/etc/timezone
+      - /etc/localtime:/etc/localtime
+      - portainer_data:/data
+
+volumes:
+  portainer_data:
+    external: true
