@@ -27,6 +27,11 @@
 
 **Purpose:** Home server running Home Assistant and Docker services
 
+**GitHub checkout:** `~/code/infra` tracks this repository over HTTPS. Git
+credentials come from `gh auth git-credential` in `~/.gitconfig`; pico has no
+GitHub-authorized SSH key, so do not change `origin` back to a
+`git@github.com:...` URL without registering one first.
+
 **Key Services:**
 
 - **Home Assistant** — **HA Container** via `docker compose` (migrated from Supervised 2026-08-01)
