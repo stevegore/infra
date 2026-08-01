@@ -19,6 +19,9 @@ on:
       - 'apps/**'
       - 'argocd/**'
       - 'cilium/**'
+      - 'scripts/setup_uptime_kuma.py'
+      - 'scripts/setup_status_page.py'
+      - '.github/workflows/argocd-sync.yml'
   workflow_dispatch:
     inputs:
       app:
