@@ -255,21 +255,38 @@ Core vanished entirely (a pending 2026.4.4 → 2026.7.4 update removed the old
 container; both the update and its rollback hit the missing mount). Container mode
 removes this whole failure class — there is no host-side launcher to drift.
 
-### Old Supervised install — now fully disabled
+### Old Supervised install — fully torn down
+
+Disabling `hassio-supervisor.service` alone was not sufficient:
+`hassio-apparmor.service` was still enabled and declared
+`Wants=hassio-supervisor.service`, so `multi-user.target` pulled the Supervisor
+back up on every boot. The Supervisor then recreated all five plugin containers
+and resumed host-level `autofix` across the whole Docker daemon.
+
+Resolved on 2026-08-01 by disabling both units, removing the seven legacy
+containers, and removing the `hassio` bridge network. Verified on the booted
+system: both units report `disabled`/`inactive`, no `hassio*` containers remain,
+and `homeassistant-app` is still the only listener on port 8123.
 
 - `hassio-supervisor.service`: **disabled and stopped** (2026-08-01).
-- Core: `boot=false`, `watchdog=false`, container `homeassistant` exited.
+- `hassio-apparmor.service`: **disabled and stopped** (2026-08-01) — this was
+  the unit that kept pulling the Supervisor back up.
+- Core was set to `boot=false`/`watchdog=false`; the legacy `homeassistant`
+  container has since been removed.
 - All add-ons (`core_mariadb`, `core_matter_server`, `a0d7b954_vscode`,
   `a0d7b954_phpmyadmin`) set to `boot: manual` and stopped. **This matters** — on
   `auto` the Supervisor would start a second Matter server on the same fabric.
-- Old config still at `/usr/share/hassio/homeassistant` — read-only reference,
-  never modified during migration.
+- Old config remains at `/usr/share/hassio/homeassistant` as a read-only rollback
+  reference. The Supervisor images remain unreferenced. The `os-agent` package
+  and `haos-agent.service` remain enabled/running but are unused by Container
+  mode; remove them only after the rollback window closes.
 
-**Leftover cruft:** the plugin containers `hassio_dns`, `hassio_audio`,
-`hassio_multicast`, `hassio_cli`, `hassio_observer` are still present.
-All are `restart: no` **except `hassio_observer`, which is `restart: always` and
-will come back after every reboot holding port 4357.** Safe to
-`docker rm -f` all five once you're confident in the new stack.
+The removed containers were `hassio_supervisor`, `hassio_dns`, `hassio_audio`,
+`hassio_multicast`, `hassio_cli`, `hassio_observer`, and the exited Supervised
+Core container `homeassistant`. Order matters if this ever has to be repeated:
+disable both systemd units before removing containers, otherwise the
+Supervisor's `Restart=always` path recreates them. The Container stack does not
+use `hassio_dns` or the removed `hassio` network.
 
 ### Verification at cutover
 

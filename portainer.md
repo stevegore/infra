@@ -1669,17 +1669,16 @@ password sits in `configuration.yaml`.
 
 #### Decommissioned Supervised install
 
-`hassio-supervisor.service` is **disabled and stopped**. Core has
-`boot=false`/`watchdog=false`; the old `homeassistant` container is exited. All
-add-ons (`core_mariadb`, `core_matter_server`, `a0d7b954_vscode`,
-`a0d7b954_phpmyadmin`) are set to `boot: manual` and stopped — on `auto` the
-Supervisor would start a second Matter server on the same fabric. Old config
-retained read-only at `/usr/share/hassio/homeassistant`.
+Both `hassio-supervisor.service` and `hassio-apparmor.service` are **disabled and
+inactive**. Disabling only the Supervisor was insufficient: the enabled AppArmor
+unit declared `Wants=hassio-supervisor.service` and resurrected the entire stack
+at boot.
 
-**Leftover plugin containers** (safe to `docker rm -f` once confident):
-`hassio_dns`, `hassio_audio`, `hassio_multicast`, `hassio_cli` are all
-`restart: no`, but **`hassio_observer` is `restart: always`** and will return
-after every reboot holding port 4357.
+All seven legacy containers (`hassio_supervisor`, five `hassio_*` plugins, and
+the old `homeassistant` Core) plus the `hassio` bridge network were removed on
+2026-08-01. A subsequent reboot confirmed they remain absent; port 4357 is now
+free. Old config remains read-only at `/usr/share/hassio/homeassistant`, and the
+unreferenced Supervisor images plus `os-agent` package remain for rollback.
 
 ---
 
@@ -1828,7 +1827,7 @@ bash ~/code/infra/scripts/vw-mysql-to-sqlite.sh
 | 3011  | phpMyAdmin (Huginn)   | huggin-mysqladmin-1               | TCP      |
 | 3012  | Vaultwarden WebSocket | bitwarden                         | TCP      |
 | 3307  | HA MariaDB            | homeassistant-db (127.0.0.1 only) | TCP      |
-| 4357  | HA Observer           | hassio_observer (**orphan**, see HA section) | TCP |
+| ~~4357~~ | ~~HA Observer~~     | *(removed — port free)*           | —        |
 | 5580  | Matter Server         | homeassistant-matter              | TCP      |
 | 7878  | Radarr                | radarr                            | TCP      |
 | ~~3001~~ | ~~Uptime Kuma~~    | *(migrated to OKE — port free)*   | —        |
@@ -1858,7 +1857,8 @@ bash ~/code/infra/scripts/vw-mysql-to-sqlite.sh
 | 32414 | Plex GDM              | plex                              | UDP      |
 | 32469 | Plex DLNA             | plex                              | TCP      |
 
-**Host network mode** (all ports on host): Portainer, homeassistant-app, homeassistant-matter, hassio_multicast (orphan)
+**Host network mode** (all ports on host): Portainer, homeassistant-app,
+homeassistant-matter
 
 ---
 

@@ -19,3 +19,7 @@ terraform/crash.*.log
 
 # Helm dependencies are fetched from Chart.lock during rendering.
 cilium/charts/
+
+# Private host inventory captured before pico release upgrades. The public
+# runbook and capture script are tracked; raw package/network/account state is not.
+pico/upgrade-26.04-state/

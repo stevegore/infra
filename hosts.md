@@ -20,10 +20,10 @@
 ### pico (192.168.4.120 / 10.20.30.1)
 
 **Hardware:** ASRock B550M-ITX/ac (Mini-ITX desktop), AMD Ryzen 5 5600G (6c/12t, integrated Radeon), 30 GB RAM
-**OS:** Ubuntu 24.04.4 LTS (kernel 6.8.0-107-generic), x86-64
+**OS:** Ubuntu 24.04.4 LTS (kernel 6.8.0-136-generic), x86-64
 **Storage:**
-- `/` — 456 GB LVM (`/dev/mapper/ubuntu--vg-ubuntu--lv`), ~82% full
-- `/media/m2` — 3.6 TB NVMe, ~47% used
+- `/` — 456 GB LVM (`/dev/mapper/ubuntu--vg-ubuntu--lv`), ~88% full
+- `/media/m2` — 3.6 TB NVMe, ~78% used
 
 **Purpose:** Home server running Home Assistant and Docker services
 
@@ -67,10 +67,11 @@
 |----------|-------|------|-----------|--------|
 | RAM | 30 GB | 9.7 GB | 21 GB available | 32% |
 | CPU | 12 cores | varies | idle most of time | <20% sustained |
-| `/` root | 456 GB | 384 GB | 52 GB | **89%** |
-| `/media/m2` NVMe | 3.6 TB | 1.7 TB | 1.8 TB | 50% |
+| `/` root | 456 GB | 382 GB | 54 GB | **88%** |
+| `/media/m2` NVMe | 3.6 TB | 2.7 TB | 796 GB | 78% |
 
-**Storage Alert:** Root filesystem at 89% — consider cleanup:
+**Storage Alert:** Root filesystem at 88% — prepare cleanup before the 26.04
+release upgrade; see [`pico/UPGRADE-26.04.md`](pico/UPGRADE-26.04.md):
 - Docker images: `docker image prune`
 - Unused volumes: `docker volume prune`
 - Duplicati backups: check `/var/lib/docker/volumes/` size
