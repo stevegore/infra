@@ -118,11 +118,11 @@
     {
       "description": "Critical platform major upgrades require manual review.",
       "matchPackageNames": [
-        "hashicorp/vault",
-        "hashicorp/vault-secrets-operator",
-        "cilium/cilium",
-        "tailscale/tailscale-operator",
-        "goauthentik/authentik"
+        "/(^|\\/)vault$/",
+        "/vault-secrets-operator/",
+        "/(^|\\/)cilium$/",
+        "/tailscale-operator/",
+        "/(^|\\/)authentik$/"
       ],
       "matchUpdateTypes": [
         "major"
