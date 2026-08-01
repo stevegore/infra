@@ -56,25 +56,23 @@ spec:
             - |
               pip install --quiet --no-cache-dir "pymysql=={{ .Values.reconcile.pymysqlVersion }}"
               python - <<'PY'
-              import io
               import os
               import pathlib
               import ssl
               import subprocess
-              import tarfile
               import urllib.parse
               import urllib.request
 
-              archive_url = "https://github.com/smlbiobot/infra/archive/refs/heads/main.tar.gz"
-              with urllib.request.urlopen(archive_url, timeout=60) as response:
-                  payload = response.read()
-              with tarfile.open(fileobj=io.BytesIO(payload), mode="r:gz") as archive:
-                  archive.extractall("/tmp/infra")
-
-              checkout = next(pathlib.Path("/tmp/infra").glob("infra-*"))
+              script_dir = pathlib.Path("/tmp/infra-scripts")
+              script_dir.mkdir()
+              raw_base = "https://raw.githubusercontent.com/stevegore/infra/main/scripts"
               for script in ("setup_uptime_kuma.py", "setup_status_page.py"):
+                  with urllib.request.urlopen(
+                      f"{raw_base}/{script}", timeout=60
+                  ) as response:
+                      (script_dir / script).write_bytes(response.read())
                   subprocess.run(
-                      ["python", str(checkout / "scripts" / script)],
+                      ["python", str(script_dir / script)],
                       check=True,
                   )
 
