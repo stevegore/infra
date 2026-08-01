@@ -198,6 +198,18 @@ for manual review. After merging:
 The old image is retained until verification, so rollback is: stop Portainer,
 restore the archived volume, change the Compose tag/digest back, and redeploy.
 
+The verified 2.33.6 rollback set created before the 2026-08-01 upgrade to
+2.39.5 LTS is:
+
+- `~/.local/state/infra/portainer-backups/portainer_data-pre-2.39.5-20260801T165103+1000.tar.gz`
+- `~/.local/state/infra/portainer-backups/compose-pre-2.39.5-20260801T165103+1000.yaml`
+- archive SHA-256: `153fb008e8fd5991470cc87f0a444d48f7cc3bd44936fdef5e0e39601f3f9731`
+
+The archive is mode `0600`; `gzip -t` passed and `./portainer.db` was confirmed
+inside it before the new container was started. The upgrade preserved the
+instance ID, endpoint, and all 14 stack names/statuses; the public and direct
+Uptime Kuma monitors both returned to green.
+
 ---
 
 ## 3. Home Assistant
