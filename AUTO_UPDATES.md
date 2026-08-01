@@ -169,10 +169,14 @@ keep them out of the repo, and note `/tmp` does not survive the 05:00 reboot.
 script records each stack's Portainer `Status` and re-stops anything that was
 not running. Two stacks are deliberately stopped and should stay that way:
 
-| Stack | Why it is off |
-| --- | --- |
-| `stravakeeper` | `strava.stevegore.au` is served by the OKE `strava-keeper` app. |
-| `gymmaster-rest` | Superseded by the OKE `gym-booker` app. |
+| Stack | Why it is off | Stays down? |
+| --- | --- | --- |
+| `stravakeeper` | `strava.stevegore.au` is served by the OKE `strava-keeper` app. | Yes — `restart: unless-stopped` |
+| `gymmaster-rest` | Superseded by the OKE `gym-booker` app. | Yes — `restart: unless-stopped` |
+
+Both were verified on 2026-08-01: their composes use `restart: unless-stopped`,
+their containers no longer exist on the host, and they stayed down across the
+reboot that morning. Ports `8180` and `8112` are closed.
 
 > **Stopping a stack is not permanent if its containers are `restart: always`.**
 > Docker restarts those on boot regardless of the Portainer stack's status — a
