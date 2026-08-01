@@ -182,27 +182,47 @@ brings something unexpected up, `POST /api/stacks/<id>/stop?endpointId=1`.
 
 ## 3. Home Assistant
 
+> **HA moved from Supervised to Container on 2026-08-01.** That splits its
+> updates across two mechanisms — the automation below no longer covers core.
+
 Automation: **`automation.auto_update_ha_core_apps_and_hacs`**, nightly at 04:00.
+It installs every pending `update.*` entity, which in Container mode means
+**HACS only** — integrations, Lovelace cards and themes.
 
-Installs every pending `update.*` entity — HA Core, Supervisor, Apps
-(add-ons), HACS integrations and cards — taking a backup wherever the entity
-advertises the BACKUP supported-feature bit.
+### What Container mode removed
 
-HA Core is installed **last and alone**, because installing it restarts Home
-Assistant and kills the automation run; anything sequenced after it would
-silently never execute.
+Without a Supervisor these entities no longer exist, so nothing installs them:
+
+| Gone | Now handled by |
+| --- | --- |
+| `update.home_assistant_core_update` | the image tag in the compose file (see below) |
+| `update.home_assistant_supervisor_update` | n/a — no Supervisor |
+| add-on entities (mariadb, phpmyadmin, matter_server, studio_code_server) | plain compose services; add-ons do not exist in Container mode |
+
+**HA cannot update its own core in Container mode.** Core is
+`ghcr.io/home-assistant/home-assistant:<tag>` in `/opt/ha-container/compose.yaml`
+on pico. That file is a bare `docker compose` project — not a Portainer stack and
+not in this repo — so **Renovate does not see it and HA core will not auto-update
+today**. To close that gap, move it to `pico/homeassistant/compose.yaml` and
+convert it with `scripts/portainer-stacks-to-git.py`, exactly like the other 15.
+Its `mariadb:11` service would then fall under the database hold-back
+automatically, which is the behaviour you want.
+
+### The backup bit
+
+`update.install` takes `backup: true` only where the entity advertises
+`UpdateEntityFeature.BACKUP`, which is **bit 8** — not bit 1 (that is `INSTALL`,
+set on every update entity). Passing `backup: true` to an entity that lacks it
+errors. Every current entity is `sf=23`, so backup is always false in practice.
 
 ### Held back
 
-- **`device_class: firmware`** — currently the three eero mesh nodes. Flashing
-  every router in the house unattended has no remote recovery path if it goes
-  wrong, and firmware cannot be rolled back. This exclusion is by device class,
-  so any future firmware entity is caught automatically.
-- **`update.mariadb_update`** — HA's recorder database, matching the data-layer
-  carve-out Renovate uses. Drop it from the automation's `held` variable to
-  un-hold it.
+**`device_class: firmware`** — currently the three eero mesh nodes. Flashing
+every router in the house unattended has no remote recovery path if it goes
+wrong, and firmware cannot be rolled back. The exclusion is by device class, so
+any future firmware entity is caught automatically.
 
-To pause everything: turn the automation off.
+To pause: turn the automation off.
 
 ---
 
