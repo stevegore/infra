@@ -28,7 +28,7 @@ services:
    - /srv/tv:/tv
   environment:
    - TZ=Australia/Sydney
-  image: linuxserver/sonarr:4.0.17  # https://hub.docker.com/r/linuxserver/sonarr/tags
+  image: linuxserver/sonarr:4.0.19  # https://hub.docker.com/r/linuxserver/sonarr/tags
  
  jackett:
   container_name: jackett
