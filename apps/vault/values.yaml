@@ -15,13 +15,20 @@ vault:
     # Pin the tag too so we don't drift on each chart reload.
     image:
       repository: "docker.io/hashicorp/vault"
-      tag: "1.21.4"
+      tag: "2.0.3"
 
-    # Required for mlock (IPC_LOCK moved from runtime setcap to build-time in 1.19.17+)
-    containerSecurityContext:
-      capabilities:
-        add:
-          - IPC_LOCK
+    # No IPC_LOCK / mlock override here, deliberately. `standalone.config` below
+    # omits disable_mlock, so the chart appends `disable_mlock = true` for us
+    # (_helpers.tpl) — the sanctioned Kubernetes setting, since kubelet runs with
+    # swap off. Vault logs "Mlock: supported: true, enabled: false" and never
+    # calls mlock(), so the IPC_LOCK capability would buy nothing.
+    #
+    # A `server.containerSecurityContext:` block lived here until 2026-08-01. It
+    # was a no-op — vault-helm reads `server.statefulSet.securityContext.container`
+    # — so the pod has only ever run with the chart default
+    # (allowPrivilegeEscalation: false, CapEff 0x0). Don't re-add it under the
+    # real key without also re-stating allowPrivilegeEscalation: false; setting
+    # that key replaces the chart default wholesale rather than merging.
 
     # Resource limits for Ampere A1
     resources:
