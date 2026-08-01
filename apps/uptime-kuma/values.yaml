@@ -71,6 +71,14 @@ persistence:
   size: 50Gi
   storageClass: oci-bv
 
+# Reconcile monitor/status-page definitions inside the VCN after each ArgoCD
+# sync. The PostSync hook reads the existing VSO-managed DB Secret and restarts
+# the single Kuma pod only after both idempotent scripts commit successfully.
+reconcile:
+  enabled: true
+  image: python:3.12-alpine@sha256:6d43704baacd1bfbe7c295d7f13079d5d8104ed33568873133f8fc69980419df
+  pymysqlVersion: "1.1.2"
+
 # MySQL backend — uses the OCI MySQL HeatWave Free instance shared with
 # Vaultwarden (separate database: uptime_kuma). Credentials synced from
 # Vault kv/uptime-kuma/config by VSO into k8s Secret uptime-kuma-db.

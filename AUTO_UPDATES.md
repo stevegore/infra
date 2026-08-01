@@ -13,11 +13,12 @@ Set up 2026-07-31.
 | --- | --- | --- | --- |
 | OKE apps, Helm charts, Terraform providers, GitHub Actions | **Renovate** (`renovate.json`) | nightly 01:00–06:00 AEST | PR → automerge → `argocd-sync.yml` |
 | pico Docker stacks | **Renovate** + git-backed Portainer stacks | nightly, then Portainer polls every 5 min | PR → automerge → Portainer redeploy |
-| Home Assistant core, Apps, HACS | HA automation `Auto-update: HA core, Apps and HACS` | nightly 04:00 | `update.install` |
+| Home Assistant HACS integrations/cards/themes | HA automation `Auto-update: HA core, Apps and HACS` | nightly 04:00 | `update.install` |
+| Home Assistant Core, Matter and MariaDB containers | **Renovate**, manual review after a verified backup | nightly scan | PR → review → pico Compose deployment |
 | pico OS packages | `unattended-upgrades` | daily, reboot 05:00 | apt |
 
-Everything routes through this repo except the HA automation and apt.
-Nothing is applied by hand.
+Everything routes through this repo except the HACS automation and apt. Stateful
+and platform-coordinated upgrades deliberately require a human approval.
 
 ---
 
@@ -25,7 +26,8 @@ Nothing is applied by hand.
 
 Config: [`renovate.json`](renovate.json) · Workflow: [`.github/workflows/renovate.yml`](.github/workflows/renovate.yml)
 
-Covers 67 dependencies across 43 files, via seven managers:
+Covers Helm, containers, Terraform providers, Actions, and the pinned ArgoCD
+upstream release via built-in and custom managers:
 
 | Manager | Files |
 | --- | --- |
@@ -35,17 +37,21 @@ Covers 67 dependencies across 43 files, via seven managers:
 | `dockerfile` | `apps/caddy/Dockerfile` |
 | `github-actions` | `.github/workflows/*` |
 | `terraform` | `terraform/*.tf` — provider constraints |
-| `regex` (custom) | bare `image: repo:tag` lines that `helm-values` does not model — `apps/ttyd/values.yaml`, `apps/gym-booker/templates/deployment.yaml` |
+| `regex` (custom) | bare template images plus `ARGOCD_VERSION` in `bootstrap/argocd-init.sh` |
 
-**Policy: everything self-merges.** `automerge: true` including majors, with
-`platformAutomerge` so GitHub does the merge. Uptime Kuma is the smoke test.
+Routine updates self-merge only after `.github/workflows/validate.yml` proves
+that Renovate config, Helm dependencies/rendering, Compose definitions, and
+Terraform configuration are valid. Uptime Kuma is the post-deploy smoke test.
 
 ### What does NOT self-merge
 
 | Held back | Why |
 | --- | --- |
 | Postgres, MySQL, MariaDB, Redis, CloudNativePG | A bad major here is a restore, not a rollback. Opens a PR labelled `database` / `manual-review` and waits. |
+| Home Assistant Core and Matter Server | Container-mode migrations need a verified snapshot and compatibility review. |
+| ArgoCD (all updates); Vault, VSO, Cilium, Tailscale Operator and Authentik majors | These coordinate or secure the platform and need release-note/order review. |
 | `apps/caddy/Dockerfile` | Caddy is a custom `xcaddy` build. Merging the base-image bump is not enough — the image must be rebuilt and pushed, then `image.tag` bumped in `values.yaml`. The PR body carries the buildx command. |
+| `images/garmin-mcp/Dockerfile` | The custom image must be rebuilt and its deployment tag bumped. |
 
 ### What is ignored entirely
 
@@ -53,9 +59,9 @@ Covers 67 dependencies across 43 files, via seven managers:
   bare local images built on pico (`stravakeeper`, `stravabot-rs`, `nuraspace`,
   `gymbooking2`, `goldenboards`). These are tagged with git SHAs or exist in no
   registry at all; the GitHub Actions that build them own their versioning.
-- **Floating tags** — `:latest`, `:release`, `:stable`. There is nothing for
-  Renovate to bump. These refresh when Portainer force-pulls on redeploy
-  (see below), so they are muted rather than left on the dashboard forever.
+- **No floating tags are ignored.** Renovate pins their registry digest, then
+  opens digest PRs. That creates the Git change Portainer/ArgoCD need to deploy
+  a new immutable image instead of silently drifting behind a mutable tag.
 
 ### Auth
 
@@ -79,25 +85,8 @@ branches).
 Alternatively install the [Mend Renovate app](https://github.com/apps/renovate)
 and delete the workflow; `renovate.json` is read identically either way.
 
-### Throughput: ~2 PRs per run
-
-Renovate merges **at most 2 PRs per run**, by design. After an automerge the base
-branch has moved, so it logs `Restarting repository job after automerge result`
-and re-runs — but only once, then finishes. A backlog of 20 PRs therefore takes
-about 10 runs, i.e. ~10 nights on the normal schedule.
-
-That is fine for steady state (a handful of updates a night drains immediately),
-but to clear a backlog now, either dispatch repeatedly with `ignoreSchedule`, or
-merge the already-approved ones directly — identical outcome, since these are PRs
-the config has already classified as automerge:
-
-```bash
-gh pr list --repo stevegore/infra --limit 60 --json number,labels \
-  -q '.[] | select((([.labels[].name]|index("database")) or ([.labels[].name]|index("needs-rebuild"))) | not) | .number' \
-  | xargs -I{} gh pr merge {} --repo stevegore/infra --squash --delete-branch
-```
-
-The label filter is what keeps the database and caddy hold-backs out of it.
+`rebaseWhen: conflicted` lets independent PRs drain in the same run instead of
+rebasing the whole queue after every merge. Real conflicts still rebase.
 
 ### Watching it
 
@@ -110,13 +99,13 @@ The label filter is what keeps the database and caddy hold-backs out of it.
 
 ## 2. pico stacks are git-backed
 
-All 15 Portainer stacks were converted from inline file-editor stacks to
+All 14 existing Portainer stacks were converted from inline file-editor stacks to
 **git-backed stacks** pointing at [`pico/`](pico/) in this repo, polling every
 5 minutes with `forcePullImage` on.
 
 That gives three things the file-editor stacks did not have: Renovate can see
-and bump the images, every change has a commit, and floating tags
-(`:latest`, `:release`) actually get re-pulled on redeploy.
+and bump the images, every change has a commit, and a pinned digest change
+causes Portainer to redeploy an immutable image.
 
 ```
 pico/
@@ -169,10 +158,14 @@ keep them out of the repo, and note `/tmp` does not survive the 05:00 reboot.
 script records each stack's Portainer `Status` and re-stops anything that was
 not running. Two stacks are deliberately stopped and should stay that way:
 
-| Stack | Why it is off |
-| --- | --- |
-| `stravakeeper` | `strava.stevegore.au` is served by the OKE `strava-keeper` app. |
-| `gymmaster-rest` | Superseded by the OKE `gym-booker` app. |
+| Stack | Why it is off | Stays down? |
+| --- | --- | --- |
+| `stravakeeper` | `strava.stevegore.au` is served by the OKE `strava-keeper` app. | Yes — `restart: unless-stopped` |
+| `gymmaster-rest` | Superseded by the OKE `gym-booker` app. | Yes — `restart: unless-stopped` |
+
+Both were verified on 2026-08-01: their composes use `restart: unless-stopped`,
+their containers no longer exist on the host, and they stayed down across the
+reboot that morning. Ports `8180` and `8112` are closed.
 
 > **Stopping a stack is not permanent if its containers are `restart: always`.**
 > Docker restarts those on boot regardless of the Portainer stack's status — a
@@ -207,14 +200,16 @@ Without a Supervisor these entities no longer exist, so nothing installs them:
 | `update.home_assistant_supervisor_update` | n/a — no Supervisor |
 | add-on entities (mariadb, phpmyadmin, matter_server, studio_code_server) | plain compose services; add-ons do not exist in Container mode |
 
-**HA cannot update its own core in Container mode.** Core is
-`ghcr.io/home-assistant/home-assistant:<tag>` in `/opt/ha-container/compose.yaml`
-on pico. That file is a bare `docker compose` project — not a Portainer stack and
-not in this repo — so **Renovate does not see it and HA core will not auto-update
-today**. To close that gap, move it to `pico/homeassistant/compose.yaml` and
-convert it with `scripts/portainer-stacks-to-git.py`, exactly like the other 15.
-Its `mariadb:11` service would then fall under the database hold-back
-automatically, which is the behaviour you want.
+Core, Matter Server and MariaDB are now defined in
+`pico/homeassistant/compose.yaml`, with the deployed copy at
+`/opt/ha-container/compose.yaml`. Renovate sees all three. Core and Matter wait
+for `home-assistant` / `manual-review`; MariaDB inherits the database holdback.
+
+Before approval, run `scripts/backup-ha-container.sh`. It takes a logical,
+single-transaction MariaDB dump plus config/Matter state, verifies both inner
+archives and checksums, then stages the result under the existing Duplicati Home
+Assistant source. pico runs it at 00:30, before Duplicati at 01:00. The first
+snapshot was also restored into an isolated temporary MariaDB container.
 
 ### The backup bit
 
@@ -242,7 +237,8 @@ drop-in at `/etc/apt/apt.conf.d/52homelab-auto-upgrades`.
 
 The stock config only allowed the release and `-security` pockets, which meant
 ordinary package updates in `noble-updates` were never applied. The drop-in adds
-`-updates`, enables unused-kernel and unused-dependency removal, and turns on
+`-updates` plus the signed Tailscale stable origin, enables unused-kernel and
+unused-dependency removal, and turns on
 automatic reboot at 05:00 (verified safe — pico has no LUKS, so an unattended
 boot cannot hang on a passphrase prompt).
 
@@ -271,8 +267,14 @@ rollback does not need a re-pull. It never touches volumes —
 
 - **`raspberrypi.local`** — SSH key auth is not working from this machine
   (`Permission denied (publickey,password)`), so nothing was configured there.
-- **OKE Kubernetes version and node pools** — owned by the `homelab-tf` ORM
-  stack. Deliberately manual; see [`terraform/README.md`](terraform/README.md).
+- **OKE Kubernetes version and node replacement** — owned by the `homelab-tf`
+  ORM stack and deliberately manual. The control plane is pinned at current
+  `v1.36.1`; the node-pool definition is pinned to the 2026-07-20 OKE image.
+  Applying the Terraform change updates future-node configuration; cycle the two
+  workers one at a time only after reviewing the ORM plan and workload health.
+- **ArgoCD rollout** — Renovate opens a held PR for the pinned release. After
+  merge, re-run `bootstrap/argocd-init.sh`; it upgrades the upstream manifests,
+  waits for the server, and reapplies the Cilium/Flannel probe patches.
 - **The ArgoCD ApplicationSet** — not self-managed. Editing
   `argocd/applicationset.yaml` still needs a manual
   `kubectl apply --server-side --force-conflicts`.

@@ -95,7 +95,7 @@ bash bootstrap/argocd-init.sh
 
 This script is idempotent. It:
 1. Regenerates kubeconfig for the new cluster OCID
-2. Installs ArgoCD
+2. Installs or upgrades ArgoCD to the reviewed version pinned in the script
 3. Applies the `infra-apps` ApplicationSet (deploying all `apps/`)
 4. Creates the `ocir-creds` docker-registry secret in `caddy` namespace (reads from Vault)
 
@@ -105,6 +105,11 @@ This script is idempotent. It:
 > ```
 
 Wait ~5 min for ArgoCD to sync all apps. Vault auto-unseals via OCI KMS (no manual unseal needed on rebuild).
+
+For an ArgoCD upgrade, review the Renovate PR that changes `ARGOCD_VERSION`,
+merge it, then re-run `bash bootstrap/argocd-init.sh`. The script applies the
+pinned upstream manifest, waits for the API server rollout, and reapplies the
+cluster-specific probe patches idempotently.
 
 ### 4. Recover CNPG database (pg-shared)
 

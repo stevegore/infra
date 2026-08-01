@@ -6,9 +6,8 @@ name: Renovate
 #   pico/*/compose.yaml   Portainer stack images        (docker-compose)
 #   .github/workflows/*   action versions               (github-actions)
 #
-# Policy lives in renovate.json, not here: everything self-merges except the
-# data layer (Postgres/MySQL/MariaDB/CNPG) and the caddy Dockerfile, which need
-# a human. See the comments in that file.
+# Policy lives in renovate.json, not here: routine upgrades self-merge after
+# validation; stateful and coordinated upgrades wait for manual review.
 #
 # Once a PR merges to main the existing pipelines take over with no extra glue:
 #   apps/**  -> argocd-sync.yml fires an immediate ArgoCD sync

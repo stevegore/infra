@@ -1626,26 +1626,22 @@ the personal photo library.
 rationale and rollback in [`home-assistant.md`](home-assistant.md).
 
 **Stack dir:** `/opt/ha-container` (`docker compose`, project name `homeassistant`)  
-**Not Portainer-managed and not in `pico/`** — deliberately standalone, unlike
-every other stack here. Managed with `docker compose` directly on the host.
+**Not Portainer-managed.** It is operated with `docker compose` directly on the
+host, but its reviewed source is now `pico/homeassistant/compose.yaml`.
 
 > Why it's the exception: it was stood up as a live migration off Supervised and
-> kept out of the git-backed pipeline so a Portainer poll or a Renovate image bump
-> couldn't restart Home Assistant mid-cutover. Converting it later is
-> straightforward — move `compose.yaml` to `pico/homeassistant/`, replace the
-> `.env` values with `${VAR}` and put the real ones in the stack's Portainer Env
-> (this repo is public). Do **not** commit `/opt/ha-container/.env`.
->
-> Two caveats before converting: Renovate would then bump the Core image
-> automatically, and HA Core upgrades can break HACS custom components (see
-> [`home-assistant.md`](home-assistant.md)). Pin the Core tag or exclude it from
-> Renovate.
+> kept outside Portainer so a poll cannot restart Home Assistant mid-cutover or
+> during an unreviewed migration. Renovate now sees the Compose definition, but
+> Core and Matter updates are labelled `home-assistant` / `manual-review`, and
+> MariaDB uses the database holdback. Deploy only after the verified snapshot
+> and compatibility checks in `pico/homeassistant/README.md`. Secrets stay in
+> `/opt/ha-container/.env`; never commit that file.
 
 | Container | Image | Network | Restart |
 | --------- | ----- | ------- | ------- |
 | homeassistant-app    | ghcr.io/home-assistant/home-assistant:2026.7.4        | host                   | unless-stopped |
-| homeassistant-db     | mariadb:11                                            | homeassistant_default  | unless-stopped |
-| homeassistant-matter | ghcr.io/home-assistant-libs/python-matter-server:stable | host                 | unless-stopped |
+| homeassistant-db     | mariadb:11.8.8                                        | homeassistant_default  | unless-stopped |
+| homeassistant-matter | python-matter-server:stable (digest-pinned in Git)     | host                   | unless-stopped |
 
 **homeassistant-app mounts:**
 
