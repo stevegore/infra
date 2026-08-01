@@ -167,16 +167,24 @@ keep them out of the repo, and note `/tmp` does not survive the 05:00 reboot.
 
 **Stopped stacks stay stopped.** Creating a stack from a repo deploys it, so the
 script records each stack's Portainer `Status` and re-stops anything that was
-not running. Three stacks are deliberately stopped and should stay that way:
+not running. Two stacks are deliberately stopped and should stay that way:
 
 | Stack | Why it is off |
 | --- | --- |
-| `stevegore-au` | A `ttyd --writable` shell on `:8788`. Superseded by the OKE ttyd, which has the CiliumNetworkPolicy, egress-lockdown init container and dropped capabilities that this one does not. |
 | `stravakeeper` | `strava.stevegore.au` is served by the OKE `strava-keeper` app. |
 | `gymmaster-rest` | Superseded by the OKE `gym-booker` app. |
 
-The first full sweep started all three before this was handled. If a future run
-brings something unexpected up, `POST /api/stacks/<id>/stop?endpointId=1`.
+> **Stopping a stack is not permanent if its containers are `restart: always`.**
+> Docker restarts those on boot regardless of the Portainer stack's status — a
+> reboot brought the ttyd stack back up, listening on `:8788`, after it had been
+> stopped. For something that must never run again, **delete the stack and remove
+> its `pico/<name>/` directory**, which is what was done to `stevegore-au`
+> (ttyd now runs only on OKE, where it has the CiliumNetworkPolicy, the
+> egress-lockdown init container and dropped capabilities). Check
+> `restart:` in the compose file before relying on a stop.
+
+If a future run brings something unexpected up,
+`POST /api/stacks/<id>/stop?endpointId=1`.
 
 ---
 
