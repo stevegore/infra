@@ -22,6 +22,11 @@
 > `pico/portainer/compose.yaml` but holds every update for a cold
 > `portainer_data` backup and manual deployment.
 >
+> **Last control-plane upgrade:** 2.33.6 → 2.39.5 LTS on 2026-08-01. The
+> database migration completed cleanly, the instance ID and `pico-docker`
+> endpoint were preserved, and all 14 stack names/statuses matched the
+> pre-upgrade inventory. Both Portainer Uptime Kuma monitors returned to green.
+>
 > **This repo is public.** The compose snippets below use `${VAR}` for every
 > credential; the real values live in each stack's Portainer Env, never in git.
 > Anything shown as `<REDACTED>` belongs to a decommissioned stack and should be
