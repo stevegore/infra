@@ -470,9 +470,9 @@ export KUBECONFIG=~/.kube/oke-homelab.config
 oci os object bulk-download -bn vault-storage --namespace sdajdczqv0qo \
   --download-dir ~/backups/vault-storage-$(date +%Y%m%d-%H%M%S)
 
-# 1. Merge the tag bump, wait for ArgoCD, then confirm the roll is staged
+# 1. Merge the tag bump, wait for ArgoCD, then confirm the new tag is staged
 kubectl -n argocd get app vault -o jsonpath='{.status.sync.status}{"\n"}'
-kubectl -n vault get sts vault -o jsonpath='{.status.currentRevision}{"\n"}{.status.updateRevision}{"\n"}'
+kubectl -n vault get sts vault -o jsonpath='{.spec.template.spec.containers[0].image}{"\n"}'
 
 # 2. Trigger it
 kubectl -n vault delete pod vault-0
@@ -480,7 +480,20 @@ kubectl -n vault delete pod vault-0
 # 3. Verify — OCI KMS auto-unseals, no key entry needed
 kubectl -n vault logs vault-0 | grep -iE "mlock|unseal|post-unseal"
 kubectl -n vault exec vault-0 -- vault status
+
+# 4. Confirm consumers: restart VSO and check every VSS is Healthy
+kubectl delete pod -n vault-secrets-operator \
+  -l app.kubernetes.io/name=vault-secrets-operator
+kubectl get vaultstaticsecret -A -o json | jq -r \
+  '.items[] | "\(.metadata.namespace)/\(.metadata.name) \(
+     [.status.conditions[]? | select(.type=="Healthy") | .status] | first)"'
 ```
+
+> Don't verify with `.status.currentRevision` vs `.status.updateRevision`. Under
+> `OnDelete` the controller never advances `currentRevision`, so those two stay
+> divergent *forever*, before and after a successful roll — they tell you nothing.
+> Check the pod instead: `kubectl -n vault get pod vault-0 -o jsonpath='{.metadata.labels.controller-revision-hash} {.spec.containers[0].image}'`,
+> or just read the version off `vault status`.
 
 Downgrade is **not supported** by Vault. Rolling back means restoring the bucket
 backup *and* reverting the tag, so take the backup before every major bump.
@@ -500,10 +513,14 @@ removed 2026-08-01. If you ever do need that key, restate
 `allowPrivilegeEscalation: false` alongside it: setting it replaces the chart default
 wholesale rather than merging.
 
-The two Vault 2.0 container regressions ([#31919](https://github.com/hashicorp/vault/issues/31919))
-— the `unable to set CAP_SETFCAP` entrypoint failure and `Failed to lock memory` — are
-both already neutralised by the chart, which injects `SKIP_SETCAP=true` and the
-`disable_mlock = true` above.
+Neither Vault 2.0 container regression ([#31919](https://github.com/hashicorp/vault/issues/31919))
+bites here:
+
+- `unable to set CAP_SETFCAP` — the 2.0.2+ entrypoint detects the non-root user and
+  skips `setcap` on its own. On the 2.0.3 roll it logged
+  `Container is running as non-root user, ignoring SKIP_SETCAP`, i.e. the chart's
+  `SKIP_SETCAP=true` env var was belt-and-braces, not the thing that saved it.
+- `Failed to lock memory` — covered by the `disable_mlock = true` above.
 
 ### Version history
 
