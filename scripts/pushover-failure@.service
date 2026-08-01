@@ -1,0 +1,15 @@
+[Unit]
+# Generic OnFailure= target: any unit can get Pushover alerting by adding
+#   OnFailure=pushover-failure@%n.service
+# to its [Unit] section. %n passes the full failing unit name as the instance,
+# so this template serves every unit on the host.
+Description=Pushover alert for failed unit %i
+
+[Service]
+Type=oneshot
+# steve is in the adm group, so it can read other units' journals, and owns
+# ~/.config/vault-token-sync where the AppRole credentials live.
+User=steve
+ExecStart=/home/steve/.local/bin/pushover-notify.sh --unit %i
+StandardOutput=journal
+StandardError=journal

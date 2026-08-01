@@ -1,6 +1,9 @@
 [Unit]
 Description=Vaultwarden warm-standby sync (MySQL HeatWave → sqlite)
 After=network.target docker.service
+# Without this the sync fails silently — it did exactly that for eight weeks
+# after the 2026-06-06 rebuild. See architecture-proposal.md §7.1.1.
+OnFailure=pushover-failure@%n.service
 
 [Service]
 Type=oneshot

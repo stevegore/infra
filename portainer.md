@@ -1972,7 +1972,7 @@ This Portainer instance manages a comprehensive home infrastructure on pico:
 
 ### Security & Access
 
-- **Vaultwarden** - Warm standby at `bw2.stevegore.au`; primary is OKE (`bw.stevegore.au`). Hourly sync from MySQL HeatWave via `vw-mysql-to-sqlite.timer`.
+- **Vaultwarden** - Warm standby at `bw2.stevegore.au`; primary is OKE (`bw.stevegore.au`). Hourly sync from MySQL HeatWave via `vw-mysql-to-sqlite.timer`. Was broken 2026-06-06 → 2026-08-01 (stale Tailscale route approval; the timer fired fine but the service could not reach `10.0.1.51`) — fixed 2026-08-01, first successful sync that day. See architecture-proposal.md §7.1.1 for the failure mode, which recurs on every cluster rebuild unless the ACL `autoApprovers` entry is in place.
 - **Homepage** - Application dashboard at `homepage.stevegore.au` (port 8080, GitHub OAuth)
 
 ### Automation & Utilities
