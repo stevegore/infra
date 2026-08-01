@@ -1,0 +1,71 @@
+name: homeassistant
+
+services:
+  homeassistant-db:
+    image: mariadb:11.8.8
+    container_name: homeassistant-db
+    restart: unless-stopped
+    command: >-
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+    environment:
+      MARIADB_ROOT_PASSWORD: ${HA_DB_ROOT_PASSWORD}
+      MARIADB_DATABASE: homeassistant
+      MARIADB_USER: homeassistant
+      MARIADB_PASSWORD: ${HA_DB_PASSWORD}
+    volumes:
+      - /opt/ha-container/dbdata:/var/lib/mysql
+    ports:
+      - "127.0.0.1:3307:3306"
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 18
+      start_period: 30s
+
+  homeassistant-matter:
+    # Keep the stable channel auditable: Renovate updates the digest by PR.
+    image: ghcr.io/home-assistant-libs/python-matter-server:stable@sha256:170aa093ce91c76cde4cc390918307590f0f5558fcec93f913af3cb019e6562a
+    container_name: homeassistant-matter
+    restart: unless-stopped
+    network_mode: host
+    command:
+      - "--storage-path"
+      - "/data"
+      - "--paa-root-cert-dir"
+      - "/data/credentials"
+      - "--fabricid"
+      - "2"
+      - "--vendorid"
+      - "4939"
+    security_opt:
+      - apparmor=unconfined
+    cap_add:
+      - NET_ADMIN
+    volumes:
+      - /opt/ha-container/matter-data:/data
+      - /run/dbus:/run/dbus:ro
+
+  homeassistant:
+    image: ghcr.io/home-assistant/home-assistant:2026.7.4
+    container_name: homeassistant-app
+    restart: unless-stopped
+    network_mode: host
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    security_opt:
+      - apparmor=unconfined
+    environment:
+      TZ: Australia/Sydney
+      HA_DB_URL: ${HA_DB_URL}
+    volumes:
+      - /opt/ha-container/config:/config
+      - /run/dbus:/run/dbus
+      - /etc/localtime:/etc/localtime:ro
+    depends_on:
+      homeassistant-db:
+        condition: service_healthy
+      homeassistant-matter:
+        condition: service_started

@@ -24,49 +24,15 @@ the Portainer stack and its SQLite database are gone.
 ## Provisioning monitors and the status page
 
 Monitor config is written **straight into MySQL** by two idempotent scripts
-(`scripts/setup_uptime_kuma.py`, `scripts/setup_status_page.py`). They skip anything whose
-name already exists, so re-running is safe. `setup_uptime_kuma.py` also deactivates any
-monitor listed in `retired_monitor_names`.
+(`scripts/setup_uptime_kuma.py`, `scripts/setup_status_page.py`). ArgoCD runs them from the
+`uptime-kuma-reconcile` PostSync hook inside the VCN, using the VSO-managed `uptime-kuma-db`
+Secret. After both transactions commit, the hook deletes only the Kuma Deployment pod so its
+in-memory monitor cache reloads; the ReplicaSet recreates it. The hook's ServiceAccount has
+namespace-scoped `get`, `list`, and `delete` permission on pods and nothing else.
 
-Both scripts need a MySQL driver (`pymysql`) and VCN network access, and the Kuma image ships
-neither `pip` nor a driver — so run them from a short-lived pod in the namespace, pulling
-credentials from the existing Secret rather than passing a password by hand:
-
-```bash
-export KUBECONFIG=~/.kube/oke-homelab.config
-kubectl -n uptime-kuma create configmap kuma-setup-script \
-  --from-file=setup_uptime_kuma.py=scripts/setup_uptime_kuma.py
-
-kubectl -n uptime-kuma run kuma-setup --restart=Never --image=python:3.12-alpine \
-  --overrides='{
-    "spec": {"containers": [{
-      "name": "setup", "image": "python:3.12-alpine",
-      "command": ["sh","-c"],
-      "args": ["pip install --quiet --no-cache-dir pymysql && python /script/setup_uptime_kuma.py --host \"$DB_HOSTNAME\" --port \"$DB_PORT\" --database \"$DB_NAME\" --user \"$DB_USERNAME\" --password \"$DB_PASSWORD\""],
-      "env": [
-        {"name":"DB_HOSTNAME","valueFrom":{"secretKeyRef":{"name":"uptime-kuma-db","key":"db_hostname"}}},
-        {"name":"DB_PORT","valueFrom":{"secretKeyRef":{"name":"uptime-kuma-db","key":"db_port"}}},
-        {"name":"DB_NAME","valueFrom":{"secretKeyRef":{"name":"uptime-kuma-db","key":"db_name"}}},
-        {"name":"DB_USERNAME","valueFrom":{"secretKeyRef":{"name":"uptime-kuma-db","key":"db_username"}}},
-        {"name":"DB_PASSWORD","valueFrom":{"secretKeyRef":{"name":"uptime-kuma-db","key":"db_password"}}}
-      ],
-      "volumeMounts": [{"name":"script","mountPath":"/script"}]
-    }],
-    "volumes": [{"name":"script","configMap":{"name":"kuma-setup-script"}}]}
-  }'
-
-kubectl -n uptime-kuma logs -f kuma-setup
-kubectl -n uptime-kuma delete pod kuma-setup configmap/kuma-setup-script
-```
-
-**Kuma caches monitors in memory at startup**, so a direct DB write is not picked up until the
-pod restarts. Restart by deleting the pod (the ReplicaSet recreates it) rather than
-`kubectl rollout restart`, which mutates the Deployment spec and shows up as ArgoCD drift:
-
-```bash
-kubectl -n uptime-kuma delete pod -l app.kubernetes.io/name=uptime-kuma
-kubectl -n uptime-kuma wait --for=condition=ready pod -l app.kubernetes.io/name=uptime-kuma --timeout=180s
-```
+Changes to either setup script trigger an immediate `uptime-kuma` sync through
+`.github/workflows/argocd-sync.yml`. No laptop database route, copied secret, temporary
+ConfigMap, or imperative Deployment mutation is required.
 
 **Adding a monitor for a new service** means editing `scripts/setup_uptime_kuma.py` and
 re-running the above. Adding it to the **public** status page is a separate, deliberate step —

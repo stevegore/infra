@@ -50,7 +50,7 @@ headlamp:
 
   image:
     # Chart appVersion omits the 'v' but GHCR tags have it
-    tag: "v0.42.0"
+    tag: "v0.44.0"
     pullPolicy: IfNotPresent
 
   serviceAccount:
@@ -76,4 +76,3 @@ headlamp:
   readinessProbe:
     initialDelaySeconds: 10
     periodSeconds: 10
-

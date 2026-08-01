@@ -7,9 +7,9 @@
   ],
   "timezone": "Australia/Sydney",
   "description": [
-    "Homelab policy: everything self-merges. Breaking changes are acceptable — Uptime Kuma is the smoke test. The ONE exception is the data layer (see the 'databases' rule below), where a bad major is painful to unwind.",
+    "Homelab policy: routine updates self-merge after CI. Data stores, Home Assistant runtimes, critical platform majors, and custom-image rebuilds require manual review because rollback is stateful or coordinated.",
     "No managerFilePatterns overrides here on purpose: Renovate MERGES those with its defaults rather than replacing them, so narrowing to apps/ and pico/ would have added nothing while implying a restriction that does not exist. The defaults already cover apps/*/Chart.yaml, apps/*/values.yaml, pico/*/compose.yaml, cilium/Chart.yaml, terraform/*.tf and .github/workflows/*.",
-    "ignoreTests is required, not optional: this repo has no CI on the Renovate branches, and GitHub reports a combined commit status of 'pending' when a branch has ZERO checks (not 'success'). Renovate will not automerge a non-green branch, so without this nothing self-merges — the first forced run opened 22 automergeable PRs and merged none of them. platformAutomerge also cannot arm here (GitHub rejects enabling auto-merge on an already-mergeable PR with no required checks), so Renovate merges directly instead.",
+    "Renovate branches are validated by the infrastructure CI workflow before automerge. Helm archives are never committed: CI and ArgoCD rebuild the exact dependencies in Chart.lock, preventing a stale charts/*.tgz from shadowing a version bump.",
     "rebaseWhen is 'conflicted', not 'behind-base-branch'. With behind-base-branch, every merge left the remaining branches behind main, so Renovate had to rebase them and could only merge them on a LATER run — the queue drained about 2 PRs per run instead of all at once. These PRs touch disjoint files (one values.yaml or compose.yaml each), so they do not actually conflict, and main has no branch protection requiring an up-to-date branch. 'conflicted' rebases only on a real conflict and lets the rest merge immediately."
   ],
   "schedule": [
@@ -21,7 +21,8 @@
   "automerge": true,
   "automergeType": "pr",
   "platformAutomerge": true,
-  "ignoreTests": true,
+  "ignoreTests": false,
+  "pinDigests": true,
   "automergeSchedule": [
     "after 1am and before 6am"
   ],
@@ -45,6 +46,17 @@
       ],
       "datasourceTemplate": "docker",
       "versioningTemplate": "docker"
+    },
+    {
+      "description": "Pinned ArgoCD upstream manifest release used by bootstrap and upgrades.",
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/^bootstrap/argocd-init\\.sh$/"
+      ],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>[^ ]+) depName=(?<depName>[^\\n]+)\\nARGOCD_VERSION=\\\"(?<currentValue>[^\\\"]+)\\\""
+      ],
+      "versioningTemplate": "semver"
     }
   ],
   "packageRules": [
@@ -86,9 +98,53 @@
       "enabled": false
     },
     {
-      "description": "3. Floating tags (:latest, :release, :buildx-stable-1). Nothing for Renovate to bump — these refresh when Portainer force-pulls on its redeploy cycle. Muted so they do not sit on the dashboard forever.",
+      "description": "3. Floating tags are pinned to their current digest so every deployment receives an auditable Git change.",
       "matchCurrentValue": "/^(latest|release|stable|main|edge)$/",
-      "enabled": false
+      "pinDigests": true
+    },
+    {
+      "description": "Home Assistant runtime updates require a verified backup and migration review.",
+      "matchPackageNames": [
+        "ghcr.io/home-assistant/home-assistant",
+        "ghcr.io/home-assistant-libs/python-matter-server"
+      ],
+      "automerge": false,
+      "addLabels": [
+        "home-assistant",
+        "manual-review"
+      ],
+      "prPriority": 20
+    },
+    {
+      "description": "Critical platform major upgrades require manual review.",
+      "matchPackageNames": [
+        "hashicorp/vault",
+        "hashicorp/vault-secrets-operator",
+        "cilium/cilium",
+        "tailscale/tailscale-operator",
+        "goauthentik/authentik"
+      ],
+      "matchUpdateTypes": [
+        "major"
+      ],
+      "automerge": false,
+      "addLabels": [
+        "critical",
+        "manual-review"
+      ],
+      "prPriority": 20
+    },
+    {
+      "description": "ArgoCD upgrades are manual because it reconciles the rest of the platform.",
+      "matchPackageNames": [
+        "argoproj/argo-cd"
+      ],
+      "automerge": false,
+      "addLabels": [
+        "critical",
+        "manual-review"
+      ],
+      "prPriority": 20
     },
     {
       "description": "4. Kubernetes-adjacent images carry ordering constraints with the OKE control plane (currently v1.36.x). Group them so kubectl/iptables/etc. move together in one PR rather than racing each other.",
@@ -127,6 +183,16 @@
       ],
       "prBodyNotes": [
         ":warning: Merging this is **not** enough. Rebuild and push the image, then bump `image.tag` in `apps/caddy/values.yaml`:\n```\ndocker buildx build --platform linux/arm64 \\\n  -t syd.ocir.io/sdajdczqv0qo/caddy:<new-tag> --push apps/caddy/\n```"
+      ]
+    },
+    {
+      "description": "8. The Garmin MCP Dockerfile is a self-built image. Its base-image updates need a manual image rebuild and deployment tag bump.",
+      "matchFileNames": [
+        "images/garmin-mcp/Dockerfile"
+      ],
+      "automerge": false,
+      "addLabels": [
+        "needs-rebuild"
       ]
     }
   ]

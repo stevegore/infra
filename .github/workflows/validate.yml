@@ -1,0 +1,41 @@
+name: Validate infrastructure
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  manifests:
+    name: Helm and Compose
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: azure/setup-helm@v4
+        with:
+          # ArgoCD currently renders with Helm 3. Helm 4 dependency build has
+          # an Authentik repository regression, so validate the same contract.
+          version: v3.21.0
+      - name: Validate version-controlled deployment artifacts
+        run: scripts/validate-version-upgrades.sh
+
+  terraform:
+    name: Terraform
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: terraform
+    steps:
+      - uses: actions/checkout@v7
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.15.8
+      - name: Check formatting
+        run: terraform fmt -check -recursive
+      - name: Initialize without remote state
+        run: terraform init -backend=false -input=false
+      - name: Validate configuration
+        run: terraform validate

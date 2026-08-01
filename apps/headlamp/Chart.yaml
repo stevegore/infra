@@ -3,10 +3,9 @@ name: headlamp
 description: Headlamp Kubernetes web-based dashboard
 type: application
 version: 1.0.0
-appVersion: "0.42.0"
+appVersion: "0.44.0"
 dependencies:
   - name: headlamp
     version: "0.44.0"
     repository: "https://kubernetes-sigs.github.io/headlamp/"
-
 

@@ -1,0 +1,146 @@
+{{- if and .Values.mysql.enabled .Values.reconcile.enabled }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "uptime-kuma.fullname" . }}-reconciler
+  namespace: {{ .Release.Namespace }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "uptime-kuma.fullname" . }}-reconciler
+  namespace: {{ .Release.Namespace }}
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "uptime-kuma.fullname" . }}-reconciler
+  namespace: {{ .Release.Namespace }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "uptime-kuma.fullname" . }}-reconciler
+    namespace: {{ .Release.Namespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "uptime-kuma.fullname" . }}-reconciler
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "uptime-kuma.fullname" . }}-reconcile
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation,HookSucceeded
+spec:
+  backoffLimit: 2
+  activeDeadlineSeconds: 300
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: reconciler
+    spec:
+      restartPolicy: Never
+      serviceAccountName: {{ include "uptime-kuma.fullname" . }}-reconciler
+      containers:
+        - name: reconcile
+          image: {{ .Values.reconcile.image | quote }}
+          imagePullPolicy: IfNotPresent
+          command: ["sh", "-ec"]
+          args:
+            - |
+              pip install --quiet --no-cache-dir "pymysql=={{ .Values.reconcile.pymysqlVersion }}"
+              python - <<'PY'
+              import io
+              import os
+              import pathlib
+              import ssl
+              import subprocess
+              import tarfile
+              import urllib.parse
+              import urllib.request
+
+              archive_url = "https://github.com/smlbiobot/infra/archive/refs/heads/main.tar.gz"
+              with urllib.request.urlopen(archive_url, timeout=60) as response:
+                  payload = response.read()
+              with tarfile.open(fileobj=io.BytesIO(payload), mode="r:gz") as archive:
+                  archive.extractall("/tmp/infra")
+
+              checkout = next(pathlib.Path("/tmp/infra").glob("infra-*"))
+              for script in ("setup_uptime_kuma.py", "setup_status_page.py"):
+                  subprocess.run(
+                      ["python", str(checkout / "scripts" / script)],
+                      check=True,
+                  )
+
+              # Kuma caches monitors in memory. Restart its Deployment pod only
+              # after both transactions commit; the ReplicaSet recreates it.
+              namespace = pathlib.Path(
+                  "/var/run/secrets/kubernetes.io/serviceaccount/namespace"
+              ).read_text().strip()
+              token = pathlib.Path(
+                  "/var/run/secrets/kubernetes.io/serviceaccount/token"
+              ).read_text().strip()
+              ca_file = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
+              api = "https://{}:{}".format(
+                  os.environ["KUBERNETES_SERVICE_HOST"],
+                  os.environ["KUBERNETES_SERVICE_PORT_HTTPS"],
+              )
+              selector = urllib.parse.quote("app.kubernetes.io/name=uptime-kuma")
+              list_url = f"{api}/api/v1/namespaces/{namespace}/pods?labelSelector={selector}"
+              headers = {"Authorization": f"Bearer {token}"}
+              request = urllib.request.Request(list_url, headers=headers)
+              context = ssl.create_default_context(cafile=ca_file)
+              with urllib.request.urlopen(request, context=context, timeout=30) as response:
+                  import json
+                  pods = json.load(response)["items"]
+              if not pods:
+                  raise RuntimeError("no Uptime Kuma pod found to restart")
+              for pod in pods:
+                  name = pod["metadata"]["name"]
+                  delete_url = f"{api}/api/v1/namespaces/{namespace}/pods/{name}"
+                  request = urllib.request.Request(
+                      delete_url, headers=headers, method="DELETE"
+                  )
+                  with urllib.request.urlopen(request, context=context, timeout=30):
+                      print(f"Restart requested for {name}")
+              PY
+          env:
+            - name: UPTIME_KUMA_DB_HOST
+              valueFrom:
+                secretKeyRef:
+                  name: uptime-kuma-db
+                  key: db_hostname
+            - name: UPTIME_KUMA_DB_PORT
+              valueFrom:
+                secretKeyRef:
+                  name: uptime-kuma-db
+                  key: db_port
+            - name: UPTIME_KUMA_DB_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: uptime-kuma-db
+                  key: db_name
+            - name: UPTIME_KUMA_DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: uptime-kuma-db
+                  key: db_username
+            - name: UPTIME_KUMA_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: uptime-kuma-db
+                  key: db_password
+          resources:
+            requests:
+              cpu: 25m
+              memory: 64Mi
+            limits:
+              cpu: 250m
+              memory: 256Mi
+{{- end }}

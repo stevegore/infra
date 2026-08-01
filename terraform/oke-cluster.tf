@@ -11,9 +11,9 @@ variable "oke_kubernetes_version" {
 }
 
 variable "oke_node_image_ocid" {
-  description = "OKE-prebuilt ARM image OCID matching var.oke_kubernetes_version. Currently: Oracle-Linux-8.10-aarch64-2026.06.15-0-OKE-1.36.1-1505. Re-query via: oci ce node-pool-options get --node-pool-option-id all --query 'data.sources[?contains(\"source-name\", `OKE-1.36.1`)]'"
+  description = "OKE-prebuilt ARM image OCID matching var.oke_kubernetes_version. Currently: Oracle-Linux-8.10-aarch64-2026.07.20-0-OKE-1.36.1-1578. Re-query via: oci ce node-pool-options get --node-pool-option-id all --query 'data.sources[?contains(\"source-name\", `OKE-1.36.1`)]'"
   type        = string
-  default     = "ocid1.image.oc1.ap-sydney-1.aaaaaaaar3qfio6v3bjh5vpl4h26ebqgjblg7gvepng2kh7puhuick3hmrxq"
+  default     = "ocid1.image.oc1.ap-sydney-1.aaaaaaaailgymkxxie56hvo5akvvo3vbduq273wnztweemowkyjemo7kpzaq"
 }
 
 resource "oci_containerengine_cluster" "homelab" {

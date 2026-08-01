@@ -16,19 +16,24 @@
 #     silently never applied. This is the change that makes "auto-update
 #     everything" actually true for apt.
 #
-#  2. apt: reclaim disk. Remove-Unused-Kernel-Packages and
+#  2. apt: permit the signed Tailscale stable repository. Tailscale is pico's
+#     recovery/control path, so leaving it outside unattended-upgrades created
+#     a permanent patch-level gap even while Ubuntu packages stayed current.
+#     Other desktop/vendor repositories remain manual by design.
+#
+#  3. apt: reclaim disk. Remove-Unused-Kernel-Packages and
 #     Remove-Unused-Dependencies. pico had 4 kernel images installed and its
 #     root filesystem is at 88%; unattended kernel upgrades without cleanup
 #     fill /boot and then fail.
 #
-#  3. apt: automatic reboot at 05:00. A reboot has been pending since well
+#  4. apt: automatic reboot at 05:00. A reboot has been pending since well
 #     before this script existed, which means kernel and libc updates were
 #     being installed but never taking effect. 05:00 is after the Home
 #     Assistant update automation's 04:00 run. Verified safe: pico has no LUKS
 #     or crypttab entries, so an unattended boot will not hang on a passphrase
 #     prompt with no remote recovery path.
 #
-#  4. docker: weekly image + build-cache prune. This one exists BECAUSE of the
+#  5. docker: weekly image + build-cache prune. This one exists BECAUSE of the
 #     rest of the auto-update pipeline. Renovate bumps image tags and Portainer
 #     force-pulls on redeploy, so every update leaves the old image behind. At
 #     install time pico was already holding 20.6 GB of reclaimable images and
@@ -67,6 +72,13 @@ Unattended-Upgrade::Allowed-Origins {
     "${distro_id}:${distro_codename}-updates";
     "${distro_id}ESMApps:${distro_codename}-apps-security";
     "${distro_id}ESM:${distro_codename}-infra-security";
+};
+
+// Tailscale is intentionally the only third-party origin allowed unattended:
+// it is pico's remote recovery path. Docker currently has no configured apt
+// repository on pico; Code, Brave and other workstation packages stay manual.
+Unattended-Upgrade::Origins-Pattern {
+    "origin=Tailscale,codename=${distro_codename},label=Tailscale";
 };
 
 // Keep the root filesystem from filling: drop superseded kernels and

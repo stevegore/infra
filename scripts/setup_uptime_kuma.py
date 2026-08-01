@@ -61,7 +61,10 @@ ACCEPT_302       = '["302"]'
 ACCEPT_VAULT     = '["200-299","429","473","501","503"]'
 
 retired_monitor_names = {
+    "Gym Bookings (direct)",
     "Ping ampere-ubuntu (WG)",
+    "PhotoPrism",
+    "StravaKeeper",
 }
 
 monitors = [
@@ -102,11 +105,9 @@ monitors = [
     {"name": "Duplicati",           "type": "http", "kwargs": {"url": "http://pico:8200/",                     "maxredirects": 0, "accepted_statuscodes_json": ACCEPT_OK_REDIR}, "tags": ["internal", "infra"]},
     {"name": "Stirling PDF (direct)","type":"http", "kwargs": {"url": "http://pico:8083/",                     "maxredirects": 5, "accepted_statuscodes_json": ACCEPT_OK},       "tags": ["internal"]},
     {"name": "StravaBot",           "type": "port", "kwargs": {"hostname": "pico", "port": 8082},                                                                                "tags": ["internal"]},
-    {"name": "StravaKeeper",        "type": "http", "kwargs": {"url": "http://pico:8180/",                     "maxredirects": 0, "accepted_statuscodes_json": ACCEPT_OK_REDIR}, "tags": ["internal"]},
     {"name": "Immich (direct)",     "type": "http", "kwargs": {"url": "http://pico:2283/api/server/ping",      "maxredirects": 0, "accepted_statuscodes_json": ACCEPT_OK,        "keyword": "pong"}, "tags": ["internal", "photos"], "aliases": ["Immich (local)"]},
     {"name": "Huginn (direct)",     "type": "http", "kwargs": {"url": "http://pico:3000/",                     "maxredirects": 5, "accepted_statuscodes_json": ACCEPT_OK},       "tags": ["internal"],           "aliases": ["Huginn (local)"]},
     {"name": "Homepage (direct)",   "type": "http", "kwargs": {"url": "http://pico:8080/",                     "maxredirects": 0, "accepted_statuscodes_json": ACCEPT_OK},       "tags": ["internal", "infra"],  "aliases": ["Homepage (local)"]},
-    {"name": "Gym Bookings (direct)","type":"http", "kwargs": {"url": "http://pico:8112/",                     "maxredirects": 5, "accepted_statuscodes_json": ACCEPT_OK_REDIR}, "tags": ["internal"],           "aliases": ["GymBooking"]},
     {"name": "NuraSpace",           "type": "http", "kwargs": {"url": "http://pico:8111/",                     "maxredirects": 5, "accepted_statuscodes_json": ACCEPT_OK_REDIR}, "tags": ["internal"]},
     {"name": "Portainer (direct)",  "type": "http", "kwargs": {"url": "http://pico:9000/",                     "maxredirects": 5, "accepted_statuscodes_json": ACCEPT_OK_REDIR}, "tags": ["internal", "infra"],  "aliases": ["Portainer (local)"]},
     {"name": "phpMyAdmin",          "type": "http", "kwargs": {"url": "http://pico:3011/",                     "maxredirects": 5, "accepted_statuscodes_json": ACCEPT_OK_REDIR}, "tags": ["internal", "infra"]},
