@@ -79,6 +79,26 @@ branches).
 Alternatively install the [Mend Renovate app](https://github.com/apps/renovate)
 and delete the workflow; `renovate.json` is read identically either way.
 
+### Throughput: ~2 PRs per run
+
+Renovate merges **at most 2 PRs per run**, by design. After an automerge the base
+branch has moved, so it logs `Restarting repository job after automerge result`
+and re-runs — but only once, then finishes. A backlog of 20 PRs therefore takes
+about 10 runs, i.e. ~10 nights on the normal schedule.
+
+That is fine for steady state (a handful of updates a night drains immediately),
+but to clear a backlog now, either dispatch repeatedly with `ignoreSchedule`, or
+merge the already-approved ones directly — identical outcome, since these are PRs
+the config has already classified as automerge:
+
+```bash
+gh pr list --repo stevegore/infra --limit 60 --json number,labels \
+  -q '.[] | select((([.labels[].name]|index("database")) or ([.labels[].name]|index("needs-rebuild"))) | not) | .number' \
+  | xargs -I{} gh pr merge {} --repo stevegore/infra --squash --delete-branch
+```
+
+The label filter is what keeps the database and caddy hold-backs out of it.
+
 ### Watching it
 
 - Dependency dashboard: the repo issue titled **"Renovate: homelab update dashboard"**
