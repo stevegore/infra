@@ -61,7 +61,7 @@ curl -s -X POST http://pico.local:9000/api/endpoints/1/docker/exec/$EXEC_ID/star
 2. [sonarrradarrjackett](#sonarrradarrjackett) - Media automation (TV/Movies/Indexers)  
 3. [plex](#plex) - Media server  
 4. [owncloud](#owncloud) - Cloud storage (stopped)  
-5. [stevegore-au](#stevegore-au) - Web terminal and utilities (stopped — migrated to OKE)  
+5. [stevegore-au](#stevegore-au) - Web terminal (**removed 2026-08-01** — runs only on OKE now)  
 6. [photoprism](#photoprism) - Photo management with AI (**decommissioned** — superseded by Immich)  
 7. [huggin](#huggin) - Task automation  
 8. [nuraspace2](#nuraspace2) - NuraSpace application  
@@ -541,12 +541,19 @@ services:
 
 ### stevegore-au
 
-**Status:** Stopped (migrated to OKE 2026-06-03)  
-**Stack ID:** 29  
-**Project Path:** `/data/compose/29`  
+> **REMOVED 2026-08-01.** The stack is deleted from Portainer and its
+> `pico/stevegore-au/` directory is gone from the repo. ttyd now runs **only on
+> OKE** (`apps/ttyd`), where it has the CiliumNetworkPolicy, the egress-lockdown
+> init container and dropped capabilities that this copy never had.
+>
+> It was previously only *stopped*, which turned out not to be enough: its
+> containers were `restart: always`, so a host reboot brought the writable shell
+> back up on `:8788`. Deleting the stack is what makes it stick. The section
+> below is kept for history — do not redeploy it.
+
+**Status:** Removed (was stopped 2026-06-03 on migration to OKE; deleted 2026-08-01)  
+**Stack ID:** 29 (later 77 after the git conversion; now gone)  
 **Compose Version:** v2  
-**Public:** Yes (Portainer resource control set to public)  
-**Last Updated:** 2026-06-03  
 **Created:** 2023-07-06
 
 **Containers:**
