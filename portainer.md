@@ -275,7 +275,7 @@ networks:
 
 **Download client categories:** Radarr uses category `radarr`, Sonarr uses category `sonarr` — completed downloads land in `/var/lib/transmission/completed/<category>/`
 
-**Jackett indexers:** 1337x, EZTV, TPB, kickasstorrents-to, kickasstorrents-ws, YTS, TorrentGalaxy, Nyaa.si, torrentproject2  
+**Jackett indexers:** 1337x, EZTV (configured but Cloudflare-blocked — see below), TPB, kickasstorrents-to, kickasstorrents-ws, YTS, TorrentGalaxy, Nyaa.si, torrentproject2  
 **FlareSolverr URL:** `http://flaresolverr:8191` (configured in Jackett ServerConfig.json)
 
 > **LimeTorrents was removed 2026-07-31** (Jackett + Sonarr) after it served six
@@ -284,7 +284,12 @@ networks:
 > from Jackett at some point, so every query returned `500 Unknown indexer`.
 
 **Radarr indexers (8):** 1337x, ETTV, TPB, kickasstorrents.to, kickasstorrents.ws, YTS, TorrentGalaxy, Nyaa.si  
-**Sonarr indexers (7):** 1337x, EZTV, TPB, kickasstorrents.to, kickasstorrents.ws, TorrentGalaxy, Nyaa.si
+**Sonarr indexers (7):** 1337x, ~~EZTV~~ (disabled 2026-08-01), TPB, kickasstorrents.to, kickasstorrents.ws, TorrentGalaxy, Nyaa.si
+
+> **EZTV was disabled in Sonarr 2026-08-01** (indexer id 4 — `enableRss`,
+> `enableAutomaticSearch` and `enableInteractiveSearch` all set to `false`; the
+> indexer is retained, not deleted, so it can be re-enabled with one API call).
+> See [EZTV Cloudflare lockout](#eztv-cloudflare-lockout-2026-08-01).
 
 **Indexer hygiene (set 2026-07-31, both Sonarr and Radarr):**
 
@@ -353,6 +358,72 @@ rather run it from systemd — `sudo cp` both into `/etc/systemd/system/`,
 `systemctl enable --now arr-malware-watchdog.timer`, then drop the cron line.
 Cron was used initially only because enabling the timer needs sudo and
 `Linger=no` rules out a user-level timer.
+
+#### EZTV Cloudflare lockout (2026-08-01)
+
+**Symptom.** Every Jackett search touching EZTV stalled ~60s and returned
+nothing: `Exception (eztv): TaskCanceledException ... HttpClient.Timeout of 60
+seconds elapsing`. Six occurrences in 24h.
+
+**The error is misleading.** The bottom frame of the stack trace is
+`FlareSolverrSharp.Solvers.FlareSolverr.SendFlareSolverrRequest` — the timeout is
+Jackett waiting on **FlareSolverr**, not on EZTV. FlareSolverr reaches EZTV fine,
+detects `Just a moment...`, and gives up after its 55s `FlareSolverrMaxTimeout`.
+
+**It is EZTV-specific, not a broken FlareSolverr.** Over 24h FlareSolverr solved
+72 of 76 challenges; 4 of the 5 failures were `eztvx.to` and EZTV was at a **100%
+failure rate (4/4)**. Every mirror in the Jackett definition — `eztvx.to`,
+`eztv.wf`, `eztv.tf`, plus `eztv1.xyz` — returns `HTTP 403` with
+`cf-mitigated: challenge`, so changing the Site Link does not help.
+
+**Byparr was evaluated and rejected (2026-08-01).** `ghcr.io/thephaseless/byparr`
+2.1.0, run as a throwaway container on `:8192`:
+
+| Target | reported | HTTP | body | `cf-mitigated` |
+| --- | --- | --- | --- | --- |
+| `eztvx.to/home` ×4 | `ok` / "Success" | 200 | **0 bytes** | `challenge` |
+| `1337x.to/home` | `ok` | 200 | real HTML | — |
+| `example.com` | `ok` | 200 | real HTML | — |
+
+Byparr reports `status: ok` on EZTV but the body is empty every time and
+`cf-mitigated: challenge` persists — a **false positive**. It does hand back a
+`cf_clearance` cookie scoped to `.eztvx.to`, but replaying it with curl still
+gets a 403 (weak evidence on its own, since `cf_clearance` is TLS-fingerprint
+bound — the empty body is the hard blocker; Jackett has nothing to parse). The
+1337x control is what makes this conclusive: **Byparr returns real HTML from
+1337x under the same `content-encoding: zstd`**, so this is not a deployment
+fault or a zstd decoding bug. EZTV defeats both solvers. `compose.yaml` was left
+unchanged.
+
+**EZTV's API and RSS are not behind Cloudflare at all.** Plain curl, no solver:
+
+```
+/api/get-torrents?limit=10  -> HTTP 200, 8.3 KB JSON, torrents_count 1069599
+/ezrss.xml                  -> HTTP 200, 49 KB, 30 items
+/home                       -> HTTP 403, cf-mitigated: challenge   <- what Jackett scrapes
+```
+
+Only the HTML site is gated. Jackett's bundled `eztv.yml` is an HTML scraper
+(`paths: search/{{ .Keywords }}` else `home`, parsing `table.forum_header_border`),
+so it hits the one protected surface. **The catch:** the API has no free-text
+search — `?imdb_id=11280740` works (140 Severance results) but `?query=severance`
+is silently ignored and returns the global latest list. A custom API-backed
+definition would only serve IMDb-ID lookups; `ezrss.xml` gives the latest 30 and
+nothing else. Not attempted yet.
+
+**Applied 2026-08-01:**
+
+1. EZTV **disabled in Sonarr** (indexer id 4, all three enable flags `false`).
+   Retained rather than deleted so it is one API call to restore.
+2. Jackett `eztv.json` cleaned — a dead `cf_clearance` cookie dated **2026-07-18**
+   (568 chars) and a 4,844-char stale `lasterror` stack trace were cleared.
+   Jackett was stopped for the edit so it could not rewrite the file on shutdown.
+   Backup at `/tmp/eztv.json.bak` on pico; note Jackett also keeps its own
+   `eztv.json.bak`, which still holds the old cookie until Jackett rotates it.
+3. Radarr needed no change — it carries **ETTV**, a different site, not EZTV.
+
+**Do not** re-enable EZTV expecting it to work until either Cloudflare is relaxed
+upstream or an API-backed definition is built.
 
 #### Pushover alerting
 
