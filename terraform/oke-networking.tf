@@ -8,16 +8,16 @@
 # kubectl from pico/Mac can reach the apiserver; NSG below restricts access
 # to the home IP plus the worker NSG.
 resource "oci_core_subnet" "oke_api_endpoint" {
-  compartment_id      = var.compartment_ocid
-  vcn_id              = oci_core_vcn.export_nebula.id
-  cidr_block          = "10.0.2.0/28"
-  display_name        = "oke-api-endpoint"
-  dns_label           = "okeapi"
-  route_table_id      = oci_core_default_route_table.export_Default-Route-Table-for-nebula.id
-  security_list_ids   = [oci_core_vcn.export_nebula.default_security_list_id]
-  dhcp_options_id     = oci_core_default_dhcp_options.export_Default-DHCP-Options-for-nebula.id
-  prohibit_internet_ingress    = false
-  prohibit_public_ip_on_vnic   = false
+  compartment_id             = var.compartment_ocid
+  vcn_id                     = oci_core_vcn.export_nebula.id
+  cidr_block                 = "10.0.2.0/28"
+  display_name               = "oke-api-endpoint"
+  dns_label                  = "okeapi"
+  route_table_id             = oci_core_default_route_table.export_Default-Route-Table-for-nebula.id
+  security_list_ids          = [oci_core_vcn.export_nebula.default_security_list_id]
+  dhcp_options_id            = oci_core_default_dhcp_options.export_Default-DHCP-Options-for-nebula.id
+  prohibit_internet_ingress  = false
+  prohibit_public_ip_on_vnic = false
 }
 
 # ---- API endpoint NSG ---------------------------------------------------

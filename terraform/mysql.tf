@@ -126,7 +126,7 @@ output "mysql_admin_username" {
 }
 
 output "mysql_admin_password" {
-  value     = random_password.mysql_admin.result
-  sensitive = true
+  value       = random_password.mysql_admin.result
+  sensitive   = true
   description = "Pull via: terraform output -raw mysql_admin_password (state must be activated locally first)"
 }

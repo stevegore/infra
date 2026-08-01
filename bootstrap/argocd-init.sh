@@ -26,6 +26,8 @@ OKE_CLUSTER_ID="ocid1.cluster.oc1.ap-sydney-1.aaaaaaaayyadaznxbxlzv7qz6drid3w3er
 REGION="ap-sydney-1"
 KUBECONFIG_PATH="$HOME/.kube/oke-homelab.config"
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+# renovate: datasource=github-releases depName=argoproj/argo-cd
+ARGOCD_VERSION="v3.4.3"
 
 log()  { printf '\n\033[1;34m==> %s\033[0m\n' "$*"; }
 skip() { printf '    \033[2m· %s\033[0m\n' "$*"; }
@@ -49,15 +51,19 @@ echo "✓ kubeconfig written"
 # ---------- 2. ArgoCD ----------
 log "ArgoCD"
 kubectl create namespace argocd --dry-run=client -o yaml | kubectl apply -f -
-if ! kubectl get deploy -n argocd argocd-server >/dev/null 2>&1; then
-  ARGOCD_VER=$(curl -fsSL https://api.github.com/repos/argoproj/argo-cd/releases/latest | \
-    grep '"tag_name"' | head -1 | cut -d'"' -f4)
+CURRENT_ARGOCD_VERSION=$(
+  kubectl get deploy -n argocd argocd-server \
+    -o jsonpath='{.spec.template.spec.containers[0].image}' 2>/dev/null \
+    | sed 's/.*://' || true
+)
+if [[ "$CURRENT_ARGOCD_VERSION" != "$ARGOCD_VERSION" ]]; then
+  echo "    reconciling ArgoCD ${CURRENT_ARGOCD_VERSION:-not-installed} -> ${ARGOCD_VERSION}"
   kubectl apply -n argocd \
-    -f "https://raw.githubusercontent.com/argoproj/argo-cd/${ARGOCD_VER}/manifests/install.yaml"
+    -f "https://raw.githubusercontent.com/argoproj/argo-cd/${ARGOCD_VERSION}/manifests/install.yaml"
   echo "    waiting for argocd-server..."
   kubectl rollout status -n argocd deploy/argocd-server --timeout=5m
 else
-  skip "argocd-server already deployed"
+  skip "argocd-server already at ${ARGOCD_VERSION}"
 fi
 
 # Cilium generic-veth sees OKE/Flannel kubelet probes as traffic from cni0's

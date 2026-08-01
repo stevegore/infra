@@ -85,9 +85,7 @@ GROUPS = [
         "Desk Service",
         "NuraSpace",
         "Gym Bookings",
-        "Gym Bookings (direct)",
         "Strava Service",
-        "StravaKeeper",
         "StravaBot",
     ]),
     ("Hosts", [
