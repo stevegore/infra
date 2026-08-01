@@ -110,7 +110,9 @@ login. Three ways in:
    → redirects to Authentik → GitHub SSO → back to Vault with the `admin` policy.
    Restricted to Steve by the `allow-stevegore-github` policy on the Vault app.
 2. **Userpass** — method **Username**, user `steve` (policy `admin`).
-3. **Token** — root token in `~/Code/Personal/infra/vault-root.token` (break-glass).
+3. **Token** — root token in `~/Code/Personal/infra/vault-root.token`, mode `600`
+   (break-glass; gitignored via `*.token`, never committed). Also in Vaultwarden —
+   see [Where the break-glass credentials live](#where-the-break-glass-credentials-live).
 
 > Replaced the old caddy-security `caddy-user`/`caddy-admin` JWT method (gone
 > with caddy-security on 2026-06-02) — that path no longer exists.
@@ -426,6 +428,54 @@ Vault data is stored in OCI Object Storage bucket `vault-storage` with versionin
 2. Reinstall Vault from ArgoCD
 3. Vault auto-unseals using OCI KMS
 4. Data restored from Object Storage
+
+**This sequence needs no Vault token, which is the point.** `auth/kubernetes/config`
+is self-discovering — `kubernetes_host = https://kubernetes.default.svc`,
+`disable_local_ca_jwt = false`, no pinned CA cert and no reviewer JWT — so Vault
+re-derives cluster auth against whatever cluster it lands in. A from-scratch rebuild
+therefore bootstraps itself: Vault starts → OCI KMS unseals it → k8s auth works
+untouched → VSO syncs every secret → the apps that hold your credentials come back.
+There is no chicken-and-egg problem, provided the KMS key and the bucket survive.
+
+### The single point of failure is the KMS key
+
+The recovery shares **cannot unseal this Vault** — with `seal "ocikms"` they only
+re-root a Vault that is already unsealing itself. Everything in `vault-storage` is
+encrypted under the master key, which is encrypted under OCI KMS key
+`vault-auto-unseal`. Lose that key and the bucket is permanently undecryptable, with
+or without recovery shares. It is `protection_mode = "HSM"`, so the raw material can
+never leave OCI — there is no offline copy and no way to make one.
+
+Guards in place: `prevent_destroy` on both `oci_kms_vault` and `oci_kms_key` in
+[`terraform/kms.tf`](terraform/kms.tf) (added 2026-08-01), plus OCI's own
+scheduled-deletion window. Note `kms.tf` is Resource-Discovery-generated — if that
+file ever gets regenerated, **re-add the lifecycle blocks**.
+
+Not yet done: `oci kms management key backup --key-id <ocid> --endpoint <mgmt-endpoint>`
+does support HSM-protected keys (vault-level backup does *not* apply here — that
+needs a virtual private vault, and this one is `vault_type = "DEFAULT"`). A key
+backup restores only back into OCI, so it protects against key deletion, not against
+loss of the tenancy.
+
+### Where the break-glass credentials live
+
+Root token and recovery share are both in the Vaultwarden entry for Vault. *(The item
+name is deliberately not recorded here — this repo is public.)* Two consequences worth
+understanding:
+
+- **Same blast radius.** One item holds both factors, so a single loss takes out both.
+  The mitigating fact is that `userpass/steve` and OIDC both carry the `admin` policy
+  (`path "*"` with `sudo`), which does everything the root token does — so losing both
+  is recoverable as long as one admin login works.
+- **Vaultwarden's database is MySQL HeatWave, not pg-shared** — the CNPG daily backups
+  do *not* cover it. The HeatWave system is a `MySQL.Free` shape, whose backup policy
+  is `retention-in-days: 1` with PITR disabled and soft-delete disabled, and per
+  [`terraform/mysql.tf`](terraform/mysql.tf) that is a platform constraint, not a
+  setting we chose. Recovery window for anything stored only in Vaultwarden is
+  therefore **24 hours**.
+
+Keeping a copy of the recovery share outside that loop — offline, or in a second
+password manager — is the cheap fix, and is worth more than any amount of rekeying.
 
 ### Root Token Recovery
 
