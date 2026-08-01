@@ -60,6 +60,29 @@ install got them implicitly by running the Core container **privileged**.
 | `NET_ADMIN` + `NET_RAW` | HA logs this requirement explicitly for Bluetooth adapter management. |
 | `network_mode: host` | mDNS/SSDP discovery (LIFX, Sonos, Cast, WebOS, Brother, upnp) and the HomeKit bridge on `:21063`. |
 | `recorder.db_url: !env_var HA_DB_URL` | Keeps the DB password out of `configuration.yaml`. If this config is ever restored elsewhere, that env var **must** be set or the recorder won't start. |
+| `recorder.db_max_retries: 30` | Boot-race protection — see below. |
+
+### The boot race (found by testing, 2026-08-01)
+
+Docker **ignores compose `depends_on` when the daemon starts at boot** — it just
+restarts containers per their restart policy, in no particular order. So
+`homeassistant-app` can come up before `homeassistant-db` is accepting
+connections.
+
+Recorder's default is 10 retries × 3s ≈ **30 seconds**, after which it gives up
+**permanently**: `recorder`, `history`, `logbook`, `energy` and
+`usage_prediction` all fail to set up. HA keeps running and still serves HTTP
+200, so the failure is **silent** — you'd only notice when history was missing.
+Starting the database afterwards does **not** recover it; only an HA restart does.
+
+Verified by holding the DB down for 60s while HA started: with the defaults, all
+five integrations were permanently dead. With `db_max_retries: 30`
+(≈90s of retries) the same test logged 21 retries and then connected cleanly,
+with 0 setup failures.
+
+30s would usually be enough at a real boot, but MariaDB doing InnoDB recovery
+after an unclean shutdown can easily exceed it — which is exactly the case where
+a reboot would silently cost you history.
 
 ## MCP servers
 
