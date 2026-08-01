@@ -437,6 +437,83 @@ vault operator generate-root -otp=<otp>
 # Enter recovery key shares when prompted
 ```
 
+> **Vault 2.0 change — this is no longer a pure break-glass path.** `sys/generate-root`,
+> `sys/rekey` and the DR operation-token endpoints now require **both** recovery key
+> shares **and** a valid Vault token. With `Total Recovery Shares 1` that means the
+> recovery key alone will not get you back in. Working alternates, in order: the OIDC
+> login (`vault login -method=oidc role=default`, Authentik → `admin` policy), then
+> `userpass/`. If every token path is dead, the escape hatch is the
+> `enable_unauthenticated_access` config parameter, which restores 1.x behaviour —
+> that requires editing `standalone.config` in `apps/vault/values.yaml` and rolling
+> the pod, which is possible without a Vault token.
+
+---
+
+## Upgrades
+
+**Vault version is pinned in two places** — `apps/vault/values.yaml`
+(`vault.server.image.tag`, the one that matters) and `apps/vault/Chart.yaml`
+(`appVersion`, cosmetic). Keep them in step. Renovate raises the tag bump; the
+`critical` + `manual-review` labels mean it never automerges.
+
+**The StatefulSet uses `updateStrategy: OnDelete`** (vault-helm default). Merging a
+tag bump and letting ArgoCD sync updates the STS spec but **does not restart Vault** —
+`currentRevision` and `updateRevision` simply diverge and the old pod keeps running.
+This is easy to miss: the 1.21.2 → 1.21.4 bump sat unapplied for a day this way. The
+upgrade only happens on an explicit pod delete, which is the one sanctioned use of
+direct `kubectl` against this app.
+
+```bash
+export KUBECONFIG=~/.kube/oke-homelab.config
+
+# 0. Back up the bucket first — Vault does NOT support downgrades.
+oci os object bulk-download -bn vault-storage --namespace sdajdczqv0qo \
+  --download-dir ~/backups/vault-storage-$(date +%Y%m%d-%H%M%S)
+
+# 1. Merge the tag bump, wait for ArgoCD, then confirm the roll is staged
+kubectl -n argocd get app vault -o jsonpath='{.status.sync.status}{"\n"}'
+kubectl -n vault get sts vault -o jsonpath='{.status.currentRevision}{"\n"}{.status.updateRevision}{"\n"}'
+
+# 2. Trigger it
+kubectl -n vault delete pod vault-0
+
+# 3. Verify — OCI KMS auto-unseals, no key entry needed
+kubectl -n vault logs vault-0 | grep -iE "mlock|unseal|post-unseal"
+kubectl -n vault exec vault-0 -- vault status
+```
+
+Downgrade is **not supported** by Vault. Rolling back means restoring the bucket
+backup *and* reverting the tag, so take the backup before every major bump.
+
+### Container capabilities / mlock
+
+`standalone.config` deliberately omits `disable_mlock`, so vault-helm appends
+`disable_mlock = true` — the sanctioned Kubernetes setting, since kubelet runs with
+swap off. Vault logs `Mlock: supported: true, enabled: false` and never calls
+`mlock()`, so the pod needs no `IPC_LOCK` capability and runs with the chart default
+container context (`allowPrivilegeEscalation: false`, `CapEff 0x0`, uid 100 non-root).
+
+A `server.containerSecurityContext:` block granting `IPC_LOCK` sat in `values.yaml`
+from Jan–Aug 2026 doing nothing at all — vault-helm reads
+`server.statefulSet.securityContext.container`, so the key was never consumed. It was
+removed 2026-08-01. If you ever do need that key, restate
+`allowPrivilegeEscalation: false` alongside it: setting it replaces the chart default
+wholesale rather than merging.
+
+The two Vault 2.0 container regressions ([#31919](https://github.com/hashicorp/vault/issues/31919))
+— the `unable to set CAP_SETFCAP` entrypoint failure and `Failed to lock memory` — are
+both already neutralised by the chart, which injects `SKIP_SETCAP=true` and the
+`disable_mlock = true` above.
+
+### Version history
+
+| Date | Version | Chart | Notes |
+|------|---------|-------|-------|
+| 2026-08-01 | 2.0.3 | 0.34.0 | Major bump. Chart 0.34.0 already defaulted to 2.0.3 — the pin was holding the image *behind* the chart. Storage `oci` + `seal ocikms` unaffected. See the root-token warning above. |
+| 2026-08-01 | 1.21.4 | 0.34.0 | Staged by Renovate but never rolled (OnDelete); superseded same day. |
+| 2026-06-03 | 1.21.2 | 0.32.0 | |
+| 2026-01-28 | 1.18.1 | 0.28.1 | Initial deployment. |
+
 ---
 
 ## Troubleshooting
@@ -447,6 +524,9 @@ vault operator generate-root -otp=<otp>
 | Secret not syncing | Check VaultStaticSecret status: `kubectl describe vaultstaticsecret` |
 | JWT auth failing | Verify Caddy Security JWT issuer/audience match Vault config |
 | Auto-unseal failing | Check OCI instance principal permissions on KMS key |
+| Tag bump merged but `vault status` shows the old version | Expected — STS is `OnDelete`. `kubectl -n vault delete pod vault-0` to apply. See [Upgrades](#upgrades) |
+| `unable to set CAP_SETFCAP` / `Failed to lock memory` on 2.0+ | Chart already sets `SKIP_SETCAP=true` and appends `disable_mlock = true`; check they survived a values.yaml edit |
+| 404 / `invalid path` on a request that used to work | Vault 2.0 rejects non-canonical paths (e.g. double slashes). Fix the caller's URL |
 
 ---
 
