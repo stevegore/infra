@@ -22,7 +22,7 @@ services:
       retries: 3
 
   gallery-admin:
-    image: python:3.13.14-alpine
+    image: python:3.14.6-alpine
     container_name: gallery-admin
     restart: unless-stopped
     user: "1000:1000"
