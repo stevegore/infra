@@ -3,7 +3,16 @@
 # Authenticates via AppRole; Vault sees pico's Tailscale IP (100.98.212.71).
 set -euo pipefail
 
-export VAULT_ADDR="${VAULT_ADDR:-http://vault-oke:8200}"
+# vault-oke-1, not vault-oke. The 2026-06-06 cluster rebuild left the original
+# `vault-oke` tailnet device registered but dead, so when the Tailscale operator
+# re-registered the proxy it had to take the next free name. MagicDNS still
+# resolves `vault-oke` — to the corpse (100.71.200.112, offline since the
+# rebuild) — so the old value failed as a 30s i/o timeout every 15 minutes
+# rather than as anything that looked like a name error. Fixed 2026-08-01.
+#
+# If the stale device is ever deleted and the proxy reclaims `vault-oke`, this
+# needs to move back. Verify with `tailscale status | grep vault-oke`.
+export VAULT_ADDR="${VAULT_ADDR:-http://vault-oke-1:8200}"
 CRED_DIR="${CRED_DIR:-$HOME/.config/vault-token-sync}"
 TOKEN_DIR="${TOKEN_DIR:-$HOME/code/infra}"
 # Don't sync the bootstrap credential into the thing it bootstraps.

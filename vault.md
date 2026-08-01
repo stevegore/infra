@@ -81,7 +81,27 @@ Used by pico to push `*.token` files in `~/code/infra/` into Vault. No CIDR bind
 |------|------|----------|-----------|
 | pico-token-sync | none | pico-token-sync | 10m / 30m max |
 
-**Path:** Pico hits Vault via `http://vault-oke:8200` (Tailscale MagicDNS — `vault-oke.chipmunk-fir.ts.net`). The `vault-tailscale` LoadBalancer Service in the `vault` namespace exposes port 8200 via the Tailscale operator. Traffic stays on the tailnet; does not traverse the public OKE NLB or Caddy.
+**Path:** Pico hits Vault via `http://vault-oke-1:8200` (Tailscale MagicDNS — `vault-oke-1.chipmunk-fir.ts.net`, 100.69.225.0). The `vault-tailscale` LoadBalancer Service in the `vault` namespace exposes port 8200 via the Tailscale operator. Traffic stays on the tailnet; does not traverse the public OKE NLB or Caddy.
+
+> **Why `-1`.** The 2026-06-06 cluster rebuild left the original `vault-oke`
+> device registered on the tailnet but dead (100.71.200.112, offline since), so
+> the re-registered proxy had to take the next free name. MagicDNS kept
+> resolving `vault-oke` — to the corpse — so `vault-token-sync.service` failed as
+> a silent 30-second i/o timeout every 15 minutes rather than as a name error,
+> and `kv/homelab/*` went stale unnoticed until 2026-08-01. Deleting the stale
+> device would free the name back up, at which point this needs to move back;
+> check with `tailscale status | grep vault-oke`.
+>
+> The old WireGuard-to-NodePort path (`http://10.20.30.2:30820`) died in the same
+> rebuild and now times out from pico. `vault-token-sync-setup.sh` was still
+> pointing at it, so a secret_id rotation would have failed before it started.
+>
+> That script also used to assert `secret_id_bound_cidrs`/`token_bound_cidrs` of
+> `10.20.30.1/32`, which no longer matches anything — the Tailscale proxy
+> terminates TCP inside the cluster, so Vault sees the proxy, never pico. The
+> live role has had empty bindings since the tailnet cutover; since `vault write`
+> replaces a role wholesale, re-running the old script would have silently
+> re-bound the role to a dead CIDR and broken the sync. Both fixed 2026-08-01.
 
 **Bootstrap (run once with the root token on pico):**
 ```bash
