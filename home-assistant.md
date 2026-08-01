@@ -14,9 +14,10 @@
 | Secrets | `/opt/ha-container/.env` (mode 600) — DB password + `HA_DB_URL` |
 
 There is **no Supervisor and no add-ons.** Core upgrades are an image tag bump in
-`compose.yaml`, the same workflow as every other service on pico. The stack is
-deliberately **not** registered with Portainer or the GitOps repo, so nothing
-auto-deploys over it.
+`compose.yaml`. The reviewed source is `pico/homeassistant/compose.yaml`; the
+deployed copy remains `/opt/ha-container/compose.yaml`. The stack is deliberately
+not registered with Portainer, so Renovate opens held PRs for Core/Matter and the
+database policy holds MariaDB, but merging cannot restart HA unexpectedly.
 
 External access (unchanged by the migration):
 
@@ -42,10 +43,12 @@ cd /opt/ha-container
 docker compose ps
 docker compose logs -f homeassistant
 docker compose restart homeassistant
-docker compose pull && docker compose up -d      # after bumping the image tag
+docker compose pull && docker compose up -d      # after backup + reviewed tag bump
 ```
 
 `compose.yaml` pins an exact Core version (not `stable`) so upgrades are deliberate.
+Before an image change, run `/home/steve/.local/bin/backup-ha-container`; the
+nightly copy runs at 00:30 automatically.
 
 ## Non-obvious settings that must not be lost
 
@@ -325,8 +328,10 @@ already on the host — check with `hostname` first).
 - **No add-ons.** Studio Code Server → use SSH / VS Code Remote. phpMyAdmin → the
   existing adminer container. MariaDB → `homeassistant-db`.
 - **Supervisor backups are gone.** HA's built-in `backup` integration works in
-  Container mode (it sets up cleanly once the stale `hassio` config entry is
-  removed), and Duplicati already covers `/opt/ha-container`.
+  Container mode once the stale `hassio` entry is removed. Duplicati does not
+  mount `/opt`, so `scripts/backup-ha-container.sh` creates a logical MariaDB
+  dump plus config/Matter archive and stages it under Duplicati's existing
+  `/usr/share/hassio/` source before the 01:00 job.
 - **eero integration is read-only.** No service to create reservations, change SSIDs, etc. Reservations must be done in the eero mobile app.
 - **`tuya_local` requires a static `host`** — there's no built-in auto-discovery mode for the IP. The `auto` option in the schema is for **protocol version**, not IP. Workaround documented above.
 - **`homeassistant.reload_config_entry` reads in-memory state, not disk.** Always pair direct `.storage` edits with a restart.
