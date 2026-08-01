@@ -51,6 +51,7 @@ Terraform configuration are valid. Uptime Kuma is the post-deploy smoke test.
 | Postgres, MySQL, MariaDB, Redis, CloudNativePG | A bad major here is a restore, not a rollback. Opens a PR labelled `database` / `manual-review` and waits. |
 | Home Assistant Core and Matter Server | Container-mode migrations need a verified snapshot and compatibility review. |
 | Portainer (all updates) | It controls every git-backed pico stack and migrates its database on startup. Back up `portainer_data`, then verify the API, environment and stack inventory. |
+| Huginn MySQL beyond 5.7 | Its existing data directory is 5.7 format and cannot jump directly to a current MySQL release. Renovate is constrained to 5.7 and CI enforces the boundary until a staged logical migration is performed. |
 | ArgoCD (all updates); Vault, VSO, Cilium, Tailscale Operator and Authentik majors | These coordinate or secure the platform and need release-note/order review. |
 | `apps/caddy/Dockerfile` | Caddy is a custom `xcaddy` build. Merging the base-image bump is not enough — the image must be rebuilt and pushed, then `image.tag` bumped in `values.yaml`. The PR body carries the buildx command. |
 | `images/garmin-mcp/Dockerfile` | The custom image must be rebuilt and its deployment tag bumped. |

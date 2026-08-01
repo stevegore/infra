@@ -8,6 +8,12 @@ helm_bin="${HELM_BIN:-helm}"
 echo "Validating Renovate configuration"
 jq empty renovate.json
 
+echo "Validating stateful version guards"
+if ! grep -Eq '^[[:space:]]+image:[[:space:]]+mysql:5\.7([.][0-9]+)?@sha256:[0-9a-f]{64}[[:space:]]*$' pico/huggin/compose.yaml; then
+  echo "Huginn must remain on a digest-pinned MySQL 5.7 image until its staged logical migration is performed" >&2
+  exit 1
+fi
+
 echo "Validating Helm charts"
 chart_repositories=(
   "goauthentik=https://charts.goauthentik.io"

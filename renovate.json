@@ -61,6 +61,22 @@
   ],
   "packageRules": [
     {
+      "description": "Huginn's existing data directory is MySQL 5.7 format. Never propose a direct current-major jump; changing this boundary requires a staged logical migration and a matching CI guard update.",
+      "matchFileNames": [
+        "pico/huggin/compose.yaml"
+      ],
+      "matchPackageNames": [
+        "/(^|\\/)mysql$/"
+      ],
+      "allowedVersions": "/^5\\.7(?:\\.|$)/",
+      "automerge": false,
+      "addLabels": [
+        "database",
+        "manual-review"
+      ],
+      "prPriority": 20
+    },
+    {
       "description": [
         "1. DATA LAYER — never self-merge. A bad Postgres/MySQL/MariaDB major means a restore, not a rollback. These open a PR and wait for Steve.",
         "Regex, not globs: depNames here are a mix of bare (`mysql`, `redis`, `cloudnative-pg`) and registry-qualified (`ghcr.io/immich-app/postgres`), and a `**mysql**` glob does not reliably match a name with no path separators. Substring regex matches both forms. Checked against the real dependency set — `phpmyadmin` does not collide."
