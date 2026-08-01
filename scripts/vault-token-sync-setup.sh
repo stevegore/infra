@@ -2,14 +2,18 @@
 # One-time bootstrap. Uses the root token to:
 #   - enable the approle auth method
 #   - install the pico-token-sync policy
-#   - create a CIDR-bound role
+#   - create the pico-token-sync role (no CIDR binding — see below)
 #   - emit role_id + secret_id into ~/.config/vault-token-sync/
 # Re-running rotates the secret_id.
 set -euo pipefail
 
-export VAULT_ADDR="${VAULT_ADDR:-http://10.20.30.2:30820}"
+# Was http://10.20.30.2:30820 — the WireGuard-to-NodePort path, which the
+# 2026-06-06 cluster rebuild also killed (new nodes, new IPs); it now times out
+# from pico. Use the same tailnet endpoint the sync script does so there is only
+# one address to keep correct. See the note in vault-token-sync.sh about why
+# this is `vault-oke-1`.
+export VAULT_ADDR="${VAULT_ADDR:-http://vault-oke-1:8200}"
 ROOT_TOKEN_FILE="${ROOT_TOKEN_FILE:-$HOME/code/infra/vault-root.token}"
-PICO_CIDR="${PICO_CIDR:-10.20.30.1/32}"
 ROLE_NAME="pico-token-sync"
 POLICY_NAME="pico-token-sync"
 CRED_DIR="${CRED_DIR:-$HOME/.config/vault-token-sync}"
@@ -29,10 +33,16 @@ fi
 echo ">> Writing policy $POLICY_NAME"
 vault policy write "$POLICY_NAME" "$SCRIPT_DIR/vault-token-sync.policy.hcl" >/dev/null
 
-echo ">> Upserting role $ROLE_NAME (CIDR $PICO_CIDR)"
+# No CIDR binding, deliberately — and `vault write` replaces the whole role, so
+# re-adding one here would take effect on the next secret_id rotation and break
+# the sync immediately. Pico reaches Vault through the Tailscale operator proxy,
+# which terminates TCP inside the cluster, so Vault sees the proxy's address and
+# never pico's; the old 10.20.30.1/32 WireGuard binding cannot match anything.
+# The live role has had empty bindings since the tailnet cutover — this script
+# was the last thing still asserting otherwise. Security rests on the role_id +
+# secret_id pair and the narrow pico-token-sync policy. See vault.md.
+echo ">> Upserting role $ROLE_NAME (no CIDR binding — see comment)"
 vault write "auth/approle/role/$ROLE_NAME" \
-    secret_id_bound_cidrs="$PICO_CIDR" \
-    token_bound_cidrs="$PICO_CIDR" \
     token_policies="$POLICY_NAME" \
     token_ttl=10m \
     token_max_ttl=30m \
