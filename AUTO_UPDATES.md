@@ -242,6 +242,10 @@ unused-dependency removal, and turns on
 automatic reboot at 05:00 (verified safe — pico has no LUKS, so an unattended
 boot cannot hang on a passphrase prompt).
 
+Major Ubuntu release upgrades remain reviewed operations. The current
+24.04→26.04 preparation, private baseline capture, rollback, and verification
+steps are in [`pico/UPGRADE-26.04.md`](pico/UPGRADE-26.04.md).
+
 `sudo` on pico requires a password, so this cannot be applied remotely:
 
 ```bash
