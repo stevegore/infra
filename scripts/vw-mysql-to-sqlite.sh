@@ -101,11 +101,18 @@ if [ "$USER_COUNT" -lt 1 ]; then
   exit 1
 fi
 
-# Atomic swap with brief container stop
+# Atomic swap with brief container stop. From here on the container is down,
+# so the trap has to bring it back up on any failure — otherwise a bad sync
+# leaves the standby offline until someone notices.
 docker stop "$CONTAINER_NAME"
+trap 'rm -f "$TMP_SQLITE" "${SQLITE_DB}.new"; docker start "$CONTAINER_NAME" >/dev/null' EXIT
+
 cp "$TMP_SQLITE" "${SQLITE_DB}.new"
 chmod 644 "${SQLITE_DB}.new"
+# The -wal/-shm sidecars belong to the database we're about to replace.
+# Leaving them in place lets SQLite try to replay the old WAL into the new
+# file on next open, which corrupts it.
+rm -f "${SQLITE_DB}-wal" "${SQLITE_DB}-shm"
 mv "${SQLITE_DB}.new" "$SQLITE_DB"
-docker start "$CONTAINER_NAME"
 
 echo "vaultwarden sync complete: ${USER_COUNT} users"

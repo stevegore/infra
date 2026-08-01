@@ -277,6 +277,61 @@ The OKE Vaultwarden is the primary, but for the credentials-critical workload it
 
 This sync direction is one-way: OKE → pico. The reverse (pico → OKE during recovery) is a manual reconciliation step, not automated.
 
+**Known failure mode — stale Tailscale route approval (hit 2026-06-06 → 2026-08-01, now RESOLVED).**
+The sync reaches MySQL at `10.0.1.51` over the `10.0.1.0/24` subnet route advertised
+by the OKE `Connector`. That route has to be *approved* per-device in the Tailscale
+admin console. When the cluster is rebuilt the operator registers a brand-new device
+(`oke-connector-1`, `-2`, …) and **the approval does not carry over**. Worse, the old
+offline device keeps `PrimaryRoutes: 10.0.1.0/24`, so peers still install the route and
+send traffic into a blackhole — the symptom is a TCP *timeout* to anything in
+`10.0.1.0/24`, not a refusal, which reads like a firewall problem and sends you looking
+at OCI security lists.
+
+This broke the sync for eight weeks: from the 2026-06-06 rebuild until 2026-08-01 the
+dead `oke-connector` (100.118.51.11, offline 56d) held the primary route while the live
+`oke-connector-1` (100.120.116.120) had none. **The sync had therefore never once
+succeeded** — `db.sqlite3` on pico sat frozen at the migration snapshot (newest record
+2026-06-01) while the timer failed hourly in silence.
+
+Fixed 2026-08-01 by approving `10.0.1.0/24` on the live connector and deleting the
+stale device; first successful sync ran the same day (1213 ciphers, current to
+2026-07-25).
+
+To keep it fixed, add an `autoApprovers` entry to the tailnet ACL so a rebuild
+re-approves itself. **The tailnet policy file is not in this repo and has no GitOps
+sync — it is edited only in the admin console** at
+<https://login.tailscale.com/admin/acls/file>. Merge this in at the top level, as a
+sibling of `acls` / `tagOwners`:
+
+```jsonc
+"autoApprovers": { "routes": { "10.0.1.0/24": ["tag:k8s-operator"] } }
+```
+
+`tag:k8s-operator` is the correct tag — it's what `apps/tailscale-operator/values.yaml`
+sets via `connector.tags`, confirmed live on the `oke-connector-1` device.
+
+Diagnose recurrences with `tailscale status --json` on pico, comparing `Online`
+against `PrimaryRoutes` per peer — that comparison is what actually reveals this.
+
+**Failure alerting (added 2026-08-01).** The sync failing silently for eight weeks was
+the second half of the problem — a warm standby nobody checks is worse than no standby,
+because it gets trusted. `vw-mysql-to-sqlite.service` now carries:
+
+```ini
+OnFailure=pushover-failure@%n.service
+```
+
+`scripts/pushover-failure@.service` is a **generic template unit**, not specific to the
+sync: any unit on pico gets Pushover alerting by adding that one line, since `%n` passes
+the failing unit name as the instance. It runs `scripts/pushover-notify.sh --unit <unit>`,
+which composes an alert containing the result, exit status and the unit's journal tail
+(systemd's own chatter filtered out), then sends it at priority 1.
+
+Credentials come from `kv/homelab/pushover` via the `pico-token-sync` AppRole — the same
+path and pattern as `scripts/arr-malware-watchdog.sh`, never on disk. The notifier
+degrades to log-only and always exits 0 if Vault or the AppRole is unavailable: a
+failure to alert must not become a second failing unit.
+
 ### 7.2 Vault — standalone with Object Storage backend
 
 Kept as-is from the current setup, just moved to OKE. No raft, no PVCs, no migration of state.
