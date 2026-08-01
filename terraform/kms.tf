@@ -15,6 +15,17 @@ resource "oci_kms_vault" "export_hashicorp-vault-unseal" {
   #restore_trigger = <<Optional value not found in discovery>>
   #time_of_deletion = <<Optional value not found in discovery>>
   vault_type = "DEFAULT"
+
+  # This vault holds the key that decrypts Vault's master key. Losing it makes
+  # every object in the vault-storage bucket permanently undecryptable — the
+  # recovery shares do NOT help, they only re-root a Vault that can already
+  # unseal itself. Nothing else in this config is unrecoverable, so this one
+  # gets a hard stop against `terraform destroy` and against any plan that
+  # wants to replace it in place. If you genuinely need to remove it, delete
+  # this block in a dedicated commit so the intent is on the record.
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 resource "oci_kms_key" "export_vault-auto-unseal" {
@@ -41,6 +52,14 @@ resource "oci_kms_key" "export_vault-auto-unseal" {
   #restore_from_object_store = <<Optional value not found in discovery>>
   #restore_trigger = <<Optional value not found in discovery>>
   #time_of_deletion = <<Optional value not found in discovery>>
+
+  # The actual unseal key — see the note on oci_kms_vault above. HSM protection
+  # means the raw material can never leave OCI, so there is no copy of this
+  # anywhere else and no way to make one outside a `key backup` (which restores
+  # only back into OCI). Treat destruction as data loss, not a rebuild.
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 resource "oci_kms_key_version" "export_vault-auto-unseal_key_version" {
