@@ -25,16 +25,18 @@
 - `/` — 456 GB LVM (`/dev/mapper/ubuntu--vg-ubuntu--lv`), ~82% full
 - `/media/m2` — 3.6 TB NVMe, ~47% used
 
-**Purpose:** Home server running Home Assistant (supervised) and Docker services
+**Purpose:** Home server running Home Assistant and Docker services
 
 **Key Services:**
 
-- **Home Assistant** — supervised install via Hassio
-  - Config: `/usr/share/hassio/homeassistant/`
-  - DB: MariaDB addon (`core-mariadb`)
+- **Home Assistant** — **HA Container** via `docker compose` (migrated from Supervised 2026-08-01)
+  - Stack: `/opt/ha-container` (`homeassistant-app`, `homeassistant-db`, `homeassistant-matter`)
+  - Config: `/opt/ha-container/config/`
+  - DB: own MariaDB 11 container on `127.0.0.1:3307` (data in `/opt/ha-container/dbdata`)
   - External access: `hass2.stevegore.au` (Cloudflare Tunnel, direct) and `hass.stevegore.au` (via Tailscale egress in OKE → Caddy → pico:8123)
-  - `trusted_proxies` includes `10.244.0.0/16` (OKE pod CIDR) so Caddy pods are trusted for X-Forwarded-For
+  - `trusted_proxies` includes `10.0.0.0/8` (covers OKE pod CIDR) and `100.64.0.0/10` (Tailscale) so Caddy pods are trusted for X-Forwarded-For
   - Custom components: `tuya_local`, `eero` (new), `eero_tracker` (legacy — kept for now, `interval_seconds: 30` set to avoid scan overrun)
+  - No Supervisor, no add-ons. Core upgrades are an image tag bump. See [`home-assistant.md`](home-assistant.md).
 - **Tailscale** — `tailscaled.service`
   - Tailnet IP: `100.98.212.71` (also `fd7a:115c:a1e0::f039:d447`), MagicDNS `pico.chipmunk-fir.ts.net`
   - Hostname in admin: `pico`
@@ -72,7 +74,10 @@
 - Docker images: `docker image prune`
 - Unused volumes: `docker volume prune`
 - Duplicati backups: check `/var/lib/docker/volumes/` size
-- Home Assistant DB: `~/.local/share/hassio/homeassistant/home-assistant_v2.db` — ~2-3 GB
+- Home Assistant: recorder DB is MariaDB at `/opt/ha-container/dbdata` (~316 MB). Also
+  `/usr/share/hassio/homeassistant/home-assistant_v2.db.corrupt.2024-09-21…` — a **714 MB
+  orphaned corrupt DB** from 2024, safe to delete
+- Old Supervised install `/usr/share/hassio` — kept for rollback since 2026-08-01, can go once confident
 
 **Monitoring & Observability:**
 

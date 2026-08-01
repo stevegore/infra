@@ -80,7 +80,7 @@ curl -s -X POST http://pico.local:9000/api/endpoints/1/docker/exec/$EXEC_ID/star
 ### Standalone Containers
 
 1. [Portainer](#portainer) - Container management UI  
-2. [Home Assistant](#home-assistant) - Smart home automation  
+2. [Home Assistant](#home-assistant) - Smart home automation (**HA Container**, `docker compose` at `/opt/ha-container`)  
 3. [Bitwarden (Vaultwarden)](#bitwarden-vaultwarden) - Password manager  
 4. [Duplicati](#duplicati) - Backup and disaster recovery
 
@@ -1615,50 +1615,68 @@ the personal photo library.
 
 ### Home Assistant
 
-**Container:** homeassistant  
-**Image:** ghcr.io/home-assistant/qemux86-64-homeassistant:2026.4.4  
-**Status:** Running (Up 2 weeks)  
-**Network:** host (all ports exposed directly)  
-**Command:** `/init`  
-**Mounts:**  
+**Migrated from HA Supervised to HA Container on 2026-08-01.** Full detail,
+rationale and rollback in [`home-assistant.md`](home-assistant.md).
 
-- `/usr/share/hassio/homeassistant` -> `/config`  
-- `/usr/share/hassio/media` -> `/media`  
-- `/usr/share/hassio/share` -> `/share`  
-- `/usr/share/hassio/ssl` -> `/ssl` (read-only)  
-- `/dev` -> `/dev` (device passthrough)  
-- `/run/dbus` -> `/run/dbus` (D-Bus access)
+**Stack dir:** `/opt/ha-container` (`docker compose`, project name `homeassistant`)  
+**Not Portainer-managed and not in `pico/`** — deliberately standalone, unlike
+every other stack here. Managed with `docker compose` directly on the host.
 
-**Purpose:** Smart home automation and control (Home Assistant Supervised)
+> Why it's the exception: it was stood up as a live migration off Supervised and
+> kept out of the git-backed pipeline so a Portainer poll or a Renovate image bump
+> couldn't restart Home Assistant mid-cutover. Converting it later is
+> straightforward — move `compose.yaml` to `pico/homeassistant/`, replace the
+> `.env` values with `${VAR}` and put the real ones in the stack's Portainer Env
+> (this repo is public). Do **not** commit `/opt/ha-container/.env`.
+>
+> Two caveats before converting: Renovate would then bump the Core image
+> automatically, and HA Core upgrades can break HACS custom components (see
+> [`home-assistant.md`](home-assistant.md)). Pin the Core tag or exclude it from
+> Renovate.
 
-**Supervisor:**
+| Container | Image | Network | Restart |
+| --------- | ----- | ------- | ------- |
+| homeassistant-app    | ghcr.io/home-assistant/home-assistant:2026.7.4        | host                   | unless-stopped |
+| homeassistant-db     | mariadb:11                                            | homeassistant_default  | unless-stopped |
+| homeassistant-matter | ghcr.io/home-assistant-libs/python-matter-server:stable | host                 | unless-stopped |
 
-| Container         | Image                                        | Status    | Network        |
-| ----------------- | -------------------------------------------- | --------- | -------------- |
-| hassio_supervisor | homeassistant/amd64-hassio-supervisor        | Up 7 days | bridge, hassio |
+**homeassistant-app mounts:**
 
-**Core Components:**
+- `/opt/ha-container/config` -> `/config`  
+- `/run/dbus` -> `/run/dbus` (**read-write** — required, connecting to the socket needs write access)  
+- `/etc/localtime` -> `/etc/localtime` (read-only)
 
-| Container        | Image                                                   | Status    | Network |
-| ---------------- | ------------------------------------------------------- | --------- | ------- |
-| hassio_multicast | ghcr.io/home-assistant/amd64-hassio-multicast:2026.02.0 | Up 12 days | host   |
-| hassio_audio     | ghcr.io/home-assistant/amd64-hassio-audio:2026.02.0     | Up 12 days | hassio |
-| hassio_dns       | ghcr.io/home-assistant/amd64-hassio-dns:2026.02.0       | Up 12 days | hassio |
-| hassio_cli       | ghcr.io/home-assistant/amd64-hassio-cli:2026.05.0       | Up 3 days | hassio  |
-| hassio_observer  | ghcr.io/home-assistant/amd64-hassio-observer:2026.02.0  | Up 12 days | hassio |
+**homeassistant-app security:** `cap_add: NET_ADMIN, NET_RAW` and
+`apparmor=unconfined`. All three are **required for Bluetooth** — the old
+Supervised container got them implicitly by running privileged. Without them
+BlueZ fails with `AttributeError: 'NoneType' object has no attribute 'send'`.
 
-**Addons:**
+**homeassistant-matter command:** `--storage-path /data --paa-root-cert-dir /data/credentials --fabricid 2 --vendorid 4939`
 
-| Container                 | Image                                         | Purpose                | Status               | Network |
-| ------------------------- | --------------------------------------------- | ---------------------- | -------------------- | ------- |
-| addon_a0d7b954_vscode     | ghcr.io/hassio-addons/vscode/amd64:6.0.1      | VS Code editor         | Up 2 weeks (healthy) | hassio  |
-| addon_a0d7b954_phpmyadmin | ghcr.io/hassio-addons/phpmyadmin/amd64:0.13.0 | Database management    | Up 2 weeks           | hassio  |
-| addon_core_matter_server  | homeassistant/amd64-addon-matter-server:8.4.0 | Matter protocol bridge | Up 2 weeks           | host    |
-| addon_core_mariadb        | homeassistant/amd64-addon-mariadb:3.0.1       | Database backend       | Up 2 weeks           | hassio  |
+> ⚠️ The `--fabricid 2 --vendorid 4939` args are **mandatory**. Defaults are
+> fabricid 1 / vendorid 65521; with the defaults the server silently allocates a
+> brand-new empty fabric and every commissioned device disappears with no error.
+> Fabric data lives in `/opt/ha-container/matter-data/server-2-134b`.
 
-**HA Storage:** All HA data under `/usr/share/hassio/` with subdirectories for homeassistant, media, share, ssl, addons, backup, dns, audio  
-**HA Network:** Uses dedicated `hassio` bridge network (172.30.32.0/23) plus host network for core and Matter  
-**Observer Port:** 4357 (HA system observer/health)
+**Ports:** 8123 (HA), 21063 (HomeKit bridge), 5580 (Matter), 127.0.0.1:3307 (MariaDB, loopback only)
+
+**Storage:** `/opt/ha-container/{config,dbdata,matter-data}`; secrets in
+`/opt/ha-container/.env` (mode 600). Recorder uses `!env_var HA_DB_URL` so no
+password sits in `configuration.yaml`.
+
+#### Decommissioned Supervised install
+
+`hassio-supervisor.service` is **disabled and stopped**. Core has
+`boot=false`/`watchdog=false`; the old `homeassistant` container is exited. All
+add-ons (`core_mariadb`, `core_matter_server`, `a0d7b954_vscode`,
+`a0d7b954_phpmyadmin`) are set to `boot: manual` and stopped — on `auto` the
+Supervisor would start a second Matter server on the same fabric. Old config
+retained read-only at `/usr/share/hassio/homeassistant`.
+
+**Leftover plugin containers** (safe to `docker rm -f` once confident):
+`hassio_dns`, `hassio_audio`, `hassio_multicast`, `hassio_cli` are all
+`restart: no`, but **`hassio_observer` is `restart: always`** and will return
+after every reboot holding port 4357.
 
 ---
 
@@ -1806,7 +1824,9 @@ bash ~/code/infra/scripts/vw-mysql-to-sqlite.sh
 | 3005  | Plex Companion        | plex                              | TCP      |
 | 3011  | phpMyAdmin (Huginn)   | huggin-mysqladmin-1               | TCP      |
 | 3012  | Vaultwarden WebSocket | bitwarden                         | TCP      |
-| 4357  | HA Observer           | hassio_observer                   | TCP      |
+| 3307  | HA MariaDB            | homeassistant-db (127.0.0.1 only) | TCP      |
+| 4357  | HA Observer           | hassio_observer (**orphan**, see HA section) | TCP |
+| 5580  | Matter Server         | homeassistant-matter              | TCP      |
 | 7878  | Radarr                | radarr                            | TCP      |
 | ~~3001~~ | ~~Uptime Kuma~~    | *(migrated to OKE — port free)*   | —        |
 | 8080  | Homepage              | homepage                          | TCP      |
@@ -1817,6 +1837,7 @@ bash ~/code/infra/scripts/vw-mysql-to-sqlite.sh
 | 8191  | FlareSolverr          | flaresolverr                      | TCP      |
 | 8111  | NuraSpace             | nuraspace2-nuraspace-1            | TCP      |
 | 8112  | GymBooking            | gymmaster-rest-gymbooking-1       | TCP      |
+| 8123  | Home Assistant        | homeassistant-app                 | TCP      |
 | 8180  | StravaKeeper          | stravakeeper-stravakeeper-1       | TCP      |
 | 8200  | Duplicati             | duplicati                         | TCP      |
 | 8324  | Plex Roku             | plex                              | TCP      |
@@ -1826,6 +1847,7 @@ bash ~/code/infra/scripts/vw-mysql-to-sqlite.sh
 | 9092  | Transmission Proxy    | transmission-transmission-proxy-1 | TCP      |
 | 9093  | Transmission WebUI    | transmission-transmission-1       | TCP      |
 | 9117  | Jackett               | jackett                           | TCP      |
+| 21063 | HomeKit Bridge        | homeassistant-app                 | TCP      |
 | 32400 | Plex Primary          | plex                              | TCP      |
 | 32410 | Plex GDM              | plex                              | UDP      |
 | 32412 | Plex GDM              | plex                              | UDP      |
@@ -1833,7 +1855,7 @@ bash ~/code/infra/scripts/vw-mysql-to-sqlite.sh
 | 32414 | Plex GDM              | plex                              | UDP      |
 | 32469 | Plex DLNA             | plex                              | TCP      |
 
-**Host network mode** (all ports on host): Portainer, Home Assistant, hassio_multicast, addon_core_matter_server
+**Host network mode** (all ports on host): Portainer, homeassistant-app, homeassistant-matter, hassio_multicast (orphan)
 
 ---
 
@@ -1877,7 +1899,8 @@ Summary of all host filesystem paths used by containers:
 | `/var/stravabot-rs/.strava-auth-token` | stravabot-rs                 | Strava OAuth token (read-only)          |
 | `/usr/share/bitwarden`                 | bitwarden                    | Vaultwarden data                        |
 | `/usr/share/duplicati`                 | duplicati                    | Duplicati config/database               |
-| `/usr/share/hassio`                    | Home Assistant (all)         | HA Supervised root                      |
+| `/opt/ha-container`                    | Home Assistant (all)         | HA Container stack: config, dbdata, matter-data |
+| `/usr/share/hassio`                    | *(decommissioned)*           | Old HA Supervised root — read-only reference, kept for rollback |
 | `/var/lib/docker/volumes`              | duplicati                    | Docker volume backup source (read-only) |
 | `/dev/bus/usb`                                  | plex                         | USB device passthrough                  |
 | `/dev/net/tun`                                  | gluetun                      | TUN device for VPN                      |
@@ -1914,7 +1937,7 @@ This Portainer instance manages a comprehensive home infrastructure on pico:
 
 ### Smart Home
 
-- **Home Assistant** - Supervised installation with Matter, MariaDB, VS Code, phpMyAdmin addons
+- **Home Assistant** - HA Container (`docker compose` at `/opt/ha-container`) with its own MariaDB and Matter server. Migrated from Supervised 2026-08-01; add-ons dropped.
 
 ### Cloud & Storage
 
