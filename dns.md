@@ -157,86 +157,32 @@ in place.
 **Client Version:** 2023.8.2  
 **Connections:** 4 active (syd06 x2, bne01 x2)
 
-**Usage:** Direct access to Home Assistant via `hass2.stevegore.au` and Vaultwarden standby via `bw2.stevegore.au` without going through WireGuard/Caddy
+**Usage:** Direct access to Home Assistant via `hass2.stevegore.au` and Vaultwarden standby via `bw2.stevegore.au` without going through OKE/Caddy
 
 ---
 
-## WireGuard Mesh Network
+## Local and Tailnet Name Resolution
 
-**Hub:** ampere-ubuntu (158.178.136.162)
-**Interface:** wg0
-**Listen Port:** 51820
-**Network:** 10.20.30.0/24
-**Hub Public Key:** `***REMOVED-WIREGUARD-HUB-PUBLIC-KEY***`
+WireGuard and its DNS server on `ampere-ubuntu` were retired. Local and remote
+access to pico now use two deliberately separate names:
 
-### Peers
+| Name | Address | Scope |
+| --- | --- | --- |
+| `pico.local` | `192.168.4.120` | Home LAN only; resolved with mDNS/Bonjour |
+| `pico.chipmunk-fir.ts.net` | `100.98.212.71` | Canonical Tailscale record; works on healthy MagicDNS clients |
+| `pico` in SSH on Steve's Mac | `100.98.212.71` | Explicit `~/.ssh/config` alias; deterministic Tailscale path |
 
-| IP         | Endpoint              | Description         |
-| ---------- | --------------------- | ------------------- |
-| 10.20.30.1 | 203.0.113.4:44126   | pico (home server)  |
-| 10.20.30.2 | 158.178.136.162:51820 | ampere-ubuntu (hub) |
-| 10.20.30.3 | 203.0.113.4:56998   | Laptop (macOS)      |
+Use `ssh pico` from Steve's Mac. Use `pico.local` only when a service explicitly
+needs the direct LAN/mDNS path.
 
----
+### macOS MagicDNS issue observed 2026-08-01
 
-## Local DNS Configuration
-
-### ampere-ubuntu (10.20.30.2) — DNS Server
-
-systemd-resolved stub listener bound to the WireGuard IP via drop-in config.
-
-**Config:** `/etc/systemd/resolved.conf.d/wireguard-dns.conf`
-```ini
-[Resolve]
-DNSStubListenerExtra=10.20.30.2
-```
-
-**`/etc/hosts` WireGuard entries** (served to peers via `ReadEtcHosts=yes`):
-```
-10.20.30.1 pico
-10.20.30.2 ampere-ubuntu
-10.20.30.3 laptop
-```
-
-**iptables rules** (persisted in `/etc/iptables/rules.v4`):
-```
--A INPUT -i wg0 -s 10.20.30.0/24 -p udp --dport 53 -j ACCEPT
--A INPUT -i wg0 -s 10.20.30.0/24 -p tcp --dport 53 -j ACCEPT
-```
-These rules must sit before the blanket `REJECT` rule. The OCI Security List does **not** need port 53 open — DNS queries travel inside the WireGuard tunnel (encrypted UDP to port 51820).
-
-**Upstream DNS:** 169.254.169.254 (Oracle Cloud metadata DNS)
-
----
-
-### Laptop (macOS)
-
-**WireGuard Address:** 10.20.30.3/24
-
-**Nameservers (via WireGuard):**
-
-1. 192.168.4.1 (router)
-2. 10.20.30.2 (ampere-ubuntu via WireGuard)
-3. 192.168.0.1 (fallback)
-
-### pico (10.20.30.1)
-
-**DNS via:** systemd-resolved (stub resolver 127.0.0.53)
-
-**Interface DNS:**
-
-- enp3s0/wlp4s0: 192.168.4.1 (router)
-- wg0: 10.20.30.2 (ampere-ubuntu) with domain `~10.20.30.0/24` (reverse DNS for WireGuard subnet only — not a default route)
-
-**`/etc/wireguard/wg0.conf` DNS line:** `DNS = 10.20.30.2` (only the WireGuard DNS — 192.168.4.1 is already on enp3s0, adding it here is redundant)
-
-**`/etc/hosts` WireGuard entries** (for fast forward lookups without DNS round-trip):
-```
-10.20.30.2 ampere-ubuntu ampere
-10.20.30.3 laptop
-```
-
-> **Known boot behaviour:** systemd-resolved logs `Using degraded feature set TCP instead of UDP` for `10.20.30.2` for ~25 seconds after wg0 comes up, while WireGuard completes its first PersistentKeepalive handshake. This is transient and harmless.
+Tailscale 1.98.9 on the Mac advertised `chipmunk-fir.ts.net` and reported
+MagicDNS enabled. Its internal status and DNS APIs contained the correct pico
+record, but the installed DNS listener returned `NXDOMAIN` for both `pico` and
+`pico.chipmunk-fir.ts.net`. Restarting the network extension did not clear it.
+The SSH alias avoids depending on that client DNS path while still using pico's
+stable Tailscale address.
 
 ---
 
