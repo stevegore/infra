@@ -10,9 +10,10 @@ set -euo pipefail
 #      dead. The live proxy took `vault-oke-1`; MagicDNS kept pointing the old
 #      name at the corpse, so this failed as a 30s i/o timeout — not a name
 #      error — every 15 minutes, and kv/homelab/* went stale for 55 days.
-#      Deleting the corpses on 2026-08-01 inverted the hazard: the clean names
-#      are free again, so the *next* rebuild registers `vault-oke` with no
-#      suffix and anything pinned to `-1` breaks instead.
+#      Deleting the corpses on 2026-08-01 freed the clean names, and the live
+#      devices were renamed back on 2026-08-02, so `vault-oke` is correct again
+#      and `-1` no longer resolves at all. Both stay in TS_HOSTS, live name
+#      first: whichever a future rebuild lands on, one of them answers.
 #   2. NetworkManager (`dns=default`, `rc-manager=file`) periodically overwrites
 #      systemd-resolved's stub-resolv.conf with the router's address, which cuts
 #      out the resolver holding tailscaled's split-DNS route. MagicDNS then dies
@@ -25,7 +26,7 @@ set -euo pipefail
 # CLI degrades to the old behaviour rather than dying.
 # Space-separated, in preference order. Plain string rather than an array so it
 # stays overridable from the environment and safe under `set -u`.
-TS_HOSTS="${TS_HOSTS:-vault-oke-1 vault-oke}"
+TS_HOSTS="${TS_HOSTS:-vault-oke vault-oke-1}"
 VAULT_PORT="${VAULT_PORT:-8200}"
 
 resolve_vault_addr() {
@@ -47,7 +48,7 @@ resolve_vault_addr() {
     return 1
 }
 
-export VAULT_ADDR="${VAULT_ADDR:-$(resolve_vault_addr || echo "http://vault-oke-1:$VAULT_PORT")}"
+export VAULT_ADDR="${VAULT_ADDR:-$(resolve_vault_addr || echo "http://vault-oke:$VAULT_PORT")}"
 CRED_DIR="${CRED_DIR:-$HOME/.config/vault-token-sync}"
 TOKEN_DIR="${TOKEN_DIR:-$HOME/code/infra}"
 # Don't sync the bootstrap credential into the thing it bootstraps.
