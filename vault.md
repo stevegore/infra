@@ -81,7 +81,7 @@ Used by pico to push `*.token` files in `~/code/infra/` into Vault. No CIDR bind
 |------|------|----------|-----------|
 | pico-token-sync | none | pico-token-sync | 10m / 30m max |
 
-**Path:** Pico hits Vault via `http://vault-oke-1:8200` (Tailscale MagicDNS — `vault-oke-1.chipmunk-fir.ts.net`, 100.69.225.0). The `vault-tailscale` LoadBalancer Service in the `vault` namespace exposes port 8200 via the Tailscale operator. Traffic stays on the tailnet; does not traverse the public OKE NLB or Caddy.
+**Path:** Pico hits Vault via `http://vault-oke:8200` (Tailscale MagicDNS — `vault-oke.chipmunk-fir.ts.net`, 100.69.225.0). Was `vault-oke-1` between the 2026-06-06 rebuild and 2026-08-02, while a dead device squatted the clean name; `vault-token-sync.sh` no longer trusts either name, resolving via tailscaled and health-checking before it commits. The `vault-tailscale` LoadBalancer Service in the `vault` namespace exposes port 8200 via the Tailscale operator. Traffic stays on the tailnet; does not traverse the public OKE NLB or Caddy.
 
 > **Why `-1`.** The 2026-06-06 cluster rebuild left the original `vault-oke`
 > device registered on the tailnet but dead (100.71.200.112, offline since), so

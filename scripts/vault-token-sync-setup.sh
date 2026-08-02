@@ -10,9 +10,14 @@ set -euo pipefail
 # Was http://10.20.30.2:30820 — the WireGuard-to-NodePort path, which the
 # 2026-06-06 cluster rebuild also killed (new nodes, new IPs); it now times out
 # from pico. Use the same tailnet endpoint the sync script does so there is only
-# one address to keep correct. See the note in vault-token-sync.sh about why
-# this is `vault-oke-1`.
-export VAULT_ADDR="${VAULT_ADDR:-http://vault-oke-1:8200}"
+# one address to keep correct.
+#
+# Briefly `vault-oke-1`: the rebuild left a dead `vault-oke` device squatting the
+# name, forcing the live proxy to the suffixed one. The corpses were deleted
+# 2026-08-01 and the live devices renamed back on 2026-08-02, so the clean name
+# is correct again. vault-token-sync.sh resolves this properly via tailscaled;
+# this bootstrap runs once, by hand, so a plain address is enough.
+export VAULT_ADDR="${VAULT_ADDR:-http://vault-oke:8200}"
 ROOT_TOKEN_FILE="${ROOT_TOKEN_FILE:-$HOME/code/infra/vault-root.token}"
 ROLE_NAME="pico-token-sync"
 POLICY_NAME="pico-token-sync"

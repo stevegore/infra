@@ -308,7 +308,16 @@ sibling of `acls` / `tagOwners`:
 ```
 
 `tag:k8s-operator` is the correct tag — it's what `apps/tailscale-operator/values.yaml`
-sets via `connector.tags`, confirmed live on the `oke-connector-1` device.
+sets via `connector.tags`, confirmed live on the connector device.
+
+**Cleanup 2026-08-01/02.** All five stale devices were deleted (`caddy-pico`,
+`homepage-pico`, `tailscale-operator`, `uptime-kuma-pico`, `vault-oke`) and the live
+ones renamed off their `-1` suffixes via `POST /api/v2/device/{id}/name`. The tailnet
+is back to the names the config actually declares — `hostname: oke-connector` in
+`apps/tailscale-operator/values.yaml` and `tailscale.com/hostname: "vault-oke"` in
+`apps/vault/templates/tailscale-service.yaml` — so the `-1` workarounds are gone rather
+than entrenched. Renaming preserved route approval (it binds to the device ID, not the
+name) and the operator did not revert it.
 
 Diagnose recurrences with `tailscale status --json` on pico, comparing `Online`
 against `PrimaryRoutes` per peer — that comparison is what actually reveals this.
