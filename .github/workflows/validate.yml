@@ -13,12 +13,12 @@ jobs:
     name: Helm and Compose
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: azure/setup-helm@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4
         with:
           # ArgoCD currently renders with Helm 3. Helm 4 dependency build has
           # an Authentik repository regression, so validate the same contract.
-          version: v3.21.0
+          version: v3.21.3
       - name: Validate version-controlled deployment artifacts
         run: scripts/validate-version-upgrades.sh
 
@@ -29,8 +29,8 @@ jobs:
       run:
         working-directory: terraform
     steps:
-      - uses: actions/checkout@v7
-      - uses: hashicorp/setup-terraform@v3
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3
         with:
           terraform_version: 1.15.8
       - name: Check formatting
