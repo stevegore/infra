@@ -123,7 +123,7 @@ prune-disabled standalone exception in `cilium/`. See
 
 | Protocol | Port(s)       | Source           | Description        |
 | -------- | ------------- | ---------------- | ------------------ |
-| TCP      | 22            | 203.0.113.4/32 | SSH (home IP only) |
+| TCP      | 22            | `var.home_ip_cidr` | SSH (home IP only) |
 | TCP      | 80            | 0.0.0.0/0        | HTTP               |
 | TCP      | 443           | 0.0.0.0/0        | HTTPS              |
 | TCP      | 32400         | 0.0.0.0/0        | Plex               |
@@ -402,7 +402,7 @@ OCI users are capped at 2 active Customer Secret Keys. List + delete via
 | OCID                    | `ocid1.cluster.oc1.ap-sydney-1.aaaaaaaayyadaznxbxlzv7qz6drid3w3erh3yunv2zp7wdqzjclxsok2k6nq`         |
 | Kubernetes version      | `v1.36.1` (control plane + workers upgraded in-place 2026-07-14; workers cycled via drain + `delete-node --is-decrement-size false`) |
 | Type                    | BASIC_CLUSTER (free — Enhanced incurs ~$0.15/hr; downgrade requires full cluster rebuild)            |
-| API endpoint            | Public, NSG-restricted to home IP `203.0.113.4/32`                                                 |
+| API endpoint            | Public, NSG-restricted to the home IP (`var.home_ip_cidr`)                                           |
 | CNI                     | OKE `FLANNEL_OVERLAY` remains the primary CNI (pods 10.244.0.0/16, services 10.96.0.0/16); Cilium 1.20.0-rc.0 is chained in policy-only `generic-veth` mode and now enforces NetworkPolicy and supplies Hubble observability. |
 | Node pool               | `homelab-arm`, VM.Standard.A1.Flex 2 OCPU / 12 GB, 2 nodes (FD-1 + FD-2 in Private Subnet-nebula)    |
 | Worker NSG              | `oke-workers`                                                                                        |
@@ -580,7 +580,7 @@ bash ~/code/infra/scripts/setup-pico-stats.sh
 4. Verify: `export KUBECONFIG=~/.kube/oke-homelab.config && /home/steve/kubectl get nodes`
 
 **Access restrictions:**
-Access is allowed only from the home IP (`203.0.113.4/32`); from anywhere else you'll get a TCP timeout on 6443. If the home IP changes, update the NSG ingress rule in `terraform/oke-networking.tf` (`oke_api_kubectl_home`).
+Access is allowed only from the home IP (`var.home_ip_cidr`); from anywhere else you'll get a TCP timeout on 6443. If the home IP changes, update `home_ip_cidr` in `terraform/terraform.tfvars` (gitignored) and in the ORM stack variables, then apply — that drives both `oke_api_kubectl_home` in `terraform/oke-networking.tf` and the port-22 rule in `terraform/core.tf`.
 
 ---
 

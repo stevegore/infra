@@ -249,7 +249,7 @@ resource "oci_core_default_security_list" "export_nebula-public" {
     description = "SSH from home IP"
     #icmp_options = <<Optional value not found in discovery>>
     protocol    = "6"
-    source      = "203.0.113.4/32"
+    source      = var.home_ip_cidr
     source_type = "CIDR_BLOCK"
     stateless   = "false"
     tcp_options {

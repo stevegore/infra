@@ -11,6 +11,8 @@ config/age-identity.txt
 # forgotten rename shows up in `git status` instead of going silently missing.
 terraform/.terraform/
 terraform/.tfstate-cache/
+# Holds home_ip_cidr — a residential IP we deliberately keep out of the repo.
+terraform/terraform.tfvars
 terraform/*.tfstate
 terraform/*.tfstate.*
 terraform/*.tfplan

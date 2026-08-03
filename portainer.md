@@ -1646,6 +1646,8 @@ home public IP and from direct LAN/tailnet requests to pico. From elsewhere, use
 `https://gallery.stevegore.au/admin.html?key=<key>`. The key is generated with
 `openssl rand -hex 24`, stored in Vaultwarden, and configured only as the
 Portainer stack environment variable `GALLERY_ADMIN_KEY`; it is never committed.
+The home public IP is likewise supplied as `GALLERY_ADMIN_IP` rather than being
+baked into the template.
 nginx returns 404 for unauthenticated admin/API requests. The sidecar has no
 published port and also requires nginx's `X-Gallery-Auth: ok` header.
 

@@ -134,7 +134,7 @@ and never leaves pico. Stacks with placeholders:
 | `stravakeeper` | `MYSQL_ROOT_PASSWORD`, `MYSQL_PASSWORD`, `STRAVA_CLIENT_SECRET`, `STRAVA_VERIFY_TOKEN` |
 | `plex` | `PLEX_CLAIM` |
 | `icloudpd`, `icloudpd-kellesi` | `ICLOUD_USERNAME` |
-| `ig-gallery` | `GALLERY_ADMIN_KEY` |
+| `ig-gallery` | `GALLERY_ADMIN_KEY`, `GALLERY_ADMIN_IP` |
 
 To change one: Portainer → Stacks → *stack* → Environment variables → Update.
 Do **not** put the value in the compose file.

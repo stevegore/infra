@@ -20,12 +20,12 @@ text file. Admin access by client IP (home = admin) or by a query-param key.
 | Direct client address | Docker currently preserves the LAN source (for example `192.168.4.23`); `172.19.0.1` remains trusted for bridge-SNAT deployments |
 | Exposure | Caddy vhost `gallery.stevegore.au` → `pico:8090`, public, no Authentik |
 | Generator | `scripts/build-gallery.py` (389 lines), runs on the **Mac** |
-| Home public IP | `203.0.113.4` (residential, dynamic) |
+| Home public IP | Supplied as `GALLERY_ADMIN_IP` in the Portainer stack env (residential, dynamic — not committed) |
 
 Two facts that the whole design rests on, both confirmed from `docker logs ig-gallery`:
 
 1. **Caddy forwards the true client IP.** A browser request from home logged
-   `"203.0.113.4"` in the `$http_x_forwarded_for` field. Caddy *appends* to
+   its public IP in the `$http_x_forwarded_for` field. Caddy *appends* to
    `X-Forwarded-For`, so with `real_ip_recursive off` the **last** entry is authoritative and
    a client cannot spoof its way in by sending its own header.
 2. **Direct LAN/tailnet hits have no `X-Forwarded-For` at all.** Docker currently preserves
@@ -113,7 +113,7 @@ geo $gallery_admin_ip {
     172.16.0.0/12   1;   # Docker bridge/SNAT
     192.168.0.0/16  1;   # direct LAN
     100.64.0.0/10   1;   # direct Tailscale
-    203.0.113.4   1;   # home public IP as Caddy sees it
+    ${GALLERY_ADMIN_IP}   1;   # home public IP as Caddy sees it
 }
 
 map $arg_key $gallery_admin_key {
@@ -167,6 +167,14 @@ own `$remote_addr`, `$arg_key`, `$is_args` to empty strings and the config is no
 Generate one (`openssl rand -hex 24`), set it as `GALLERY_ADMIN_KEY` in the **Portainer stack
 environment**, and store it in Vaultwarden. It must not be committed — `portainer.md` shows
 `${GALLERY_ADMIN_KEY}` only.
+
+### The home IP
+
+`GALLERY_ADMIN_IP` is set the same way, in the Portainer stack environment. It is kept out of
+the repo because it identifies the house, not because it is a credential. If it is unset the
+compose file falls back to `203.0.113.4` (TEST-NET-3), which no real client can ever match —
+so the failure mode is "public-IP admin access stops working, use the key", not an open door
+or a container that will not start. Update it when the residential IP changes.
 
 Tradeoff worth stating: a key in a query string lands in browser history. The referrer path is
 already covered — every outbound tile link carries `rel="noopener noreferrer"`, so Instagram

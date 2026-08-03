@@ -32,7 +32,7 @@ resource "oci_core_network_security_group_security_rule" "oke_api_kubectl_home" 
   network_security_group_id = oci_core_network_security_group.oke_api.id
   direction                 = "INGRESS"
   protocol                  = "6"
-  source                    = "203.0.113.4/32"
+  source                    = var.home_ip_cidr
   source_type               = "CIDR_BLOCK"
   description               = "kubectl from home (matches existing SSH allow rule)"
   tcp_options {

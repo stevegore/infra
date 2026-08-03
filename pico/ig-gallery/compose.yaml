@@ -13,6 +13,11 @@ services:
       TZ: Australia/Sydney
       NGINX_ENVSUBST_FILTER: "^GALLERY_"
       GALLERY_ADMIN_KEY: ${GALLERY_ADMIN_KEY}
+      # Home public IP as Caddy sees it. Kept out of the repo (residential,
+      # dynamic) — set it in the Portainer stack environment. The TEST-NET-3
+      # fallback is never a real client, so an unset value degrades to
+      # "no public-IP admin access" rather than breaking the nginx template.
+      GALLERY_ADMIN_IP: ${GALLERY_ADMIN_IP:-203.0.113.4}
     depends_on:
       - gallery-admin
     healthcheck:

@@ -153,7 +153,7 @@ in place.
 **Name:** pico  
 **ID:** `c7f990bb-9fba-4fc9-af4a-0eb509e99798`  
 **Status:** Healthy  
-**Origin IP:** 203.0.113.4 (home IP)  
+**Origin IP:** the home public IP (residential and dynamic; not recorded here)  
 **Client Version:** 2023.8.2  
 **Connections:** 4 active (syd06 x2, bne01 x2)
 
