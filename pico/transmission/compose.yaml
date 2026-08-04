@@ -21,7 +21,7 @@ services:
       - transmission
     ports:
       - "9093:9091"
-    image: haugene/transmission-openvpn:5.4
+    image: haugene/transmission-openvpn:5.5@sha256:18e5789dfd8aa9c95506d8bf2e4ef88ccd5e4c6102fb75b43f488cb5d5e4dcc5
     sysctls:
       - "net.ipv6.conf.all.disable_ipv6=0"
     security_opt:
