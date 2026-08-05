@@ -15,7 +15,7 @@ vault:
     # Pin the tag too so we don't drift on each chart reload.
     image:
       repository: "docker.io/hashicorp/vault"
-      tag: "2.0.3"
+      tag: "2.0.4"
 
     # No IPC_LOCK / mlock override here, deliberately. `standalone.config` below
     # omits disable_mlock, so the chart appends `disable_mlock = true` for us
