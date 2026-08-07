@@ -27,7 +27,7 @@ services:
     security_opt:
       - seccomp:unconfined
   transmission-proxy:
-    image: haugene/transmission-openvpn-proxy:5.4
+    image: haugene/transmission-openvpn-proxy:5.5@sha256:349695330df6740708b6232fb27a723fcff38333ca5f90141297419d871c5186
     restart: unless-stopped
     networks:
       - transmission
