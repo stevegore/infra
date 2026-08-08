@@ -71,6 +71,22 @@ spec:
             - name: http
               containerPort: 8788
               protocol: TCP
+          # Keep the pod out of the Service endpoints until ttyd is listening,
+          # so the restarter CronJob's rollout stops serving 502s. MUST be
+          # `exec`, never httpGet/tcpSocket: the CiliumNetworkPolicy allows
+          # ingress only from the Caddy pods, so a kubelet-sourced probe would
+          # be dropped and never pass. See .Values.readinessProbe in values.yaml
+          # for the full reasoning before changing this.
+          readinessProbe:
+            exec:
+              command:
+                - bash
+                - -c
+                - "exec 3<>/dev/tcp/127.0.0.1/{{ .Values.service.port }}"
+            initialDelaySeconds: {{ .Values.readinessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.readinessProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.readinessProbe.timeoutSeconds }}
+            failureThreshold: {{ .Values.readinessProbe.failureThreshold }}
           securityContext:
             runAsUser: 222
             runAsGroup: 1000

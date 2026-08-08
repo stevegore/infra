@@ -24,6 +24,34 @@ resources:
     cpu: 500m
     memory: 250Mi
 
+# Gate the pod out of the Service endpoints until ttyd has actually bound its
+# port. Without this, every restarter cycle below served ~30s of HTTP 502
+# ("dial tcp 10.244.x.y:8788: i/o timeout" in the Caddy error log) because the
+# new pod joined the endpoints the instant its container started — before ttyd
+# was listening — while the old pod was already being torn down.
+#
+# The probe MUST stay `exec`. Kubelet probe traffic arrives at the pod as
+# ordinary node-sourced traffic, and templates/ciliumnetworkpolicy.yaml selects
+# this pod (making it default-deny) and permits ingress ONLY from the Caddy
+# pods on :8788. An httpGet/tcpSocket probe would therefore be dropped and fail
+# forever, permanently removing ttyd from its endpoints — strictly worse than
+# the bug this fixes. Exec runs the check inside the pod's own netns against
+# loopback, which no policy touches (the egress-lockdown init container also
+# ACCEPTs -o lo first).
+#
+# `bash -c 'exec 3<>/dev/tcp/...'` is deliberately dependency-free: bash is
+# guaranteed present (the container's own command: is /bin/bash), so the probe
+# cannot break if a rebuild of the shell image drops curl/nc.
+readinessProbe:
+  # A few seconds is plenty — ttyd binds almost immediately once bash execs it.
+  initialDelaySeconds: 3
+  periodSeconds: 5
+  timeoutSeconds: 3
+  failureThreshold: 3
+# No livenessProbe on purpose: ttyd here is a public shell whose process health
+# is already covered by the 30-minute restarter, and an exec liveness probe only
+# adds restart-loop risk under load.
+
 service:
   type: ClusterIP
   port: 8788
