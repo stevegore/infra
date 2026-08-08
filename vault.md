@@ -592,10 +592,31 @@ bites here:
   `SKIP_SETCAP=true` env var was belt-and-braces, not the thing that saved it.
 - `Failed to lock memory` — covered by the `disable_mlock = true` above.
 
+### 2.0.4: duplicate HCL attributes are now fatal
+
+2.0.4 removed duplicate-attribute support in HCL **entirely**, along with the env-var
+escape hatch that used to re-enable it. A config that declares the same attribute
+twice no longer warns — Vault refuses to start. Check the *rendered* config before
+any bump at or past 2.0.4, not just `values.yaml`, because vault-helm appends to it:
+
+```bash
+kubectl -n vault get cm vault-config -o jsonpath='{.data.extraconfig-from-values\.hcl}'
+```
+
+The live config is clean (verified 2026-08-08). The one to watch is `disable_mlock` —
+the chart appends it precisely because `standalone.config` omits it, so adding it back
+to `values.yaml` by hand would produce a duplicate and **brick the pod on next roll**.
+
+2.0.4 also drops `gnupg`, `openssl` and `procps` from the UBI base images. Harmless
+here: `docker.io/hashicorp/vault` is Alpine, so the `pidof` in the chart's preStop hook
+still resolves (busybox provides it). `openssl` is genuinely gone from the image —
+don't reach for it in a probe or hook.
+
 ### Version history
 
 | Date | Version | Chart | Notes |
 |------|---------|-------|-------|
+| 2026-08-08 | 2.0.4 | 0.34.0 | Patch. Rolled in ~24 s, auto-unsealed clean (`unsealed with stored key`). Renovate bumped `values.yaml` only — `Chart.yaml` appVersion was left on 2.0.3 and had to be caught by hand; check both on every bump. See the 2.0.4 HCL note below. |
 | 2026-08-01 | 2.0.3 | 0.34.0 | Major bump. Chart 0.34.0 already defaulted to 2.0.3 — the pin was holding the image *behind* the chart. Storage `oci` + `seal ocikms` unaffected. See the root-token warning above. |
 | 2026-08-01 | 1.21.4 | 0.34.0 | Staged by Renovate but never rolled (OnDelete); superseded same day. |
 | 2026-06-03 | 1.21.2 | 0.32.0 | |
