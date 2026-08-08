@@ -20,9 +20,6 @@ spec:
       automountServiceAccountToken: false
       # Don't inject <SVC>_SERVICE_HOST/_PORT env vars into the visitor shell.
       enableServiceLinks: false
-      # Must stay above .Values.preStopSleepSeconds: it has to cover the
-      # preStop drain AND ttyd's own shutdown, or the drain gets SIGKILLed.
-      terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds }}
       # Public resolvers instead of CoreDNS: the shell has no legitimate need
       # to resolve *.svc.cluster.local, so deny service enumeration via DNS.
       dnsPolicy: None
@@ -90,13 +87,6 @@ spec:
             periodSeconds: {{ .Values.readinessProbe.periodSeconds }}
             timeoutSeconds: {{ .Values.readinessProbe.timeoutSeconds }}
             failureThreshold: {{ .Values.readinessProbe.failureThreshold }}
-          # Keep serving for a few seconds after this pod leaves the endpoints,
-          # so requests kube-proxy is still DNATing here during teardown don't
-          # black-hole into 502s. See .Values.preStopSleepSeconds.
-          lifecycle:
-            preStop:
-              sleep:
-                seconds: {{ .Values.preStopSleepSeconds }}
           securityContext:
             runAsUser: 222
             runAsGroup: 1000

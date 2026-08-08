@@ -52,24 +52,29 @@ readinessProbe:
 # is already covered by the 30-minute restarter, and an exec liveness probe only
 # adds restart-loop risk under load.
 
-# The other half of a 502-free rollout. The readinessProbe above fixes the
-# ORDER (new pod Ready before the old one is killed), but endpoint removal is
-# not atomic: when the old pod is deleted, kube-proxy on the Caddy node keeps
-# DNATing the ttyd ClusterIP to the now-dead pod IP for a beat, and those dials
-# black-hole ("dial tcp 10.96.24.184:8788: i/o timeout"). Measured on the
-# 2026-08-08 15:30 cycle: new pod Ready 15:30:11, old pod SIGTERM 15:30:13,
-# then 502s at :14 and :18 with 200s either side.
+# KNOWN RESIDUAL (2026-08-08) — do NOT try to fix this with preStop.
 #
-# preStop delays SIGTERM so the old pod keeps SERVING through that propagation
-# window while it is already out of the endpoints — the standard fix for this
-# race. `sleep` is the built-in kubelet action (no binary needed in the
-# container, which matters here: readOnlyRootFilesystem + all caps dropped).
+# The readinessProbe above fixed the rollout ORDER, which is what caused the
+# long every-30-minutes outage (Caddy 502s at exactly :01:09 / :31:09 for
+# hours). What is left is a ~10s window on each restarter cycle where Caddy
+# still gets "dial tcp 10.96.24.184:8788: i/o timeout" — new connections to
+# the ttyd ClusterIP are black-holed to the old pod's IP after it dies, even
+# though the new pod has been Ready and in the endpoints for ~10s.
 #
-# terminationGracePeriodSeconds MUST stay comfortably above preStopSleepSeconds
-# — the grace period covers the preStop AND the shutdown after it, so raising
-# the sleep past it would get ttyd SIGKILLed mid-drain.
-preStopSleepSeconds: 10
-terminationGracePeriodSeconds: 30
+# A `lifecycle.preStop.sleep: 10` was tried and REVERTED, because measurement
+# showed it only shifts the window instead of closing it. Two cycles, 1s poll:
+#   no preStop:  new Ready :11, old SIGTERM :13, 502s :14-:18, 200 again :22
+#   preStop 10s: new Ready :11, old SIGTERM :22, 502s :22-:29, 200 again :32
+# Recovery tracks the moment the old pod DIES, not the start of the rollout,
+# so any preStop duration just moves the same ~10s hole later. Worse, it moved
+# the hole out from under Uptime Kuma's :09-past-the-minute probe, which made
+# the monitor look green while the outage was still happening.
+#
+# The remaining gap is datapath convergence (kube-proxy/Cilium re-programming
+# the ClusterIP), not something this chart controls. The right fix is upstream
+# retry in the caddy chart — `lb_retries`/`lb_try_duration` on the reverse_proxy
+# so a dial that loses this race is retried against the healthy endpoint
+# instead of surfacing as a 502.
 
 service:
   type: ClusterIP
