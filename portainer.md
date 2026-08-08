@@ -41,6 +41,16 @@
 **Endpoint ID:** `1` (pico-docker)  
 **Base URL:** `http://pico.local:9000/api`
 
+> **Stack IDs are not stable.** The 2.33.6 → 2.39.5 upgrade on 2026-08-01
+> renumbered every stack (they now run 66–80; every ID recorded here before
+> 2026-08-08 was a pre-upgrade value). Resolve a stack by **name**:
+>
+> ```bash
+> curl -s http://pico.local:9000/api/stacks \
+>   -H "X-API-Key: $(cat ~/code/infra/portainer.token)" \
+>   | python3 -c "import sys,json;print({s['Name']:s['Id'] for s in json.load(sys.stdin)})"
+> ```
+
 ```bash
 # Authenticate all requests with:
 -H "X-API-Key: $(cat ~/code/infra/portainer.token)"
@@ -185,8 +195,8 @@ volumes:
 ### sonarrradarrjackett
 
 **Status:** Running  
-**Stack ID:** 7  
-**Project Path:** `/data/compose/7`  
+**Stack ID:** 76  
+**Project Path:** `/data/compose/76`  
 **Compose Version:** v4  
 **Last Updated:** 2026-06-03  
 **Created:** 2021-10-04
@@ -466,8 +476,8 @@ Creating notifications via the API needs `?forceSave=true`, same as indexers.
 ### plex
 
 **Status:** Running (healthy)  
-**Stack ID:** 10  
-**Project Path:** `/data/compose/10`  
+**Stack ID:** 75  
+**Project Path:** `/data/compose/75`  
 **Compose Version:** v3  
 **Last Updated:** 2026-06-03  
 **Created:** 2021-11-27
@@ -864,8 +874,8 @@ PHOTOPRISM_INIT=ffmpeg
 ### huggin
 
 **Status:** Running  
-**Stack ID:** 37  
-**Project Path:** `/data/compose/37`  
+**Stack ID:** 68  
+**Project Path:** `/data/compose/68`  
 **Compose Version:** v2  
 **Last Updated:** 2024-05-20  
 **Created:** 2023-12-26
@@ -967,17 +977,18 @@ volumes:
 ### nuraspace2
 
 **Status:** Running  
-**Stack ID:** 38  
-**Project Path:** `/data/compose/38`  
+**Stack ID:** 73  
+**Project Path:** `/data/compose/73`  
 **Compose Version:** v2  
-**Last Updated:** 2025-01-05  
+**Source:** Git — `stevegore/infra`, `refs/heads/main`, `pico/nuraspace2/compose.yaml` (auto-update poll 5m)  
+**Last Updated:** 2026-08-08  
 **Created:** 2024-01-04
 
 **Containers:**
 
-| Container              | Image              | Status     |
-| ---------------------- | ------------------ | ---------- |
-| nuraspace2-nuraspace-1 | nuraspace (custom) | Up 2 weeks |
+| Container              | Image              | Status  |
+| ---------------------- | ------------------ | ------- |
+| nuraspace2-nuraspace-1 | nuraspace (custom) | Running |
 
 **Docker Compose:**
 
@@ -998,16 +1009,46 @@ services:
 **Purpose:** NuraSpace application (custom Python deployment)  
 **Ports:** 8111 -> 5000  
 **Command:** `poetry run python app.py`  
-**Storage:** `/var/nura` (bind mount)  
-**Note:** Locally built image, not pushed to a registry
+**Storage:** `/var/nura` (bind mount) — holds `access.token` / `refresh.token`, the only
+copy of the credentials, and not recreatable by the app (see Auth below)
+
+**Source of the image:** built manually on pico from `~/code/nuraspacepy`
+(`docker build -t nuraspace:latest .`). It is **local-only — not in any registry.**
+
+> **`ForcePullImage` is deliberately off** (disabled 2026-08-08; it had been `true`).
+> Because the image exists only on pico, a forced pull resolves to
+> `docker.io/library/nuraspace`, which does not exist — so any change to
+> `pico/nuraspace2/compose.yaml` would have had the 5-minute auto-update job
+> redeploy the stack straight into a failed pull. Leave it off.
+
+Rebuild and redeploy:
+
+```bash
+docker build -t nuraspace:latest ~/code/nuraspacepy
+curl -s -X PUT "http://pico.local:9000/api/stacks/73/git/redeploy?endpointId=1" \
+  -H "X-API-Key: $(cat ~/code/infra/portainer.token)" \
+  -H "Content-Type: application/json" \
+  -d '{"env":[],"prune":false,"pullImage":false,"repositoryReferenceName":"refs/heads/main"}'
+```
+
+Keep the previous image untagged as a rollback until the new one is verified
+(`docker tag <old-id> nuraspace:latest`). To change the stack's git/auto-update
+settings the route is `POST /api/stacks/{id}/git` — `PUT` there returns 405.
+
+**Auth:** the NuraSpace API rotates refresh tokens — each is single-use, and
+replaying a consumed one revokes the whole family. The app cannot mint tokens
+(the PingFed SSO login was removed in Mar 2026), so recovery means capturing a
+fresh pair from the NuraSpace app by hand and writing them into `/var/nura`. A
+revoked token still decodes as valid locally for weeks, so the nightly 20:00
+`check_token_health` job probes the API and alerts via Pushover.
 
 ---
 
 ### pdf
 
 **Status:** Running  
-**Stack ID:** 41  
-**Project Path:** `/data/compose/41`  
+**Stack ID:** 74  
+**Project Path:** `/data/compose/74`  
 **Last Updated:** 2026-05-17 (added `restart: unless-stopped` + `container_name`)  
 **Created:** 2024-05-06
 
@@ -1053,8 +1094,8 @@ volumes:
 > container is stopped and kept only as a rollback path.
 
 **Status:** Stopped (migrated to OKE)  
-**Stack ID:** 49  
-**Project Path:** `/data/compose/49`  
+**Stack ID:** 67  
+**Project Path:** `/data/compose/67`  
 **Compose Version:** v1  
 **Created:** 2024-11-02
 
@@ -1091,8 +1132,8 @@ services:
 ### goldenboards
 
 **Status:** Running  
-**Stack ID:** 51  
-**Project Path:** `/data/compose/51`  
+**Stack ID:** 66  
+**Project Path:** `/data/compose/66`  
 **Compose Version:** v1  
 **Created:** 2025-01-06
 
@@ -1127,8 +1168,8 @@ services:
 ### stravakeeper
 
 **Status:** Running  
-**Stack ID:** 52  
-**Project Path:** `/data/compose/52`  
+**Stack ID:** 79  
+**Project Path:** `/data/compose/79`  
 **Compose Version:** v1  
 **Created:** 2025-02-23
 
@@ -1232,8 +1273,8 @@ volumes:
 ### stravabot-rs
 
 **Status:** Running  
-**Stack ID:** 56  
-**Project Path:** `/data/compose/56`  
+**Stack ID:** 78  
+**Project Path:** `/data/compose/78`  
 **Compose Version:** v3  
 **Last Updated:** 2026-01-26  
 **Created:** 2026-01-26
@@ -1278,7 +1319,7 @@ volumes:
 ### immich
 
 **Status:** Running  
-**Stack ID:** 59  
+**Stack ID:** 72  
 **Created:** 2026-05-17 (migrated from manual compose at `/home/steve/immich` to Portainer-managed)
 
 **Containers:**
@@ -1381,7 +1422,7 @@ services:
 ### icloudpd
 
 **Status:** Running  
-**Stack ID:** 58  
+**Stack ID:** 69  
 **Created:** 2026-05-17
 
 **Containers:**
@@ -1540,7 +1581,7 @@ namespace — **not** from a container on pico.
 
 **Status:** Running (public gallery + hide-list admin)
 
-**Stack ID:** 64  
+**Stack ID:** 71  
 **Created:** 2026-07-26
 
 **Containers:**
