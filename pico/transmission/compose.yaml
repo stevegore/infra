@@ -6,9 +6,10 @@ services:
       - NET_ADMIN
     volumes:
       - "/var/lib/transmission/:/data"
+      - "transmission-config:/config" # Holds transmission-home (was the deprecated /data/transmission-home)
     environment:
       - OPENVPN_PROVIDER=WINDSCRIBE
-      - OPENVPN_CONFIG=Sydney-OperaHouse-udp # From https://github.com/haugene/vpn-configs-contrib
+      - OPENVPN_CONFIG=Sydney-Squidney-udp # From https://github.com/haugene/vpn-configs-contrib
       - OPENVPN_USERNAME=${OPENVPN_USERNAME} # Credentials from https://windscribe.net/getconfig/openvpn
       - OPENVPN_PASSWORD=${OPENVPN_PASSWORD}
       - LOCAL_NETWORK=10.20.30.0/24
@@ -38,3 +39,6 @@ networks:
   transmission:
     external: true
     name: transmission_net
+
+volumes:
+  transmission-config:

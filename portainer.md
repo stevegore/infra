@@ -110,18 +110,18 @@ curl -s -X POST http://pico.local:9000/api/endpoints/1/docker/exec/$EXEC_ID/star
 ### transmission
 
 **Status:** Running (healthy)  
-**Stack ID:** 2  
-**Project Path:** `/data/compose/2`  
+**Stack ID:** 80 (git-backed from this repo, `pico/transmission/compose.yaml`)  
+**Project Path:** `/data/compose/80`  
 **Compose Version:** v6  
-**Last Updated:** 2025-05-05  
+**Last Updated:** 2026-08-08  
 **Created:** 2021-06-14
 
 **Containers:**
 
 | Container                         | Image                                  | Status               |
 | --------------------------------- | -------------------------------------- | -------------------- |
-| transmission-transmission-1       | haugene/transmission-openvpn:5.3       | Up 10 days (healthy) |
-| transmission-transmission-proxy-1 | haugene/transmission-openvpn-proxy:5.3 | Up 2 weeks           |
+| transmission-transmission-1       | haugene/transmission-openvpn:5.5       | Up (healthy)         |
+| transmission-transmission-proxy-1 | haugene/transmission-openvpn-proxy:5.5 | Up                   |
 
 **Docker Compose:**
 
@@ -134,9 +134,10 @@ services:
       - NET_ADMIN
     volumes:
       - "/var/lib/transmission/:/data"
+      - "transmission-config:/config"
     environment:
       - OPENVPN_PROVIDER=WINDSCRIBE
-      - OPENVPN_CONFIG=Sydney-OperaHouse-udp
+      - OPENVPN_CONFIG=Sydney-Squidney-udp
       - OPENVPN_USERNAME=${OPENVPN_USERNAME}
       - OPENVPN_PASSWORD=${OPENVPN_PASSWORD}
       - LOCAL_NETWORK=10.20.30.0/24
@@ -149,13 +150,13 @@ services:
       - transmission
     ports:
       - "9093:9091"
-    image: haugene/transmission-openvpn:5.3
+    image: haugene/transmission-openvpn:5.5
     sysctls:
       - "net.ipv6.conf.all.disable_ipv6=0"
     security_opt:
       - seccomp:unconfined
   transmission-proxy:
-    image: haugene/transmission-openvpn-proxy:5.3
+    image: haugene/transmission-openvpn-proxy:5.5
     restart: unless-stopped
     networks:
       - transmission
@@ -166,12 +167,16 @@ networks:
   transmission:
     external: true
     name: transmission_net
+
+volumes:
+  transmission-config:
 ```
 
 **Purpose:** BitTorrent client with Windscribe VPN integration (Sydney node). The proxy container provides an nginx reverse proxy to the Transmission web UI.  
 **Ports:** 9093 -> 9091 (Transmission web UI), 9092 -> 8080 (nginx proxy)  
 **Network:** Uses external `transmission_net` bridge network, shared with sonarrradarrjackett stack  
-**VPN:** Windscribe OpenVPN via Sydney-OperaHouse endpoint  
+**VPN:** Windscribe OpenVPN via Sydney-Squidney endpoint. Windscribe renames endpoints periodically and the container re-pulls [vpn-configs-contrib](https://github.com/haugene/vpn-configs-contrib) on every start, so a removed endpoint name breaks startup on the next restart (this happened 2026-08-04 when `Sydney-OperaHouse` was deleted upstream).  
+**Config:** `transmission-home` (settings, torrents, resume state) lives in the `transmission-config` named volume at `/config/transmission-home`. It was migrated off the deprecated `/data/transmission-home` path on 2026-08-08; the old copy is retained at `/var/lib/transmission/transmission-home.migrated-20260808`. Note the named volume is also covered by Duplicati (which backs up `/var/lib/docker/volumes`) whereas `/var/lib/transmission` is not.  
 **Health:** Transmission container has autoheal label enabled  
 **Command:** `dumb-init /etc/openvpn/start.sh`
 
