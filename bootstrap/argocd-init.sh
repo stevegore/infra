@@ -27,7 +27,7 @@ REGION="ap-sydney-1"
 KUBECONFIG_PATH="$HOME/.kube/oke-homelab.config"
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 # renovate: datasource=github-releases depName=argoproj/argo-cd
-ARGOCD_VERSION="v3.4.3"
+ARGOCD_VERSION="v3.5.1"
 
 log()  { printf '\n\033[1;34m==> %s\033[0m\n' "$*"; }
 skip() { printf '    \033[2m· %s\033[0m\n' "$*"; }
