@@ -26,7 +26,7 @@ jobs:
           # Helm 3 for a week. Rule 9 in renovate.json now caps this <4.0.0;
           # lift that cap deliberately, together with this line, once ArgoCD
           # itself moves to Helm 4.
-          version: v3.21.3
+          version: v3.21.4
       - name: Validate version-controlled deployment artifacts
         run: scripts/validate-version-upgrades.sh
 
