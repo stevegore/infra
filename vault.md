@@ -561,8 +561,16 @@ age-keygen -y vault-export.key          # the age1... public recipient
 source scripts/vault-env.sh && vlogin
 bash scripts/vault-kv-export-setup.sh
 
-# 3. Build + push the ARM image
+# 3. Build + push the ARM image (cluster is A1/aarch64)
 bash scripts/build-vault-kv-export-image.sh
+
+# 3b. OCIR pull secret — namespace-scoped, in NO chart, so a new namespace
+#     never has it. Missing it shows up only as ImagePullBackOff.
+kubectl create secret docker-registry ocir-creds -n vault-kv-export \
+  --docker-server=syd.ocir.io \
+  --docker-username="$(vault kv get -field=username kv/oci/ocir)" \
+  --docker-password="$(vault kv get -field=auth_token kv/oci/ocir)" \
+  --docker-email=steve.j.gore@gmail.com
 
 # 4. Set age.recipient in apps/vault-kv-export/values.yaml, commit, push.
 #    The chart refuses to render with an empty recipient rather than writing
