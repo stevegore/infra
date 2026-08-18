@@ -471,11 +471,36 @@ Guards in place: `prevent_destroy` on both `oci_kms_vault` and `oci_kms_key` in
 scheduled-deletion window. Note `kms.tf` is Resource-Discovery-generated — if that
 file ever gets regenerated, **re-add the lifecycle blocks**.
 
-Not yet done: `oci kms management key backup --key-id <ocid> --endpoint <mgmt-endpoint>`
-does support HSM-protected keys (vault-level backup does *not* apply here — that
-needs a virtual private vault, and this one is `vault_type = "DEFAULT"`). A key
-backup restores only back into OCI, so it protects against key deletion, not against
-loss of the tenancy.
+**The key cannot be backed up at all — this was tried on 2026-08-18 and the
+platform refuses it.** An earlier version of this section claimed
+`oci kms management key backup` worked for HSM keys and only *vault-level* backup
+needed a virtual private vault. That is wrong: **key backup also requires a Virtual
+Private Vault.** `hashicorp-vault-unseal` is `vault_type = "DEFAULT"`, and the API
+rejects the call outright:
+
+```
+$ oci kms management key backup --key-id <ocid> --endpoint <mgmt-endpoint> --uri <par>
+ServiceError: InvalidParameter (400)
+  vaultType Invalid vault type VIRTUAL. Valid values are [VirtualPrivate]
+```
+
+(A DEFAULT/shared vault reports as `VIRTUAL` internally.) Moving to a Virtual
+Private Vault is a paid, non-trivial change — it means a new key and a full Vault
+seal-migration to re-wrap the master key — so it is not on the table for a
+free-tier homelab. **Treat the KMS key as genuinely unbackuppable.** The only
+guards are `prevent_destroy` and OCI's scheduled-deletion window.
+
+The corollary matters more than the key backup would have: **a `vault-storage`
+bucket backup is worthless without the key**, since every object in it is encrypted
+under the master key that only this KMS key can unwrap. Bucket backups protect
+against bucket corruption and nothing else. The only backup that survives loss of
+the KMS key is a **logical export of the secrets themselves** (`vault kv get` across
+`kv/`, encrypted and stored off-OCI). That does not exist yet and is the single
+highest-value gap in this deployment.
+
+The `vault-kms-key-backup` bucket in [`terraform/object_storage.tf`](terraform/object_storage.tf)
+was created for the key backup before the constraint was discovered. It is empty
+and is the obvious destination for that logical export instead.
 
 ### Where the break-glass credentials live
 

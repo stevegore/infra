@@ -37,15 +37,23 @@ resource "oci_objectstorage_bucket" "export_vault-storage" {
   versioning            = "Enabled"
 }
 
-# Destination for OCI KMS key backups of `vault-auto-unseal` (see kms.tf and
-# vault.md → "The single point of failure is the KMS key"). Deliberately a
-# separate bucket from `vault-storage`: Vault's `storage "oci"` backend lists
-# that bucket, so foreign objects do not belong in it, and a key backup sharing
-# a failure domain with the ciphertext it decrypts defeats the purpose.
+# Created 2026-08-18 to hold OCI KMS backups of the `vault-auto-unseal` key.
 #
-# The backup blob is encrypted and restores only back into OCI KMS, so this
-# protects against key *deletion*, not against loss of the tenancy. Versioning
-# is on so a re-backup never overwrites the previous copy.
+# THAT TURNED OUT TO BE IMPOSSIBLE. `oci kms management key backup` requires a
+# Virtual Private Vault; `hashicorp-vault-unseal` is `vault_type = "DEFAULT"`
+# (kms.tf) and the API rejects the call with
+#   InvalidParameter: vaultType Invalid vault type VIRTUAL.
+#                     Valid values are [VirtualPrivate]
+# Don't retry it without first migrating to a VPV, which is paid and would mean
+# a new key plus a full Vault seal-migration. See vault.md → "The single point
+# of failure is the KMS key".
+#
+# The bucket is kept because the *right* backup is a logical export of `kv/`
+# — the only kind that survives loss of the KMS key, since everything in
+# `vault-storage` is encrypted under it. Deliberately separate from
+# `vault-storage`: Vault's `storage "oci"` backend lists that bucket, so foreign
+# objects do not belong in it. Versioning is on so an export never overwrites
+# its predecessor.
 resource "oci_objectstorage_bucket" "vault_kms_key_backup" {
   compartment_id = var.compartment_ocid
   name           = "vault-kms-key-backup"
