@@ -1,0 +1,6 @@
+apiVersion: v2
+name: vault-kv-export
+description: Nightly age-encrypted logical export of Vault kv/, policies and mounts
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

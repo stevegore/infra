@@ -180,11 +180,20 @@ Key-value secrets engine for application credentials.
 | kv/authentik/config | Authentik: secret_key, username/password (pg-shared role), bootstrap_password/token, github_client_id/secret | authentik (authentik ns), pg-backups+authentik (databases ns) |
 | kv/argocd | GitHub OAuth App client secret for Dex SSO | argocd (argocd ns) |
 | kv/oci/pg-backups | OCI Customer Secret Key (S3) for pg-shared WAL/base backups | pg-backups (databases ns) |
+| kv/oci/vault-kv-export | Write-only PAR for the nightly kv export upload. Written by `scripts/vault-kv-export-setup.sh`; rotate by re-running it. | vault-kv-export (vault-kv-export ns) |
 | kv/homelab/* | Tokens synced from pico (`*.token` files) | pico-token-sync (write) |
 | kv/homelab/pushover | Pushover "Homelab notification" app: `app_token`, `user_key`, `app_name`. Written by hand, **not** by `vault-token-sync.sh` (that script only walks `*.token` files and writes a single `token` field). Read by `scripts/arr-malware-watchdog.sh` and `scripts/pushover-notify.sh` (the generic systemd `OnFailure=` alerter) via the same AppRole. | pico-token-sync |
 | kv/homelab/renovate | GitHub fine-grained PAT for the Renovate workflow: `token`, plus `purpose`/`scopes`/`consumer`/`created` metadata. Scoped to `stevegore/infra` only (contents, pull requests, workflows — all read+write). Written by hand. **Vault is the origin of record; GitHub Actions holds a copy as the repo secret `RENOVATE_TOKEN`.** Nothing reads this path automatically — on rotation, re-push it with:<br>`vault kv get -field=token kv/homelab/renovate \| gh secret set RENOVATE_TOKEN --repo stevegore/infra`<br>See [`AUTO_UPDATES.md`](AUTO_UPDATES.md). | pico-token-sync |
 | kv/strava-keeper/config | Strava Keeper: STRAVA_CLIENT_ID, STRAVA_CLIENT_SECRET, STRAVA_VERIFY_TOKEN, MYSQL_DSN | strava-keeper |
 | kv/gym-booker/config | Gym Booker: USERS_YAML (full users.yaml — gym credentials, swim schedule, pushover tokens) | gym-booker |
+
+> **This table is not exhaustive.** A walk of the live mount on 2026-08-18 found
+> 25 paths, including several never documented here (`cloudflare`, `github/orm-pat`,
+> `oci/api-key`, `oci/ocir`, `mysql/heatwave-admin`, `tailscale/operator_oauth`,
+> `homelab/cloudflare-ro`, `homelab/home-assistant`, `homelab/portainer`,
+> `homepage/*`, `adminer/*`). The nightly export walks the tree rather than
+> reading this list, so it captures them regardless — but don't treat the table
+> as a manifest.
 
 > **Decommissioned:** `kv/openclaw` and `kv/hermes` (plus their `openclaw` /
 > `hermes` policies and the matching VSO namespace bindings) were removed
@@ -494,13 +503,81 @@ The corollary matters more than the key backup would have: **a `vault-storage`
 bucket backup is worthless without the key**, since every object in it is encrypted
 under the master key that only this KMS key can unwrap. Bucket backups protect
 against bucket corruption and nothing else. The only backup that survives loss of
-the KMS key is a **logical export of the secrets themselves** (`vault kv get` across
-`kv/`, encrypted and stored off-OCI). That does not exist yet and is the single
-highest-value gap in this deployment.
+the KMS key is a **logical export of the secrets themselves** — which is what
+`apps/vault-kv-export` does. See [The nightly kv export](#the-nightly-kv-export).
 
-The `vault-kms-key-backup` bucket in [`terraform/object_storage.tf`](terraform/object_storage.tf)
-was created for the key backup before the constraint was discovered. It is empty
-and is the obvious destination for that logical export instead.
+### The nightly kv export
+
+`apps/vault-kv-export` runs a CronJob at 03:20 UTC that walks the whole `kv/`
+tree, adds every policy body and the auth/secrets mount listings, encrypts the
+bundle to an **offline age key**, and PUTs it into the `vault-kms-key-backup`
+bucket. It is the only artefact in this homelab that survives loss of the KMS
+key.
+
+**Encryption is asymmetric, and that is the entire point.** The pod holds only
+the age *public* recipient — which is why it sits in plain sight in
+`values.yaml` in a public repo. The private key lives offline and exists nowhere
+in the cluster, in Vault, in Vaultwarden or in OCI. Consequences:
+
+- Compromising the cluster does not expose one byte of any past export.
+- Decryption depends on nothing inside OCI — not Vault, not KMS, not the tenancy.
+- **Lose the private key and every export ever written is permanently unreadable.**
+  There is no second factor and no recovery path. This is the one artefact where
+  "stored only in Vaultwarden" is not good enough, given its 24-hour window.
+
+Decrypt with:
+
+```bash
+age -d -i /path/to/vault-export.key kv-export-YYYYMMDD-HHMMSS.json.age | jq .
+```
+
+**Upload uses a write-only PAR, not an S3 HMAC key.** OCI caps a user at 2
+Customer Secret Keys and both are spent (`caddy-acme`, `pg-backups`) — taking one
+would have broken Caddy's ACME store or CNPG's WAL archiving. A PAR is also
+better scoped: `AnyObjectWrite` can create objects but cannot read, list or
+delete, so a leaked upload credential still cannot read back a single secret.
+The PAR expires annually; rotate by re-running the setup script. Expiry surfaces
+as an upload failure that pages, not as silence.
+
+Two guards exist specifically against *silent* success, the failure mode that
+left the bw2 sync dead for two months:
+
+- exporting 0 secrets is a hard failure, never an upload;
+- the output is checked for the `age-encryption.org` header before upload, so a
+  broken `age` can never ship plaintext.
+
+Failures page via Pushover. The credentials come from a VSO-synced k8s Secret
+rather than being read from Vault at runtime — a job that could only alert when
+Vault was healthy would go quiet during exactly the outage worth hearing about.
+
+**Setup (in order — the Vault side must exist before ArgoCD syncs the app):**
+
+```bash
+# 1. Generate the keypair. Store the private key OFFLINE. Never commit it.
+age-keygen -o vault-export.key
+age-keygen -y vault-export.key          # the age1... public recipient
+
+# 2. Vault policies, k8s auth role, VSO binding, and the upload PAR
+source scripts/vault-env.sh && vlogin
+bash scripts/vault-kv-export-setup.sh
+
+# 3. Build + push the ARM image
+bash scripts/build-vault-kv-export-image.sh
+
+# 4. Set age.recipient in apps/vault-kv-export/values.yaml, commit, push.
+#    The chart refuses to render with an empty recipient rather than writing
+#    plaintext secrets to object storage.
+
+# 5. Force a first run instead of waiting for 03:20
+kubectl -n vault-kv-export create job --from=cronjob/vault-kv-export manual-1
+kubectl -n vault-kv-export logs job/manual-1
+```
+
+> The export reads **every** secret in `kv/`, which is the broadest read grant in
+> the cluster. It therefore gets its own ServiceAccount and its own Vault role
+> (`vault-kv-export` → policy `vault-kv-export-read`) rather than borrowing the
+> shared VSO role, so it is not reachable by anything that merely lands in the
+> namespace.
 
 ### Where the break-glass credentials live
 

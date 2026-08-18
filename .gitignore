@@ -4,6 +4,13 @@
 # (age-identity.txt.age and age-identity.txt.kms) are safe to commit.
 config/age-identity.txt
 
+# age private keys, by extension rather than by name. The kv-export key
+# (vault-export.key) is the ONLY copy of the thing that can decrypt the nightly
+# Vault backups: committing it to this public repo would expose every secret in
+# kv/ at once. Matched broadly and deliberately — this repo has leaked before.
+*.key
+!*.pub.key
+
 # Terraform local artifacts. State lives in ORM (see terraform/README.md);
 # scripts/tf-env.sh pulls a snapshot into .tfstate-cache/ for fast local plans.
 # The backend_override.tf is committed as backend_override.tf.local and renamed
