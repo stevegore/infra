@@ -36,3 +36,26 @@ resource "oci_objectstorage_bucket" "export_vault-storage" {
   storage_tier          = "Standard"
   versioning            = "Enabled"
 }
+
+# Destination for OCI KMS key backups of `vault-auto-unseal` (see kms.tf and
+# vault.md → "The single point of failure is the KMS key"). Deliberately a
+# separate bucket from `vault-storage`: Vault's `storage "oci"` backend lists
+# that bucket, so foreign objects do not belong in it, and a key backup sharing
+# a failure domain with the ciphertext it decrypts defeats the purpose.
+#
+# The backup blob is encrypted and restores only back into OCI KMS, so this
+# protects against key *deletion*, not against loss of the tenancy. Versioning
+# is on so a re-backup never overwrites the previous copy.
+resource "oci_objectstorage_bucket" "vault_kms_key_backup" {
+  compartment_id = var.compartment_ocid
+  name           = "vault-kms-key-backup"
+  namespace      = data.oci_objectstorage_namespace.export_namespace.namespace
+  access_type    = "NoPublicAccess"
+  versioning     = "Enabled"
+  storage_tier   = "Standard"
+
+  # Losing this bucket means losing the only restorable copy of the unseal key.
+  lifecycle {
+    prevent_destroy = true
+  }
+}

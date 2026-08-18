@@ -58,7 +58,11 @@ DEFAULT_RETRIES  = 1
 ACCEPT_OK        = '["200-299"]'
 ACCEPT_OK_REDIR  = '["200-399"]'
 ACCEPT_302       = '["302"]'
-ACCEPT_VAULT     = '["200-299","429","473","501","503"]'
+# Vault: 200 only. On /v1/sys/health, 501 = uninitialized and 503 = sealed --
+# the two states most worth paging for -- so accepting them (as this did until
+# 2026-08-18) left the monitor green through exactly the outages it exists to
+# catch. 429/473 are HA standby codes and cannot occur: ha.enabled is false.
+ACCEPT_VAULT     = '["200-299"]'
 
 retired_monitor_names = {
     "Gym Bookings (direct)",
