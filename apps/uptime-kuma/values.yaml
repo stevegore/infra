@@ -23,7 +23,7 @@ replicaCount: 1
 image:
   # FQ image name required by cri-o on OKE workers (short names rejected).
   repository: docker.io/louislam/uptime-kuma
-  tag: "2.5.0"
+  tag: "2.5.3"
   pullPolicy: IfNotPresent
 
 resources:
