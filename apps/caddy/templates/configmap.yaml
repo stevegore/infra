@@ -180,6 +180,53 @@ data:
       import defaults
     }
 
+    # Gokapi file sharing. Upload a file, hand out the link, the link dies
+    # after N downloads or a deadline.
+    #
+    # Auth is applied per-path, not to the whole vhost: the point of the service
+    # is that recipients — who have no Authentik account — can fetch the file.
+    # The @admin matcher is Gokapi's own requireLogin() route set, copied from
+    # internal/webserver/Webserver.go. Keep it in sync when upgrading Gokapi;
+    # a route missing here is not an auth bypass (Gokapi still enforces the
+    # header itself and would 401) but it does turn a clean login redirect into
+    # an error page.
+    #
+    # SECURITY — the `route` block is deliberate, do not flatten it. Gokapi
+    # trusts X-Authentik-Username without checking which peer sent it and
+    # auto-creates whatever username it finds (see apps/gokapi/values.yaml), so
+    # a forged header must never survive to the upstream. `route` forces the
+    # strip to execute BEFORE forward_auth re-adds the authenticated value —
+    # in Caddy's default directive order request_header sorts *after*
+    # forward_auth, so without `route` this would delete the real header and
+    # break admin access instead of protecting it.
+    send.stevegore.au {
+      # Must be a `handle`, not a bare path-matched reverse_proxy as in the
+      # other vhosts: `handle` sorts ahead of `reverse_proxy` in the directive
+      # order, so the catch-all handle below would otherwise swallow the
+      # outpost callback and break the Authentik redirect loop.
+      handle /outpost.goauthentik.io/* {
+        reverse_proxy authentik-server.authentik.svc.cluster.local:80
+      }
+
+      @admin path /admin /apiKeys /auth/token /changePassword /downloadPresigned /e2eSetup /filerequests /logs /uploadChunk /uploadStatus /users
+      handle @admin {
+        route {
+          request_header -X-Authentik-Username
+          import authentik
+          reverse_proxy gokapi.gokapi.svc.cluster.local:53842
+        }
+      }
+
+      # Public surface: download pages (/d, /dh), hotlinks (/h), the wasm
+      # bundles, static assets, and /publicUpload for file-request uploads.
+      handle {
+        request_header -X-Authentik-Username
+        reverse_proxy gokapi.gokapi.svc.cluster.local:53842
+      }
+
+      import defaults
+    }
+
     immich.stevegore.au {
       reverse_proxy pico:2283
       import defaults

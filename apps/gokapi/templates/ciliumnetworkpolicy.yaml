@@ -1,0 +1,46 @@
+{{- if .Values.networkPolicy.enabled }}
+# ---------------------------------------------------------------------------
+# This policy is a load-bearing security control, not defence in depth.
+#
+# Gokapi is configured for header authentication (Authentication.Method = 2),
+# and its isGrantedHeader() trusts the X-authentik-username header verbatim —
+# there is no trusted-proxy check on that path, and an unknown username is
+# auto-created as a new account. Any pod in the cluster that could open a TCP
+# connection to :53842 with a forged header would therefore have full access to
+# every stored file. Selecting the pod here makes ingress default-deny and
+# limits it to the Caddy pods, which strip that header from client requests
+# before forward_auth re-adds the real one.
+#
+# Egress is intentionally unrestricted: Gokapi needs DNS and, if the S3 storage
+# backend is ever enabled, outbound HTTPS to Object Storage.
+#
+# NOTE: because this policy selects the pod, kubelet HTTP probes would be seen
+# as CIDR traffic and dropped — deployment.yaml uses exec probes for exactly
+# this reason. Do not convert them back to httpGet while this policy exists.
+# ---------------------------------------------------------------------------
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: {{ include "gokapi.fullname" . }}
+  labels:
+    {{- include "gokapi.labels" . | nindent 4 }}
+spec:
+  endpointSelector:
+    matchLabels:
+      {{- include "gokapi.selectorLabels" . | nindent 6 }}
+  ingress:
+    - fromEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: {{ .Values.networkPolicy.ingressFromNamespace }}
+            {{- range $key, $value := .Values.networkPolicy.ingressFromPodLabels }}
+            k8s:{{ $key }}: {{ $value }}
+            {{- end }}
+      toPorts:
+        - ports:
+            - port: {{ .Values.service.port | quote }}
+              protocol: TCP
+  egress:
+    - toEntities:
+        - world
+        - cluster
+{{- end }}

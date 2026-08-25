@@ -208,6 +208,7 @@ All services proxied through Caddy on OKE (NLB → 159.13.44.68).
 | garmin.stevegore.au      | garmin-mcp.garmin-mcp:8080                | Secret URL path | Garmin MCP server for Claude connectors; gated by `handle_path /{$GARMIN_MCP_PATH_SECRET}/*` (secret in `kv/caddy/config`), 404 otherwise. See `apps/garmin-mcp/README.md` |
 | stevegore.au         | ttyd.ttyd:8788                            | —        | ttyd web terminal (migrated from pico 2026-06-03) |
 | gym.stevegore.au         | gym-booker.gym-booker:5000                | Authentik| Elixr gym auto-booker (migrated from pico 2026-07-05) |
+| send.stevegore.au        | gokapi.gokapi:53842                       | Authentik (admin paths only) | Gokapi file sharing — links expire after N downloads or a deadline. Only Gokapi's `requireLogin()` routes (`/admin`, `/uploadChunk`, `/users`, …) are behind forward-auth; download links must stay public. See `apps/gokapi/README.md` |
 
 **Vaultwarden has one port, not two.** Until 2026-07-25 the `bw` vhost proxied
 `/notifications/hub` to `vaultwarden:3012`, matching Vaultwarden's old split

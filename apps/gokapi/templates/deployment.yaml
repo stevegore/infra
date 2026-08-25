@@ -1,0 +1,157 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "gokapi.fullname" . }}
+  labels:
+    {{- include "gokapi.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  strategy:
+    # Recreate, not RollingUpdate. The PVC is ReadWriteOnce and holds a SQLite
+    # database; a rolling update would briefly run the new pod alongside the old
+    # one against the same file, and on FSS (which will happily allow the second
+    # mount) that means two writers on one SQLite DB.
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "gokapi.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "gokapi.selectorLabels" . | nindent 8 }}
+    spec:
+      initContainers:
+        # First-boot bootstrap. Both halves are non-destructive: an existing
+        # config.json and an existing database are left completely alone, so
+        # this is a no-op on every restart after the first.
+        #
+        # Two separate things have to exist before Gokapi will serve traffic,
+        # and seeding only the config file is NOT enough — v2.2.4 refuses to
+        # start with "No user found in database. Please run setup first" if the
+        # users table is empty, regardless of what the config says. The
+        # --deployment-password run is the supported non-interactive way to
+        # create that row: it calls EditSuperAdmin() for the username in
+        # config.json, writes it, and exits 0 without serving anything.
+        #
+        # The password it sets is random and deliberately thrown away. Under
+        # header authentication it is never used for login — Gokapi reads the
+        # username from the proxy header instead — so there is no credential
+        # here worth keeping or putting in Vault. If this instance is ever
+        # switched to internal auth, set a real one with:
+        #   kubectl -n gokapi exec deploy/gokapi -- \
+        #     /app/gokapi --deployment-password '<new password>'
+        - name: bootstrap
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            - name: GOKAPI_CONFIG_DIR
+              value: /app/persist/config
+            - name: GOKAPI_DATA_DIR
+              value: /app/persist/data
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -eu
+              mkdir -p /app/persist/config /app/persist/data
+              if [ -f /app/persist/config/config.json ]; then
+                echo "config.json present - leaving existing configuration untouched"
+              else
+                echo "no config.json - installing seed configuration"
+                cp /seed/config.json /app/persist/config/config.json
+                chmod 600 /app/persist/config/config.json
+              fi
+              if [ -f /app/persist/data/gokapi.sqlite ]; then
+                echo "database present - leaving existing users untouched"
+              else
+                echo "no database - creating super-admin user"
+                /app/gokapi --deployment-password \
+                  "$(head -c 32 /dev/urandom | base64 | tr -dc 'A-Za-z0-9' | head -c 24)"
+              fi
+          volumeMounts:
+            - name: data
+              mountPath: /app/persist
+            - name: seed
+              mountPath: /seed
+              readOnly: true
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              memory: 64Mi
+      containers:
+        - name: gokapi
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          # No securityContext / runAsUser here on purpose. The FSS CSI driver
+          # ignores fsGroup, so a non-root UID cannot write to this volume, and
+          # the image only drops privileges when DOCKER_NONROOT=true. Leave both
+          # alone together — see the persistence comment in values.yaml.
+          ports:
+            - name: http
+              containerPort: {{ .Values.service.port }}
+              protocol: TCP
+          env:
+            - name: TZ
+              value: Australia/Sydney
+            - name: GOKAPI_CONFIG_DIR
+              value: /app/persist/config
+            - name: GOKAPI_DATA_DIR
+              value: /app/persist/data
+            - name: GOKAPI_PORT
+              value: {{ .Values.service.port | quote }}
+            - name: GOKAPI_MAX_FILESIZE
+              value: {{ .Values.config.maxFileSizeMB | quote }}
+            # Send the request log to the pod log instead of a file on the PVC,
+            # so `kubectl logs` works and the volume stays for user data.
+            - name: GOKAPI_LOG_STDOUT
+              value: "true"
+            # Caddy terminates TLS and is the only thing that can reach this
+            # Service, so trust the pod network for X-Forwarded-For parsing.
+            # Note this does NOT gate header authentication — Gokapi does not
+            # check the peer before trusting HeaderKey (see values.yaml).
+            - name: GOKAPI_TRUSTED_PROXIES
+              value: "10.0.0.0/8"
+          volumeMounts:
+            - name: data
+              mountPath: /app/persist
+          # exec probes, NOT httpGet — this is mandatory, not a style choice.
+          # Under Cilium generic-veth chaining, kubelet's HTTP probes arrive
+          # from the cni0 gateway IP and are classified as CIDR/world traffic
+          # rather than host identity, so the CiliumNetworkPolicy that selects
+          # this pod would deny them and the pod would never become ready. Same
+          # reason the canary DaemonSet uses exec probes — see cilium/.
+          # curl is present in the image (its own HEALTHCHECK uses it).
+          readinessProbe:
+            exec:
+              command:
+                - curl
+                - --fail
+                - --silent
+                - --output
+                - /dev/null
+                - http://127.0.0.1:{{ .Values.service.port }}/
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            exec:
+              command:
+                - curl
+                - --fail
+                - --silent
+                - --output
+                - /dev/null
+                - http://127.0.0.1:{{ .Values.service.port }}/
+            initialDelaySeconds: 15
+            periodSeconds: 30
+            failureThreshold: 3
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ include "gokapi.fullname" . }}-data
+        - name: seed
+          configMap:
+            name: {{ include "gokapi.fullname" . }}-seed

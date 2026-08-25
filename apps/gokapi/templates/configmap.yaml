@@ -1,0 +1,69 @@
+{{/*
+Seed configuration, copied onto the PVC by the init container in
+deployment.yaml *only if no config.json exists yet*.
+
+Gokapi has no environment variable for authentication: the setup wizard at
+/setup is the only supported way to choose an auth method, and it is reachable
+unauthenticated until it has been completed. Seeding config.json means the pod
+comes up already configured for header auth and the wizard never opens.
+
+This cannot be mounted at /app/config directly. Gokapi rewrites its own config
+file at runtime — it generates SaltAdmin/SaltFiles on first load and calls
+save(), and stores E2E encryption state here — so the file has to live on
+writable storage. A ConfigMap volume is read-only, hence the copy-on-first-boot
+init container. The consequence to remember: once the PVC has a config.json,
+edits to this ConfigMap have NO effect. To change auth settings afterwards, use
+Gokapi's own UI, or delete the file on the PVC and let the pod restart reseed
+it (which regenerates the salts and invalidates existing sessions).
+
+ConfigVersion 22 matches appVersion 2.2.4 (configupgrade.CurrentConfigVersion).
+It is also that release's minConfigVersion — Gokapi exits rather than migrate
+anything older — so bump this in lockstep if the image is upgraded across a
+config-schema change.
+*/}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "gokapi.fullname" . }}-seed
+  labels:
+    {{- include "gokapi.labels" . | nindent 4 }}
+data:
+  config.json: |
+    {
+      "Authentication": {
+        "Method": 2,
+        "Username": {{ .Values.config.adminUsername | quote }},
+        "HeaderKey": {{ .Values.config.headerKey | quote }},
+        "OnlyRegisteredUsers": {{ .Values.config.onlyRegisteredUsers }},
+        "SaltAdmin": "",
+        "SaltFiles": "",
+        "OauthProvider": "",
+        "OAuthClientId": "",
+        "OAuthClientSecret": "",
+        "OauthGroupScope": "",
+        "OAuthRecheckInterval": 0,
+        "OAuthGroups": []
+      },
+      "Port": "0.0.0.0:{{ .Values.service.port }}",
+      "ServerUrl": {{ .Values.config.serverUrl | quote }},
+      "RedirectUrl": {{ .Values.config.redirectUrl | quote }},
+      "PublicName": {{ .Values.config.publicName | quote }},
+      "DataDir": "/app/persist/data",
+      "DatabaseUrl": "sqlite:///app/persist/data/gokapi.sqlite",
+      "ConfigVersion": 22,
+      "MaxFileSizeMB": {{ .Values.config.maxFileSizeMB }},
+      "MaxMemory": 50,
+      "ChunkSize": 45,
+      "MaxParallelUploads": 3,
+      "Encryption": {
+        "Level": 0,
+        "Cipher": null,
+        "Salt": "",
+        "Checksum": "",
+        "ChecksumSalt": ""
+      },
+      "UseSsl": false,
+      "PicturesAlwaysLocal": false,
+      "SaveIp": {{ .Values.config.saveIp }},
+      "IncludeFilename": false
+    }
