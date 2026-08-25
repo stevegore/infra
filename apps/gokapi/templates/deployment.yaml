@@ -20,6 +20,19 @@ spec:
       labels:
         {{- include "gokapi.selectorLabels" . | nindent 8 }}
     spec:
+      # MUST stay false. Kubernetes injects legacy Docker-link environment
+      # variables for every Service in the namespace, named after the Service
+      # in upper case — and this Service is called `gokapi`, so it produces
+      # GOKAPI_PORT=tcp://<clusterIP>:53842. Gokapi reads GOKAPI_PORT as its
+      # own webserver port setting, so the injected value collides head-on with
+      # the app's config namespace and it dies at startup with:
+      #   Error parsing env variables: env: parse error on field
+      #   "WebserverPort" of type "int": strconv.ParseInt:
+      #   parsing "tcp://10.96.x.x:53842": invalid syntax
+      # An explicit env entry outranks the injected one, which is why only the
+      # init container hit this first — but turning the injection off is the
+      # actual fix, and it also covers GOKAPI_SERVICE_PORT and friends.
+      enableServiceLinks: false
       initContainers:
         # First-boot bootstrap. Both halves are non-destructive: an existing
         # config.json and an existing database are left completely alone, so

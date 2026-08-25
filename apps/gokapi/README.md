@@ -104,3 +104,18 @@ kubectl -n authentik exec deploy/authentik-server -- \
 
 GitOps as usual — edit, commit, push to `main`; the ApplicationSet picks up a
 brand-new `apps/gokapi/` on its next poll. See `ARGOCD_WORKFLOW.md`.
+
+## Gotcha: the Service name collides with the app's env namespace
+
+The Service is called `gokapi`, so Kubernetes' legacy Docker-link injection
+produces `GOKAPI_PORT=tcp://<clusterIP>:53842` — and Gokapi reads `GOKAPI_PORT`
+as its own webserver port. The pod crash-loops at startup with:
+
+```
+Error parsing env variables: env: parse error on field "WebserverPort"
+of type "int": strconv.ParseInt: parsing "tcp://10.96.x.x:53842": invalid syntax
+```
+
+`enableServiceLinks: false` in the pod spec is the fix and must stay. Renaming
+the Service would also work, but the injection covers `GOKAPI_SERVICE_PORT` and
+friends too, so turning it off is the durable answer.
