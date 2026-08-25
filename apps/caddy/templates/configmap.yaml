@@ -208,6 +208,16 @@ data:
         reverse_proxy authentik-server.authentik.svc.cluster.local:80
       }
 
+      # The bare domain is only ever visited by you — recipients get deep links
+      # to /d/<id>. Gokapi's own landing page just bounces anonymous visitors to
+      # its RedirectUrl, which made send.stevegore.au a dead end, so send the
+      # root straight to the upload page instead. Must be a `handle`: `redir`
+      # sorts after `handle` in the directive order, so a bare `redir` here
+      # would never be reached past the catch-all below.
+      handle / {
+        redir * /admin
+      }
+
       @admin path /admin /apiKeys /auth/token /changePassword /downloadPresigned /e2eSetup /filerequests /logs /uploadChunk /uploadStatus /users
       handle @admin {
         route {

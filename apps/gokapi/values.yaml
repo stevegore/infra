@@ -65,9 +65,12 @@ config:
   # Shown in the page title and on the download page.
   publicName: send.stevegore.au
 
-  # Where a visitor to the bare domain gets sent. Gokapi has no landing page of
-  # its own for anonymous users, and leaving this empty renders a blank page.
-  redirectUrl: https://stevegore.au/
+  # Where Gokapi's /index handler sends visitors. This is the ONLY place the
+  # setting is used (verified in v2.2.4 — it does not affect expired files or
+  # error pages), and Caddy already redirects the bare domain to /admin before
+  # it reaches Gokapi, so this is just a consistent fallback for anyone hitting
+  # /index directly. Leaving it empty renders a blank page.
+  redirectUrl: https://send.stevegore.au/admin
 
   # Authentication.Method = 2 (AuthenticationHeader) — Gokapi reads the
   # username out of a header set by the reverse proxy. Caddy's `import

@@ -97,7 +97,10 @@ monitors = [
     {"name": "Adminer",                    "type": "http", "kwargs": {"url": "https://adminer.stevegore.au/",                  "maxredirects": 0,  "accepted_statuscodes_json": ACCEPT_302},      "tags": ["public", "infra"],  "aliases": ["adminer.stevegore.au"]},
     {"name": "Desk Service",               "type": "http", "kwargs": {"url": "https://desk.stevegore.au/",                    "maxredirects": 0,  "accepted_statuscodes_json": ACCEPT_302},      "tags": ["public"],           "aliases": ["desk.stevegore.au"]},
     {"name": "Gym Bookings",               "type": "http", "kwargs": {"url": "https://gym.stevegore.au/",                     "maxredirects": 0,  "accepted_statuscodes_json": ACCEPT_302},      "tags": ["public"],           "aliases": ["gym.stevegore.au"]},
-    {"name": "Send (Gokapi)",              "type": "http", "kwargs": {"url": "https://send.stevegore.au/",                    "maxredirects": 0,  "accepted_statuscodes_json": ACCEPT_OK},       "tags": ["public"],           "aliases": ["send.stevegore.au"]},
+    # /index, not /: Caddy redirects the bare root to /admin without consulting
+    # the backend, so a 302 there would stay green with Gokapi completely down.
+    # /index is served by Gokapi itself and returns 200.
+    {"name": "Send (Gokapi)",              "type": "http", "kwargs": {"url": "https://send.stevegore.au/index",               "maxredirects": 0,  "accepted_statuscodes_json": ACCEPT_OK},       "tags": ["public"],           "aliases": ["send.stevegore.au"]},
     {"name": "Uptime Kuma",                "type": "http", "kwargs": {"url": "https://uptime.stevegore.au/",                  "maxredirects": 5,  "accepted_statuscodes_json": ACCEPT_OK},       "tags": ["public", "infra"],  "aliases": ["uptime.stevegore.au"]},
     {"name": "Stats",                      "type": "http", "kwargs": {"url": "https://stats.stevegore.au/api/stats",          "maxredirects": 0,  "accepted_statuscodes_json": ACCEPT_OK},       "tags": ["public", "infra"],  "aliases": ["stats.stevegore.au"]},
     {"name": "Instagram Gallery",          "type": "http", "kwargs": {"url": "https://gallery.stevegore.au/",                "maxredirects": 0,  "accepted_statuscodes_json": ACCEPT_OK},       "tags": ["public", "photos"], "aliases": ["gallery.stevegore.au"]},
