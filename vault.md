@@ -525,10 +525,17 @@ in the cluster, in Vault, in Vaultwarden or in OCI. Consequences:
   There is no second factor and no recovery path. This is the one artefact where
   "stored only in Vaultwarden" is not good enough, given its 24-hour window.
 
+**Where the private key lives** (as of 2026-08-26): `~/.config/vault-kv-export/vault-export.key`
+on the Mac, mode 600, plus a copy in **OneDrive Personal Vault**. Note Personal
+Vault does not sync to the macOS filesystem — it is reachable only via
+onedrive.live.com or the mobile app, so don't go looking for it under
+`~/Library/CloudStorage/`. Both copies are currently Microsoft- or Mac-bound; a
+third copy on offline media would remove that dependency.
+
 Decrypt with:
 
 ```bash
-age -d -i /path/to/vault-export.key kv-export-YYYYMMDD-HHMMSS.json.age | jq .
+age -d -i ~/.config/vault-kv-export/vault-export.key kv-export-YYYYMMDD-HHMMSS.json.age | jq .
 ```
 
 **Upload uses a write-only PAR, not an S3 HMAC key.** OCI caps a user at 2
@@ -553,9 +560,13 @@ Vault was healthy would go quiet during exactly the outage worth hearing about.
 **Setup (in order — the Vault side must exist before ArgoCD syncs the app):**
 
 ```bash
-# 1. Generate the keypair. Store the private key OFFLINE. Never commit it.
-age-keygen -o vault-export.key
-age-keygen -y vault-export.key          # the age1... public recipient
+# 1. Generate the keypair OUTSIDE the repo — never into the working tree, even
+#    though *.key is gitignored. Mirrors ~/.config/vault-token-sync/ and
+#    ~/.config/caddy-acme/.
+mkdir -p ~/.config/vault-kv-export && chmod 700 ~/.config/vault-kv-export
+age-keygen -o ~/.config/vault-kv-export/vault-export.key
+chmod 600 ~/.config/vault-kv-export/vault-export.key
+age-keygen -y ~/.config/vault-kv-export/vault-export.key   # the age1... recipient
 
 # 2. Vault policies, k8s auth role, VSO binding, and the upload PAR
 source scripts/vault-env.sh && vlogin
