@@ -5,9 +5,10 @@ services:
     image: nuraspace  # Built manually and kept local currently due to credentials
     ports:
       - 8111:5000
+    environment:
+      TZ: Australia/Sydney
     restart: unless-stopped
     volumes:
       - /var/nura:/var/nura
-      - /etc/timezone:/etc/timezone
-      - /etc/localtime:/etc/localtime
+      - /etc/localtime:/etc/localtime:ro
     

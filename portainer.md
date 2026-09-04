@@ -2,7 +2,7 @@
 
 **Endpoint:** pico-docker (Local Docker Engine)  
 **Docker Version:** 29.0.1  
-**Portainer Version:** portainer-ee 2.39.5 LTS<br>
+**Portainer Version:** portainer-ee 2.39.7 LTS<br>
 **Portainer Compose:** `pico/portainer/compose.yaml` (host network mode; deployed directly on pico)<br>
 **Total Containers:** 31<br>
 **Total Volumes:** 48  
@@ -27,11 +27,39 @@
 > endpoint were preserved, and all 14 stack names/statuses matched the
 > pre-upgrade inventory. Both Portainer Uptime Kuma monitors returned to green.
 >
+> **Version drift corrected 2026-09-05:** the host had been moved to 2.39.7
+> out of band while this repo still pinned 2.39.5, so a deploy from the tracked
+> compose file would have *downgraded* the binary against an already-migrated
+> `portainer_data`. `pico/portainer/compose.yaml` is now pinned to 2.39.7 by
+> tag and digest, matching the running image. The circumstances of the 2.39.5
+> -> 2.39.7 move are unrecorded.
+>
 > **This repo is public.** The compose snippets below use `${VAR}` for every
 > credential; the real values live in each stack's Portainer Env, never in git.
 > Anything shown as `<REDACTED>` belongs to a decommissioned stack and should be
 > treated as compromised — it was committed in plaintext before 2026-07-31 and
 > is still recoverable from git history.
+>
+> **Timezone convention.** Do **not** bind `/etc/timezone`. Ubuntu 26.04's
+> `tzdata` stopped shipping that file, so the 2026-09-04 release upgrade deleted
+> it, Docker recreated the path as an empty *directory*, and all seven services
+> binding it died with exit 127 — a directory cannot be bind-mounted onto a file.
+>
+> Which replacement is correct depends on whether the **image** ships zoneinfo:
+>
+> - **Ships zoneinfo** (`huginn`, `nuraspace`, `goldenboards` — verified): set
+>   `TZ=Australia/Sydney`. It resolves, and it is what applications read.
+> - **Ships no zoneinfo** (`portainer-ee` — verified by exporting the image):
+>   set **no** `TZ` and bind `/etc/localtime` read-only. A named zone the image
+>   cannot resolve falls back to UTC *and takes precedence over the bind*, so
+>   setting `TZ` actively breaks it. Portainer had `TZ=Australia/Sydney` set and
+>   was timestamping in UTC for exactly this reason — fixed 2026-09-05.
+> - **Image unavailable to check** (`gymbooking2`, `stravakeeper` — neither image
+>   is on pico): bind `/etc/localtime` read-only and set no `TZ`. Behaviour is
+>   then identical to the old two-bind setup, minus the broken bind.
+>
+> A POSIX `TZ` string (`AEST-10AEDT,M10.1.0,M4.1.0/3`) also works without
+> zoneinfo, but hardcodes the DST rules; the bind follows the host instead.
 
 ---
 
@@ -915,11 +943,11 @@ services:
       - HUGINN_DATABASE_USERNAME=root
       - HUGINN_DATABASE_NAME=huginn
       - APP_SECRET_TOKEN=${APP_SECRET_TOKEN}
+      - TZ=Australia/Sydney
     depends_on:
       - mysql
     volumes:
-      - /etc/timezone:/etc/timezone
-      - /etc/localtime:/etc/localtime
+      - /etc/localtime:/etc/localtime:ro
 
   threaded:
     image: ghcr.io/huginn/huginn-single-process
@@ -932,12 +960,12 @@ services:
       - HUGINN_DATABASE_USERNAME=root
       - HUGINN_DATABASE_NAME=huginn
       - APP_SECRET_TOKEN=${APP_SECRET_TOKEN}
+      - TZ=Australia/Sydney
     depends_on:
       - mysql
       - web
     volumes:
-      - /etc/timezone:/etc/timezone
-      - /etc/localtime:/etc/localtime
+      - /etc/localtime:/etc/localtime:ro
 
   mysqladmin:
     image: phpmyadmin
@@ -999,11 +1027,12 @@ services:
     image: nuraspace  # Built manually and kept local currently due to credentials
     ports:
       - 8111:5000
+    environment:
+      TZ: Australia/Sydney
     restart: unless-stopped
     volumes:
       - /var/nura:/var/nura
-      - /etc/timezone:/etc/timezone
-      - /etc/localtime:/etc/localtime
+      - /etc/localtime:/etc/localtime:ro
 ```
 
 **Purpose:** NuraSpace application (custom Python deployment)  
@@ -1117,8 +1146,7 @@ services:
     restart: unless-stopped
     volumes:
       - /var/elixr:/var/elixr
-      - /etc/timezone:/etc/timezone
-      - /etc/localtime:/etc/localtime
+      - /etc/localtime:/etc/localtime:ro
 ```
 
 **Purpose:** Gym booking system (Elixr gym)  
@@ -1150,12 +1178,20 @@ version: '3.5'
 services:
   goldenboards:
     image: goldenboards
+    environment:
+      TZ: Australia/Sydney
     restart: unless-stopped
     volumes:
       - /var/goldenboards:/var/goldenboards
-      - /etc/timezone:/etc/timezone
-      - /etc/localtime:/etc/localtime
+      - /etc/localtime:/etc/localtime:ro
 ```
+
+> **`ForcePullImage` is still ON — turn it off before merging any change to
+> `pico/goldenboards/compose.yaml`.** The image is built locally on pico and
+> exists in no registry, so the 5-minute auto-update job resolves it to
+> `docker.io/library/goldenboards`, and the redeploy dies on a failed pull.
+> This is the same trap that was disarmed for [nuraspace2](#nuraspace2) on
+> 2026-08-08; Portainer's log records the failed pull on every poll.
 
 **Purpose:** Golden Boards application (custom Go binary)  
 **Ports:** None exposed  
@@ -1167,7 +1203,7 @@ services:
 
 ### stravakeeper
 
-**Status:** Running  
+**Status:** Inactive — **not deployed** (verified 2026-09-05)  
 **Stack ID:** 79  
 **Project Path:** `/data/compose/79`  
 **Compose Version:** v1  
@@ -1177,7 +1213,7 @@ services:
 
 | Container                   | Image                 | Status     |
 | --------------------------- | --------------------- | ---------- |
-| stravakeeper-stravakeeper-1 | stravakeeper (custom) | Up 2 weeks |
+| stravakeeper-stravakeeper-1 | stravakeeper (custom) | Not present |
 
 **Docker Compose:**
 
@@ -1190,9 +1226,15 @@ services:
     restart: unless-stopped
     volumes:
       - /var/stravakeeper:/var/stravakeeper
-      - /etc/timezone:/etc/timezone
-      - /etc/localtime:/etc/localtime
+      - /etc/localtime:/etc/localtime:ro
 ```
+
+> **This stack does not currently run.** There is no
+> `stravakeeper-stravakeeper-1` container and no `stravakeeper` image on pico,
+> so the local-only image would have to be rebuilt before the stack can come
+> up. `ForcePullImage` is also still ON here, so an auto-update redeploy
+> resolves to `docker.io/library/stravakeeper` and fails the pull. Not caused
+> by the 26.04 upgrade — it predates it.
 
 **Purpose:** Strava data keeper and archiver (custom Go binary)  
 **Ports:** 8180  
@@ -1733,7 +1775,7 @@ the personal photo library.
 ### Portainer
 
 **Container:** portainer-portainer-1  
-**Image:** portainer/portainer-ee:2.39.5 (digest-pinned)<br>
+**Image:** portainer/portainer-ee:2.39.7 (digest-pinned)<br>
 **Status:** Running<br>
 **Network:** host (all ports exposed directly)  
 **Compose Config:** `~/code/infra/pico/portainer/compose.yaml`<br>
@@ -1741,9 +1783,12 @@ the personal photo library.
 **Mounts:**  
 
 - `portainer_data` volume -> `/data`  
-- `/etc/localtime` bind -> `/etc/localtime`  
-- `/etc/timezone` bind -> `/etc/timezone`  
+- `/etc/localtime` bind -> `/etc/localtime` (read-only)  
 - `/run/docker.sock` bind -> `/var/run/docker.sock`
+
+**Timezone:** no `TZ` env var by design — the image ships no zoneinfo, so the
+`/etc/localtime` bind is what supplies the zone. See the timezone convention at
+the top of this file before adding one back.
 
 **Purpose:** Container management UI (Enterprise Edition)
 

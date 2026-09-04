@@ -3,9 +3,10 @@ version: '3.5'
 services:
   goldenboards:
     image: goldenboards  
+    environment:
+      TZ: Australia/Sydney
     restart: unless-stopped
     volumes:
       - /var/goldenboards:/var/goldenboards    
-      - /etc/timezone:/etc/timezone
-      - /etc/localtime:/etc/localtime
+      - /etc/localtime:/etc/localtime:ro
     

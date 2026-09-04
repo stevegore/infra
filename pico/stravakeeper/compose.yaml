@@ -33,7 +33,6 @@ services:
       MYSQL_DSN: "strava:${MYSQL_PASSWORD}@tcp(mysql:3306)/strava_keeper?parseTime=true"
     volumes:
       - /var/stravakeeper:/var/stravakeeper
-      - /etc/timezone:/etc/timezone:ro
       - /etc/localtime:/etc/localtime:ro
 
 volumes:
