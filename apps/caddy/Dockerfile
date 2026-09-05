@@ -11,12 +11,12 @@
 #     -t syd.ocir.io/sdajdczqv0qo/caddy:2.11.3-stevegore.2 \
 #     --push apps/caddy/
 
-FROM caddy:2.11-builder AS builder
+FROM caddy:2.11-builder@sha256:b8f9c720f13f64c13dd42db28e8f38a3fab54c11fce4d93bda26d710c448dcfd AS builder
 
 RUN xcaddy build \
     --with github.com/ss098/certmagic-s3 \
     --with github.com/caddy-dns/cloudflare
 
-FROM caddy:2.11-alpine
+FROM caddy:2.11-alpine@sha256:5f5c8640aae01df9654968d946d8f1a56c497f1dd5c5cda4cf95ab7c14d58648
 
 COPY --from=builder /usr/bin/caddy /usr/bin/caddy
