@@ -4,7 +4,7 @@ services:
     # 2.39.5 while the host had been moved to 2.39.7 out of band, so deploying
     # from this file would have downgraded the binary against an already
     # migrated portainer_data DB.
-    image: portainer/portainer-ee:2.39.7@sha256:22ad511ad1341f2f7dfaa7447fae4f3018389a1670dd06f7b920052cd9e9f692
+    image: portainer/portainer-ee:2.45.0@sha256:18750221de87f489fffc3d52a23799e9c6a83aab0f1a5337824c81e12bf552b5
     network_mode: host
     restart: always
     volumes:
