@@ -22,6 +22,16 @@
 > `pico/portainer/compose.yaml` but holds every update for a cold
 > `portainer_data` backup and manual deployment.
 >
+> **Deploy it only from `pico/portainer/compose.yaml`.** A stale copy pinning
+> 2.33.6 was still sitting in `/opt/portainer/docker-compose.yml` — the
+> pre-2026-08-01 deploy location — and running `docker compose up -d` there on
+> 2026-09-05 downgraded the control plane against a 2.39.x database. Portainer
+> crash-looped on `The database schema version does not align with the server
+> version` and the UI returned 502 until it was redeployed at 2.39.7. Nothing
+> was lost: Portainer fails closed at the schema check rather than migrating
+> backwards. That file is now renamed to `docker-compose.yml.superseded-20260905`
+> with a README pointing here, so the old path errors instead of deploying.
+>
 > **Last control-plane upgrade:** 2.33.6 → 2.39.5 LTS on 2026-08-01. The
 > database migration completed cleanly, the instance ID and `pico-docker`
 > endpoint were preserved, and all 14 stack names/statuses matched the
