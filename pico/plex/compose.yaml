@@ -2,7 +2,7 @@ version: '2'
 services:
   plex:
     container_name: plex
-    image: plexinc/pms-docker:1.43.2.10687-563d026ea  # https://hub.docker.com/r/plexinc/pms-docker/tags
+    image: plexinc/pms-docker:1.43.2.10687-563d026ea@sha256:c37106c57fed7a6624f5dee5a3ce460ff011f09a2aa7f4ee9e8dbbd08ae1b87e  # https://hub.docker.com/r/plexinc/pms-docker/tags
     restart: unless-stopped
     ports:
       - 32400:32400/tcp
