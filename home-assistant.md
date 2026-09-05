@@ -124,9 +124,9 @@ Default to the official server for everyday on/off + state, switch to `ha-mcp` f
 
 | Component | Status | Notes |
 |---|---|---|
-| `tuya_local` | active | Local control (`local_push`), bundles `tinytuya==1.20.0`. Source: [`make-all/tuya-local`](https://github.com/make-all/tuya-local). |
-| `eero` | active | Read-only sensors + device tracker. **No services exposed** — cannot create DHCP reservations from HA. |
-| `eero_tracker` | legacy | Kept with `interval_seconds: 30` to avoid scan overrun. |
+| `tuya_local` | active | Local control (`local_push`), bundles `tinytuya==1.20.0`. Version `2026.7.2`. Source: [`make-all/tuya-local`](https://github.com/make-all/tuya-local). |
+| `eero` | active | Read-only sensors + device tracker, **115 registry entities**. **No services exposed** — cannot create DHCP reservations from HA. |
+| `eero_tracker` | legacy, **archived upstream** | v1.0.10. [`jrlucier/eero_tracker`](https://github.com/jrlucier/eero_tracker) has been **archived since May 2021** — no fixes will ever land. Legacy YAML `device_tracker` platform (`configuration.yaml`), creates **0 registry entities** — it writes to `known_devices.yaml` (107 devices tracked). Kept with `interval_seconds: 30` to avoid scan overrun. Redundant with the modern `eero` component; removal is a presence-detection behaviour change, so it has not been done. |
 
 Custom component path: `/opt/ha-container/config/custom_components/<name>/` (host) or `/config/custom_components/<name>/` (in container).
 
@@ -237,6 +237,192 @@ Symptoms: one or more `tuya_local` entries in `setup_retry` state, reason `tuya-
 
 Add DHCP reservations on the eero (Settings → Network settings → Reservations & Port Forwarding → Add a reservation, pick by MAC). The IPs in `core.config_entries` and the reservations must match — if you change one, change the other. Once reserved, this entire repair recipe should never need to run again.
 
+**The same DHCP drift hits LIFX, and there it is far worse** — a stale LIFX host
+that collides with a live bulb's IP leaks UDP sockets without bound and
+eventually breaks unrelated integrations. See
+[LIFX socket leak](#lifx-socket-leak--fd-exhaustion--tuya_local-discovery-failure-2026-08-08).
+Reserve the LIFX bulbs too.
+
+## `eero_tracker` traceback noise is transient DNS, not auth
+
+`eero_tracker` periodically dumps a full traceback ending in:
+
+```
+requests.exceptions.ConnectionError: HTTPSConnectionPool(host='api-user.e2ro.com', port=443):
+  ... NameResolutionError(... [Errno -3] Try again)
+socket.gaierror: [Errno -3] Try again
+```
+
+**This is not expired auth and not an eero API change** — the usual suspects for
+a 5-year-archived component. `EAI_AGAIN` is a *transient* resolver failure. The
+container resolves via `8.8.8.8`/`8.8.4.4` (Docker overrides the host's
+`127.0.0.53` systemd-resolved stub), so occasional failures against public DNS
+are expected.
+
+Rate is ~4 failures/day against `interval_seconds: 30` — **~0.14% of ~2880
+scans**. Each failure produces a long traceback because the component has no
+exception handling around `requests.get`, and it is archived upstream so it will
+never get any. One failure prints the message several times (chained
+exceptions), so **grep counts overstate the incident count** — count
+`socket.gaierror` occurrences, not message matches.
+
+Verdict: cosmetic log noise, no functional impact (`consider_home: 60` rides out
+a missed scan). **Nothing was changed for this on 2026-08-08** — 0 occurrences in
+the 88 min after the HA restart, but at ~4/day that window proves nothing, so
+treat this as *unfixed and understood*, not fixed. Options, in order of
+preference:
+
+1. **Leave it** — 4 tracebacks/day, harmless.
+2. **Silence it** — `logger:` override for the `homeassistant` "Error doing job"
+   path (blunt; would hide unrelated errors too).
+3. **Remove `eero_tracker`** — the modern `eero` component already supplies 115
+   entities. But `eero_tracker` is the thing populating `known_devices.yaml`
+   (107 devices), so this is a **real presence-detection behaviour change**,
+   not a cleanup. Needs a deliberate decision + migration of anything relying on
+   those legacy `device_tracker.*` entities.
+
+## LIFX socket leak → FD exhaustion → `tuya_local` discovery failure (2026-08-08)
+
+**The single most important gotcha on this box.** A LIFX IP clash leaks UDP
+sockets until the HA process holds >1024 file descriptors, at which point
+*any* library using `select()` breaks — even though nothing is wrong with
+that library.
+
+### Symptom
+
+`tuya_local` discovery failing ~100×/day, every scan pass (`SCAN_INTERVAL` is
+10 min):
+
+```
+File "/config/custom_components/tuya_local/helpers/discovery.py", line 82, in _scan_all
+    return tinytuya.deviceScan(verbose=False, poll=False)
+ValueError: filedescriptor out of range in select()
+```
+
+`tuya_local` is the **victim, not the culprit**. `select.select()` cannot
+accept a descriptor numbered ≥ `FD_SETSIZE` (1024) — a hard glibc/CPython
+limit, unrelated to `ulimit`. The HA process was holding **1121 FDs**, so
+every newly-created socket got a number above 1024 and the scan died
+instantly.
+
+### Root cause
+
+`ss -uan` showed **1037 ESTAB UDP sockets to a single peer, `192.168.4.38:56700`**
+(56700 = the LIFX LAN protocol port), out of 1285 UDP sockets total.
+
+Two LIFX config entries both claimed `192.168.4.38`:
+
+| Entry | unique_id (MAC) | State |
+|---|---|---|
+| `Lounge Room 1` | `d0:73:d5:51:6d:ea` | `loaded` — genuinely at `.38` per ARP |
+| `Dining Room 1` | `d0:73:d5:51:59:9e` | `setup_retry` — **stale host, bulb not on the LAN at all** |
+
+A ping sweep of the whole `192.168.4.0/22` (both `.4.x` and `.5.x`) found 21
+LIFX devices; `d0:73:d5:51:59:9e` was **not among them**. That bulb is gone.
+
+So `aiolifx` kept connecting "Dining Room 1" to `.38`, got a serial mismatch
+back from Lounge Room 1, retried — and **leaked one UDP socket per retry,
+forever**. This is a known aiolifx failure mode: sockets are only closed when a
+bulb is deemed offline, so an IP clash (where something *does* answer) never
+triggers the close path.
+
+**Beware the self-reinforcing loop:** once FD numbers pass 1024, `tinytuya`'s
+scan raises mid-loop and leaks its own sockets too, so the condition sustains
+itself.
+
+### Fix applied
+
+Disabled the dead `Dining Room 1` config entry (entry_id
+`00ed63d36ce6523decf13fabe57d878f`) — matching what was already done by hand for
+the dead `Dining Room 2` and `Light strip` entries (`disabled_by: user`). A
+user-disabled entry is not re-enabled by discovery.
+
+```python
+ha_set_integration(entry_id="00ed63d36ce6523decf13fabe57d878f", enabled=False)
+```
+
+**Disabling alone does not reclaim the leaked sockets** — they are orphaned in
+the process and survive the entry unload (FD count went 1121 → 1119). An **HA
+restart is required** to actually drop them.
+
+`ha_restart` restarts the HA **process inside** the container, so
+`docker ps` still reports the old container uptime ("Up 7 days"). Confirm the
+restart by the HA pid changing (71 → 364), not by container uptime.
+
+### Verified result (2026-08-08)
+
+| Metric | Before | After |
+|---|---|---|
+| HA process FDs | 1121 | **77** |
+| Highest FD number | 1131 (> 1024 → `select()` fails) | **103** |
+| UDP sockets to `192.168.4.38:56700` | 1038 | **1** |
+| Total UDP sockets | 1285 | 249 |
+| `filedescriptor out of range` in log | 102 | **0** (over 88 min ≈ 8 scan intervals) |
+
+Positive confirmation that discovery works end-to-end, not merely that it is
+quiet — `discovery.py:221` logs a product-id warning only on the **success**
+path, well past the line-82 `deviceScan` that used to throw:
+
+- last successful scan before the fix: **2026-08-01 11:45:47** (the previous HA
+  start, before the leak accumulated)
+- first successful scan after the fix: **2026-08-08 15:35:47**, exactly one
+  10-minute `SCAN_INTERVAL` after the 15:25:26 restart
+
+**Tuya discovery had therefore been dead for a full 7 days.** Device control was
+never affected — all four `tuya_local` entries use static hosts and stayed
+`loaded` throughout.
+
+### Why it surfaced as an unhandled task exception
+
+`_scan_all()` wraps `tinytuya.deviceScan()` in `except OSError`. `ValueError` is
+**not** an `OSError`, so it escaped the handler and bubbled up as
+`Error doing job: Task exception was never retrieved`. Worth remembering when
+reading these tracebacks: the traceback names `tuya_local`, but the handler gap
+is why it is *loud*, and the FD leak elsewhere is why it *happens*.
+
+### Diagnosing this again
+
+```bash
+# The HA process is NOT pid 1 in the container — find it first
+HAPID=$(docker exec homeassistant-app pgrep -f "m homeassistant" | head -1)
+docker exec homeassistant-app sh -c "ls /proc/$HAPID/fd | wc -l"      # want << 1024
+docker exec homeassistant-app grep -i "open files" /proc/$HAPID/limits # soft limit 2048
+
+# Who is hogging sockets? (host networking, so run ss on pico)
+ss -uan | tail -n +2 | awk '{print $5}' | sort | uniq -c | sort -rn | head
+```
+
+`ulimit` is a **red herring** here — the soft limit is 2048 and was never hit.
+The breakage is purely the 1024 `FD_SETSIZE` ceiling on `select()`.
+
+### Still outstanding
+
+`Master Bedroom Right Side` (`192.168.4.22`) and `Master Bedroom Left Side`
+(`192.168.4.41`) are also stuck in `setup_retry`, and neither MAC appears in the
+LAN sweep. They are **not currently leaking** — nothing answers at those IPs, so
+aiolifx's offline path closes the socket correctly. But if DHCP ever hands `.22`
+or `.41` to another device, they will start leaking exactly like `Dining Room 1`
+did. DHCP reservations for the LIFX bulbs (same fix as the Tuya bulbs above)
+would prevent the whole class of problem.
+
+## Light service parameter churn
+
+`light.turn_on` has had its colour-temperature parameter renamed twice. As of the
+running Core version, the **only** accepted key is `color_temp_kelvin`:
+
+- `kelvin` — **removed**. Fails with `extra keys not allowed @ data['kelvin']`.
+- `color_temp` (mireds) — **removed in 2026.3**.
+- `color_temp_kelvin` — current. Same units as the old `kelvin`, so a `kelvin`
+  value carries over unchanged (no mired conversion).
+
+This bit `automation.bathroom_lights_morning_colour`, which failed silently at
+04:30 every day (fixed 2026-08-08 — `kelvin: 6500` → `color_temp_kelvin: 6500`).
+Verify the live schema rather than trusting docs:
+
+```python
+ha_list_services(domain="light", query="turn_on", detail_level="full")
+```
+
 ## Migration from Supervised (2026-08-01)
 
 ### Why
@@ -329,6 +515,14 @@ ha_get_logs(source="system", search="tuya_local")
 
 # Find Tuya devices on the LAN (port 6668 = local Tuya protocol)
 nmap -p 6668 --open -T4 -n 192.168.4.0/22
+
+# FD health — if this approaches 1024, select()-based libs (tinytuya) break.
+# NOTE: the HA process is not pid 1 in the container.
+HAPID=$(docker exec homeassistant-app pgrep -f "m homeassistant" | head -1)
+docker exec homeassistant-app sh -c "ls /proc/$HAPID/fd | wc -l"
+
+# Top socket peers — finds leaks (e.g. LIFX :56700). Host networking, so run on pico.
+ss -uan | tail -n +2 | awk '{print $5}' | sort | uniq -c | sort -rn | head
 
 # ARP cache (no scan, just what's been seen recently)
 ip neigh show | grep -E '192\.168\.[4-7]\.'

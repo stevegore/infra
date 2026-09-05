@@ -180,11 +180,20 @@ Key-value secrets engine for application credentials.
 | kv/authentik/config | Authentik: secret_key, username/password (pg-shared role), bootstrap_password/token, github_client_id/secret | authentik (authentik ns), pg-backups+authentik (databases ns) |
 | kv/argocd | GitHub OAuth App client secret for Dex SSO | argocd (argocd ns) |
 | kv/oci/pg-backups | OCI Customer Secret Key (S3) for pg-shared WAL/base backups | pg-backups (databases ns) |
+| kv/oci/vault-kv-export | Write-only PAR for the nightly kv export upload. Written by `scripts/vault-kv-export-setup.sh`; rotate by re-running it. | vault-kv-export (vault-kv-export ns) |
 | kv/homelab/* | Tokens synced from pico (`*.token` files) | pico-token-sync (write) |
 | kv/homelab/pushover | Pushover "Homelab notification" app: `app_token`, `user_key`, `app_name`. Written by hand, **not** by `vault-token-sync.sh` (that script only walks `*.token` files and writes a single `token` field). Read by `scripts/arr-malware-watchdog.sh` and `scripts/pushover-notify.sh` (the generic systemd `OnFailure=` alerter) via the same AppRole. | pico-token-sync |
 | kv/homelab/renovate | GitHub fine-grained PAT for the Renovate workflow: `token`, plus `purpose`/`scopes`/`consumer`/`created` metadata. Scoped to `stevegore/infra` only (contents, pull requests, workflows — all read+write). Written by hand. **Vault is the origin of record; GitHub Actions holds a copy as the repo secret `RENOVATE_TOKEN`.** Nothing reads this path automatically — on rotation, re-push it with:<br>`vault kv get -field=token kv/homelab/renovate \| gh secret set RENOVATE_TOKEN --repo stevegore/infra`<br>See [`AUTO_UPDATES.md`](AUTO_UPDATES.md). | pico-token-sync |
 | kv/strava-keeper/config | Strava Keeper: STRAVA_CLIENT_ID, STRAVA_CLIENT_SECRET, STRAVA_VERIFY_TOKEN, MYSQL_DSN | strava-keeper |
 | kv/gym-booker/config | Gym Booker: USERS_YAML (full users.yaml — gym credentials, swim schedule, pushover tokens) | gym-booker |
+
+> **This table is not exhaustive.** A walk of the live mount on 2026-08-18 found
+> 25 paths, including several never documented here (`cloudflare`, `github/orm-pat`,
+> `oci/api-key`, `oci/ocir`, `mysql/heatwave-admin`, `tailscale/operator_oauth`,
+> `homelab/cloudflare-ro`, `homelab/home-assistant`, `homelab/portainer`,
+> `homepage/*`, `adminer/*`). The nightly export walks the tree rather than
+> reading this list, so it captures them regardless — but don't treat the table
+> as a manifest.
 
 > **Decommissioned:** `kv/openclaw` and `kv/hermes` (plus their `openclaw` /
 > `hermes` policies and the matching VSO namespace bindings) were removed
@@ -471,11 +480,123 @@ Guards in place: `prevent_destroy` on both `oci_kms_vault` and `oci_kms_key` in
 scheduled-deletion window. Note `kms.tf` is Resource-Discovery-generated — if that
 file ever gets regenerated, **re-add the lifecycle blocks**.
 
-Not yet done: `oci kms management key backup --key-id <ocid> --endpoint <mgmt-endpoint>`
-does support HSM-protected keys (vault-level backup does *not* apply here — that
-needs a virtual private vault, and this one is `vault_type = "DEFAULT"`). A key
-backup restores only back into OCI, so it protects against key deletion, not against
-loss of the tenancy.
+**The key cannot be backed up at all — this was tried on 2026-08-18 and the
+platform refuses it.** An earlier version of this section claimed
+`oci kms management key backup` worked for HSM keys and only *vault-level* backup
+needed a virtual private vault. That is wrong: **key backup also requires a Virtual
+Private Vault.** `hashicorp-vault-unseal` is `vault_type = "DEFAULT"`, and the API
+rejects the call outright:
+
+```
+$ oci kms management key backup --key-id <ocid> --endpoint <mgmt-endpoint> --uri <par>
+ServiceError: InvalidParameter (400)
+  vaultType Invalid vault type VIRTUAL. Valid values are [VirtualPrivate]
+```
+
+(A DEFAULT/shared vault reports as `VIRTUAL` internally.) Moving to a Virtual
+Private Vault is a paid, non-trivial change — it means a new key and a full Vault
+seal-migration to re-wrap the master key — so it is not on the table for a
+free-tier homelab. **Treat the KMS key as genuinely unbackuppable.** The only
+guards are `prevent_destroy` and OCI's scheduled-deletion window.
+
+The corollary matters more than the key backup would have: **a `vault-storage`
+bucket backup is worthless without the key**, since every object in it is encrypted
+under the master key that only this KMS key can unwrap. Bucket backups protect
+against bucket corruption and nothing else. The only backup that survives loss of
+the KMS key is a **logical export of the secrets themselves** — which is what
+`apps/vault-kv-export` does. See [The nightly kv export](#the-nightly-kv-export).
+
+### The nightly kv export
+
+`apps/vault-kv-export` runs a CronJob at 03:20 UTC that walks the whole `kv/`
+tree, adds every policy body and the auth/secrets mount listings, encrypts the
+bundle to an **offline age key**, and PUTs it into the `vault-kms-key-backup`
+bucket. It is the only artefact in this homelab that survives loss of the KMS
+key.
+
+**Encryption is asymmetric, and that is the entire point.** The pod holds only
+the age *public* recipient — which is why it sits in plain sight in
+`values.yaml` in a public repo. The private key lives offline and exists nowhere
+in the cluster, in Vault, in Vaultwarden or in OCI. Consequences:
+
+- Compromising the cluster does not expose one byte of any past export.
+- Decryption depends on nothing inside OCI — not Vault, not KMS, not the tenancy.
+- **Lose the private key and every export ever written is permanently unreadable.**
+  There is no second factor and no recovery path. This is the one artefact where
+  "stored only in Vaultwarden" is not good enough, given its 24-hour window.
+
+**Where the private key lives** (as of 2026-08-26): `~/.config/vault-kv-export/vault-export.key`
+on the Mac, mode 600, plus a copy in **OneDrive Personal Vault**. Note Personal
+Vault does not sync to the macOS filesystem — it is reachable only via
+onedrive.live.com or the mobile app, so don't go looking for it under
+`~/Library/CloudStorage/`. Both copies are currently Microsoft- or Mac-bound; a
+third copy on offline media would remove that dependency.
+
+Decrypt with:
+
+```bash
+age -d -i ~/.config/vault-kv-export/vault-export.key kv-export-YYYYMMDD-HHMMSS.json.age | jq .
+```
+
+**Upload uses a write-only PAR, not an S3 HMAC key.** OCI caps a user at 2
+Customer Secret Keys and both are spent (`caddy-acme`, `pg-backups`) — taking one
+would have broken Caddy's ACME store or CNPG's WAL archiving. A PAR is also
+better scoped: `AnyObjectWrite` can create objects but cannot read, list or
+delete, so a leaked upload credential still cannot read back a single secret.
+The PAR expires annually; rotate by re-running the setup script. Expiry surfaces
+as an upload failure that pages, not as silence.
+
+Two guards exist specifically against *silent* success, the failure mode that
+left the bw2 sync dead for two months:
+
+- exporting 0 secrets is a hard failure, never an upload;
+- the output is checked for the `age-encryption.org` header before upload, so a
+  broken `age` can never ship plaintext.
+
+Failures page via Pushover. The credentials come from a VSO-synced k8s Secret
+rather than being read from Vault at runtime — a job that could only alert when
+Vault was healthy would go quiet during exactly the outage worth hearing about.
+
+**Setup (in order — the Vault side must exist before ArgoCD syncs the app):**
+
+```bash
+# 1. Generate the keypair OUTSIDE the repo — never into the working tree, even
+#    though *.key is gitignored. Mirrors ~/.config/vault-token-sync/ and
+#    ~/.config/caddy-acme/.
+mkdir -p ~/.config/vault-kv-export && chmod 700 ~/.config/vault-kv-export
+age-keygen -o ~/.config/vault-kv-export/vault-export.key
+chmod 600 ~/.config/vault-kv-export/vault-export.key
+age-keygen -y ~/.config/vault-kv-export/vault-export.key   # the age1... recipient
+
+# 2. Vault policies, k8s auth role, VSO binding, and the upload PAR
+source scripts/vault-env.sh && vlogin
+bash scripts/vault-kv-export-setup.sh
+
+# 3. Build + push the ARM image (cluster is A1/aarch64)
+bash scripts/build-vault-kv-export-image.sh
+
+# 3b. OCIR pull secret — namespace-scoped, in NO chart, so a new namespace
+#     never has it. Missing it shows up only as ImagePullBackOff.
+kubectl create secret docker-registry ocir-creds -n vault-kv-export \
+  --docker-server=syd.ocir.io \
+  --docker-username="$(vault kv get -field=username kv/oci/ocir)" \
+  --docker-password="$(vault kv get -field=auth_token kv/oci/ocir)" \
+  --docker-email=steve.j.gore@gmail.com
+
+# 4. Set age.recipient in apps/vault-kv-export/values.yaml, commit, push.
+#    The chart refuses to render with an empty recipient rather than writing
+#    plaintext secrets to object storage.
+
+# 5. Force a first run instead of waiting for 03:20
+kubectl -n vault-kv-export create job --from=cronjob/vault-kv-export manual-1
+kubectl -n vault-kv-export logs job/manual-1
+```
+
+> The export reads **every** secret in `kv/`, which is the broadest read grant in
+> the cluster. It therefore gets its own ServiceAccount and its own Vault role
+> (`vault-kv-export` → policy `vault-kv-export-read`) rather than borrowing the
+> shared VSO role, so it is not reachable by anything that merely lands in the
+> namespace.
 
 ### Where the break-glass credentials live
 
@@ -592,10 +713,31 @@ bites here:
   `SKIP_SETCAP=true` env var was belt-and-braces, not the thing that saved it.
 - `Failed to lock memory` — covered by the `disable_mlock = true` above.
 
+### 2.0.4: duplicate HCL attributes are now fatal
+
+2.0.4 removed duplicate-attribute support in HCL **entirely**, along with the env-var
+escape hatch that used to re-enable it. A config that declares the same attribute
+twice no longer warns — Vault refuses to start. Check the *rendered* config before
+any bump at or past 2.0.4, not just `values.yaml`, because vault-helm appends to it:
+
+```bash
+kubectl -n vault get cm vault-config -o jsonpath='{.data.extraconfig-from-values\.hcl}'
+```
+
+The live config is clean (verified 2026-08-08). The one to watch is `disable_mlock` —
+the chart appends it precisely because `standalone.config` omits it, so adding it back
+to `values.yaml` by hand would produce a duplicate and **brick the pod on next roll**.
+
+2.0.4 also drops `gnupg`, `openssl` and `procps` from the UBI base images. Harmless
+here: `docker.io/hashicorp/vault` is Alpine, so the `pidof` in the chart's preStop hook
+still resolves (busybox provides it). `openssl` is genuinely gone from the image —
+don't reach for it in a probe or hook.
+
 ### Version history
 
 | Date | Version | Chart | Notes |
 |------|---------|-------|-------|
+| 2026-08-08 | 2.0.4 | 0.34.0 | Patch. Rolled in ~24 s, auto-unsealed clean (`unsealed with stored key`). Renovate bumped `values.yaml` only — `Chart.yaml` appVersion was left on 2.0.3 and had to be caught by hand; check both on every bump. See the 2.0.4 HCL note below. |
 | 2026-08-01 | 2.0.3 | 0.34.0 | Major bump. Chart 0.34.0 already defaulted to 2.0.3 — the pin was holding the image *behind* the chart. Storage `oci` + `seal ocikms` unaffected. See the root-token warning above. |
 | 2026-08-01 | 1.21.4 | 0.34.0 | Staged by Renovate but never rolled (OnDelete); superseded same day. |
 | 2026-06-03 | 1.21.2 | 0.32.0 | |

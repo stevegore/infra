@@ -205,6 +205,10 @@ to stay at $0. **For small persistent data, use `oci-fss` instead** — it bills
 actual usage under the *separate, near-empty 100 GB FSS Always-Free allotment*,
 independent of this block budget. `garmin-mcp` was migrated bv→fss on 2026-06-13
 for exactly this reason (its PVC is a few-KB token file); see `apps/garmin-mcp/values.yaml`.
+Current `oci-fss` consumers: `authentik-media` (5Gi), `garmin-mcp-data` (1Gi),
+`gym-booker-data` (1Gi), `gokapi-data` (20Gi — file-sharing uploads, the only
+one expected to hold real volume). Those sizes are requests, not reservations;
+FSS bills on what is actually stored.
 Caveat: the FSS CSI driver ignores `fsGroup`, so only root (or fsGroup-tolerant)
 workloads can write to `oci-fss` — see the FSS non-root gotcha above.
 
@@ -225,6 +229,45 @@ oci bv volume list --compartment-id "$CID" --region ap-sydney-1 --all \
 export KUBECONFIG=~/.kube/oke-homelab.config
 kubectl get pv -o jsonpath='{range .items[*]}{.spec.csi.volumeHandle}{\"\n\"}{end}'   # cross-reference
 ```
+
+**FSS orphans are a separate failure mode.** The `oci-fss` StorageClass uses
+reclaim policy `Retain`, so deleting a PVC leaves the PV `Released` *and* leaves
+the underlying OCI file system + export fully intact, still counting against the
+100 GB FSS allotment. Deleting the `Released` PV alone does **not** reclaim it —
+all three objects have to go.
+
+Cleaned up on 2026-08-25: `csi-fss-5589fcf5-…` (5 GB, `Released`, created
+2026-06-06T01:48Z). It was a leftover from the cluster rebuild — the
+`authentik-media` PVC was created at 01:48, deleted, then recreated at 02:10
+against a *different* file system (`csi-fss-b6c314f3-…`, still live). The
+abandoned one was never written to.
+
+Audit and verify-before-delete:
+
+```bash
+export KUBECONFIG=~/.kube/oke-homelab.config
+kubectl get pv -o custom-columns='NAME:.metadata.name,STATUS:.status.phase,CLAIM:.spec.claimRef.name,RECLAIM:.spec.persistentVolumeReclaimPolicy' | grep fss
+# A Released fss PV is a candidate. Get its file system OCID + export path:
+kubectl get pv <name> -o jsonpath='{.spec.csi.volumeHandle}'   # <fsOcid>:<mountTargetIp>:<exportPath>
+```
+
+**Confirm it is empty before deleting** — mount the export read-only in a throwaway
+pod (`spec.volumes[].nfs` with `server: <mountTargetIp>`, `path: <exportPath>`,
+`readOnly: true`) and `find /mnt -type f | wc -l`. An untouched FSS export shows
+only the `.snapshot` pseudo-directory. Cross-check with
+`oci fs file-system get --file-system-id <fsOcid>` → `metered-bytes: 0`, and
+`oci fs snapshot list --file-system-id <fsOcid>` (snapshots must be deleted first).
+
+Then remove all three, in order:
+
+```bash
+kubectl delete pv <name>
+oci fs export delete --force --export-id <exportOcid>          # oci fs export list --compartment-id "$CID" --file-system-id <fsOcid>
+oci fs file-system delete --force --file-system-id <fsOcid>
+```
+
+Beware: the live and abandoned OCIDs for the same workload differ by only a few
+characters in the middle. Match the trailing segment against the PV name first.
 
 ### Logging
 

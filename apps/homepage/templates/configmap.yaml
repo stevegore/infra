@@ -169,6 +169,10 @@ data:
             href: https://gym.stevegore.au
             description: Elixr Gym Reservations
             icon: mdi-dumbbell
+        - Send:
+            href: https://send.stevegore.au/admin
+            description: File sharing — expiring links
+            icon: mdi-share-variant
         - StravaKeeper:
             href: https://strava.stevegore.au
             description: Strava Data Archiver

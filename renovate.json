@@ -222,6 +222,20 @@
       "addLabels": [
         "needs-rebuild"
       ]
+    },
+    {
+      "description": [
+        "9. The helm binary CI validates with must track the one ArgoCD renders with (Helm 3). This is not a workflow-tooling bump like the rest of rule 6: it changes what `scripts/validate-version-upgrades.sh` actually tests.",
+        "Renovate's github-actions manager reads azure/setup-helm's `version:` input as the `helm` dep (packageName helm/helm, depType uses-with). PR #52 grouped it into 'github actions', which automerges, and it went v3.21.3 -> v4.2.3 on 2026-08-03 (commit b7bb4ca). CI validated Helm 4 against a Helm 3 renderer until 2026-08-10.",
+        "The cap is on the major only, deliberately: Helm 3.x patches still flow through the weekly actions group untouched. Lift allowedVersions and the pin in .github/workflows/validate.yml together, once ArgoCD renders with Helm 4 and the Authentik repository regression noted there is resolved."
+      ],
+      "matchManagers": [
+        "github-actions"
+      ],
+      "matchPackageNames": [
+        "helm/helm"
+      ],
+      "allowedVersions": "<4.0.0"
     }
   ]
 }

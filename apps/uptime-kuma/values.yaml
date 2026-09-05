@@ -23,7 +23,7 @@ replicaCount: 1
 image:
   # FQ image name required by cri-o on OKE workers (short names rejected).
   repository: docker.io/louislam/uptime-kuma
-  tag: "2.5.0"
+  tag: "2.5.3"
   pullPolicy: IfNotPresent
 
 resources:
@@ -76,7 +76,7 @@ persistence:
 # the single Kuma pod only after both idempotent scripts commit successfully.
 reconcile:
   enabled: true
-  image: python:3.14-alpine@sha256:a1321512d6a287428c50dcdf2ab3857761127e03a23b1f648e9c1c0de59288f8
+  image: python:3.14-alpine@sha256:3f818d6811ff5f3f2b5e5d836df3d25c2dd2e588d3b4981338a8ba17e422f74f
   pymysqlVersion: "1.1.2"
 
 # MySQL backend — uses the OCI MySQL HeatWave Free instance shared with

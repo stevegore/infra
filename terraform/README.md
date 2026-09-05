@@ -73,6 +73,22 @@ When the residential IP changes, update both, then apply. If you are locked out
 of 6443 before you can apply, edit the NSG rule by hand in the OCI console
 first — ORM will reconcile it on the next run.
 
+> **The ORM half was never actually set.** Until 2026-08-18 the stack's
+> *Variables* map was empty (`{}`), so **every ORM plan and apply job failed** at
+> init with "No value for required variable" — the stack could not run at all,
+> and had presumably been in that state since it was created. Local
+> `terraform.tfvars` masked it, because local runs worked fine. If a plan job
+> fails before it reaches the resource diff, check the stack variables first:
+>
+> ```bash
+> oci resource-manager stack get --stack-id <stack-ocid> --query 'data.variables'
+> oci resource-manager stack update --stack-id <stack-ocid> --force \
+>   --variables '{"home_ip_cidr":"<ip>/32"}'
+> ```
+>
+> Every other variable has a default baked into `variables.tf`, so this one is
+> the only thing standing between the stack and a working job.
+
 ## ORM stack
 
 | | |
@@ -91,7 +107,7 @@ Created by `scripts/provision-orm-stack.sh`. State was imported via
 - **Networking:** VCN `nebula`, public + private subnets, security lists, NSGs, internet/NAT/service gateways
 - **Compute:** `ampere-ubuntu` instance (will be `terraform destroy`'d in Phase 7 of the OKE migration)
 - **KMS:** `hashicorp-vault-unseal` vault + `vault-auto-unseal` key
-- **Object Storage:** `vault-storage` + `infra-tfstate` buckets
+- **Object Storage:** `vault-storage`, `caddy-acme`, `vault-kms-key-backup` + `infra-tfstate` buckets
 - **IAM:** `vault-instances` dynamic group + `vault-kms-objectstorage-policy`
 
 Reserved public IP `publicip20230914115348` was missed by ORM Resource

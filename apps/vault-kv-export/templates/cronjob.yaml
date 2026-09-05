@@ -1,0 +1,103 @@
+{{- if not .Values.age.recipient }}
+{{- fail "age.recipient is empty. Generate a keypair with `age-keygen -o vault-export.key`, store the private key OFFLINE (never in Vault, Vaultwarden or this repo), and set age.recipient to the public age1... line. Without it this job would write plaintext secrets to object storage." }}
+{{- end }}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "vault-kv-export.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "vault-kv-export.labels" . | nindent 4 }}
+spec:
+  schedule: {{ .Values.schedule | quote }}
+  timeZone: Etc/UTC
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: {{ .Values.successfulJobsHistoryLimit }}
+  failedJobsHistoryLimit: {{ .Values.failedJobsHistoryLimit }}
+  # Vault being briefly down at 03:20 should not silently skip a night.
+  startingDeadlineSeconds: 3600
+  jobTemplate:
+    spec:
+      backoffLimit: {{ .Values.backoffLimit }}
+      activeDeadlineSeconds: {{ .Values.activeDeadlineSeconds }}
+      template:
+        metadata:
+          labels:
+            {{- include "vault-kv-export.selectorLabels" . | nindent 12 }}
+        spec:
+          serviceAccountName: {{ include "vault-kv-export.fullname" . }}
+          restartPolicy: Never
+          {{- with .Values.imagePullSecrets }}
+          imagePullSecrets:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          securityContext:
+            runAsNonRoot: true
+            # 100:1000 is the `vault` user in the hashicorp/vault base image.
+            runAsUser: 100
+            runAsGroup: 1000
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: export
+              image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+              imagePullPolicy: {{ .Values.image.pullPolicy }}
+              command: ["/bin/sh", "/script/export.sh"]
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: ["ALL"]
+              env:
+                - name: VAULT_ADDR
+                  value: {{ .Values.vault.addr | quote }}
+                - name: VAULT_ROLE
+                  value: {{ .Values.vault.authRole | quote }}
+                - name: VAULT_MOUNT
+                  value: {{ .Values.vault.mount | quote }}
+                - name: AGE_RECIPIENT
+                  value: {{ .Values.age.recipient | quote }}
+                - name: OBJECT_PREFIX
+                  value: {{ .Values.upload.objectPrefix | quote }}
+                - name: WORK
+                  value: /work
+                - name: PAR_URL
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ .Values.vault.par.secretName }}
+                      key: par_url
+                # Optional: if the Pushover secret is missing the job still
+                # runs, it just cannot page. Failing the backup because the
+                # notifier is unconfigured would be the wrong trade.
+                - name: PUSHOVER_APP_TOKEN
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ .Values.vault.pushover.secretName }}
+                      key: app_token
+                      optional: true
+                - name: PUSHOVER_USER_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ .Values.vault.pushover.secretName }}
+                      key: user_key
+                      optional: true
+              resources:
+                {{- toYaml .Values.resources | nindent 16 }}
+              volumeMounts:
+                - name: script
+                  mountPath: /script
+                  readOnly: true
+                - name: work
+                  mountPath: /work
+          volumes:
+            - name: script
+              configMap:
+                name: {{ include "vault-kv-export.fullname" . }}-script
+                defaultMode: 0555
+            - name: work
+              emptyDir:
+                # tmpfs: the assembled plaintext bundle exists only in RAM and
+                # dies with the pod. Sized well above the expected few hundred
+                # KB so a growing kv/ doesn't start failing silently.
+                medium: Memory
+                sizeLimit: 64Mi

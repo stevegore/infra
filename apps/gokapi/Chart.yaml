@@ -1,0 +1,6 @@
+apiVersion: v2
+name: gokapi
+description: Self-hosted file sharing — links expire after N downloads or a set time
+type: application
+version: 0.1.0
+appVersion: "2.2.4"

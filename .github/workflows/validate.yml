@@ -18,7 +18,15 @@ jobs:
         with:
           # ArgoCD currently renders with Helm 3. Helm 4 dependency build has
           # an Authentik repository regression, so validate the same contract.
-          version: v4.2.3
+          #
+          # Renovate reads this input as the `helm` dep (packageName helm/helm)
+          # under the github-actions manager, and on 2026-08-03 it automerged
+          # v3.21.3 -> v4.2.3 in PR #52 (commit b7bb4ca) — straight past the
+          # comment above. CI then validated Helm 4 while ArgoCD rendered
+          # Helm 3 for a week. Rule 9 in renovate.json now caps this <4.0.0;
+          # lift that cap deliberately, together with this line, once ArgoCD
+          # itself moves to Helm 4.
+          version: v3.21.4
       - name: Validate version-controlled deployment artifacts
         run: scripts/validate-version-upgrades.sh
 

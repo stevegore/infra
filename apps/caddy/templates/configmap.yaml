@@ -180,6 +180,63 @@ data:
       import defaults
     }
 
+    # Gokapi file sharing. Upload a file, hand out the link, the link dies
+    # after N downloads or a deadline.
+    #
+    # Auth is applied per-path, not to the whole vhost: the point of the service
+    # is that recipients — who have no Authentik account — can fetch the file.
+    # The @admin matcher is Gokapi's own requireLogin() route set, copied from
+    # internal/webserver/Webserver.go. Keep it in sync when upgrading Gokapi;
+    # a route missing here is not an auth bypass (Gokapi still enforces the
+    # header itself and would 401) but it does turn a clean login redirect into
+    # an error page.
+    #
+    # SECURITY — the `route` block is deliberate, do not flatten it. Gokapi
+    # trusts X-Authentik-Username without checking which peer sent it and
+    # auto-creates whatever username it finds (see apps/gokapi/values.yaml), so
+    # a forged header must never survive to the upstream. `route` forces the
+    # strip to execute BEFORE forward_auth re-adds the authenticated value —
+    # in Caddy's default directive order request_header sorts *after*
+    # forward_auth, so without `route` this would delete the real header and
+    # break admin access instead of protecting it.
+    send.stevegore.au {
+      # Must be a `handle`, not a bare path-matched reverse_proxy as in the
+      # other vhosts: `handle` sorts ahead of `reverse_proxy` in the directive
+      # order, so the catch-all handle below would otherwise swallow the
+      # outpost callback and break the Authentik redirect loop.
+      handle /outpost.goauthentik.io/* {
+        reverse_proxy authentik-server.authentik.svc.cluster.local:80
+      }
+
+      # The bare domain is only ever visited by you — recipients get deep links
+      # to /d/<id>. Gokapi's own landing page just bounces anonymous visitors to
+      # its RedirectUrl, which made send.stevegore.au a dead end, so send the
+      # root straight to the upload page instead. Must be a `handle`: `redir`
+      # sorts after `handle` in the directive order, so a bare `redir` here
+      # would never be reached past the catch-all below.
+      handle / {
+        redir * /admin
+      }
+
+      @admin path /admin /apiKeys /auth/token /changePassword /downloadPresigned /e2eSetup /filerequests /logs /uploadChunk /uploadStatus /users
+      handle @admin {
+        route {
+          request_header -X-Authentik-Username
+          import authentik
+          reverse_proxy gokapi.gokapi.svc.cluster.local:53842
+        }
+      }
+
+      # Public surface: download pages (/d, /dh), hotlinks (/h), the wasm
+      # bundles, static assets, and /publicUpload for file-request uploads.
+      handle {
+        request_header -X-Authentik-Username
+        reverse_proxy gokapi.gokapi.svc.cluster.local:53842
+      }
+
+      import defaults
+    }
+
     immich.stevegore.au {
       reverse_proxy pico:2283
       import defaults
@@ -252,7 +309,36 @@ data:
     stevegore.au {
       respond /health "I'm doing ok, thanks for asking :)"
       respond /healthz "I'm doing ok, thanks for asking :)"
-      reverse_proxy ttyd.ttyd.svc.cluster.local:8788
+      # Retries exist here and NOWHERE ELSE in this file, on purpose.
+      #
+      # ttyd is restarted every 30 minutes by its own restarter CronJob
+      # (apps/ttyd/templates/cronjob.yaml). A readinessProbe fixed the rollout
+      # ORDER, but a ~10s hole remains after the old pod dies while the
+      # ClusterIP is reprogrammed, and new dials are black-holed to the dead
+      # pod's IP — surfacing as "dial tcp 10.96.24.184:8788: i/o timeout" and a
+      # 502. See the KNOWN RESIDUAL note in apps/ttyd/values.yaml; a preStop
+      # drain was tried and reverted because it only moved the hole.
+      #
+      # Caddy does NOT retry by default: with lb_try_duration and lb_retries
+      # both 0, tryAgain() returns immediately even for a failed dial. Setting
+      # either one turns retries on, and "if the connection to the upstream
+      # failed, a retry is always allowed" regardless of method — which is
+      # exactly this failure. Both bounds are set; whichever trips first wins.
+      # A dial takes ~3s to time out, so 5 retries inside 20s covers the hole.
+      #
+      # Deliberately NOT set: fail_duration. Passive health checking with a
+      # single upstream would mark the only backend down and fail fast with
+      # "no upstreams available" — the opposite of what we want here.
+      #
+      # Do not generalise this to other vhosts. Retrying a genuinely-down
+      # backend converts a fast 502 into a 20s hang and hides real outages
+      # from Uptime Kuma. This vhost earns it because the outage is
+      # self-inflicted, brief, and on a known schedule.
+      reverse_proxy ttyd.ttyd.svc.cluster.local:8788 {
+        lb_retries 5
+        lb_try_duration 20s
+        lb_try_interval 500ms
+      }
       import defaults
     }
 

@@ -24,6 +24,58 @@ resources:
     cpu: 500m
     memory: 250Mi
 
+# Gate the pod out of the Service endpoints until ttyd has actually bound its
+# port. Without this, every restarter cycle below served ~30s of HTTP 502
+# ("dial tcp 10.244.x.y:8788: i/o timeout" in the Caddy error log) because the
+# new pod joined the endpoints the instant its container started — before ttyd
+# was listening — while the old pod was already being torn down.
+#
+# The probe MUST stay `exec`. Kubelet probe traffic arrives at the pod as
+# ordinary node-sourced traffic, and templates/ciliumnetworkpolicy.yaml selects
+# this pod (making it default-deny) and permits ingress ONLY from the Caddy
+# pods on :8788. An httpGet/tcpSocket probe would therefore be dropped and fail
+# forever, permanently removing ttyd from its endpoints — strictly worse than
+# the bug this fixes. Exec runs the check inside the pod's own netns against
+# loopback, which no policy touches (the egress-lockdown init container also
+# ACCEPTs -o lo first).
+#
+# `bash -c 'exec 3<>/dev/tcp/...'` is deliberately dependency-free: bash is
+# guaranteed present (the container's own command: is /bin/bash), so the probe
+# cannot break if a rebuild of the shell image drops curl/nc.
+readinessProbe:
+  # A few seconds is plenty — ttyd binds almost immediately once bash execs it.
+  initialDelaySeconds: 3
+  periodSeconds: 5
+  timeoutSeconds: 3
+  failureThreshold: 3
+# No livenessProbe on purpose: ttyd here is a public shell whose process health
+# is already covered by the 30-minute restarter, and an exec liveness probe only
+# adds restart-loop risk under load.
+
+# KNOWN RESIDUAL (2026-08-08) — do NOT try to fix this with preStop.
+#
+# The readinessProbe above fixed the rollout ORDER, which is what caused the
+# long every-30-minutes outage (Caddy 502s at exactly :01:09 / :31:09 for
+# hours). What is left is a ~10s window on each restarter cycle where Caddy
+# still gets "dial tcp 10.96.24.184:8788: i/o timeout" — new connections to
+# the ttyd ClusterIP are black-holed to the old pod's IP after it dies, even
+# though the new pod has been Ready and in the endpoints for ~10s.
+#
+# A `lifecycle.preStop.sleep: 10` was tried and REVERTED, because measurement
+# showed it only shifts the window instead of closing it. Two cycles, 1s poll:
+#   no preStop:  new Ready :11, old SIGTERM :13, 502s :14-:18, 200 again :22
+#   preStop 10s: new Ready :11, old SIGTERM :22, 502s :22-:29, 200 again :32
+# Recovery tracks the moment the old pod DIES, not the start of the rollout,
+# so any preStop duration just moves the same ~10s hole later. Worse, it moved
+# the hole out from under Uptime Kuma's :09-past-the-minute probe, which made
+# the monitor look green while the outage was still happening.
+#
+# The remaining gap is datapath convergence (kube-proxy/Cilium re-programming
+# the ClusterIP), not something this chart controls. The right fix is upstream
+# retry in the caddy chart — `lb_retries`/`lb_try_duration` on the reverse_proxy
+# so a dial that loses this race is retried against the healthy endpoint
+# instead of surfacing as a 502.
+
 service:
   type: ClusterIP
   port: 8788
@@ -41,7 +93,7 @@ restarter:
   # NOTE: this image is distroless — it contains /bin/kubectl and nothing else,
   # no /bin/sh. That is fine because templates/cronjob.yaml execs kubectl
   # directly via exec-form `command:`. Never rewrite that into `sh -c`.
-  image: registry.k8s.io/kubectl:v1.36.3
+  image: registry.k8s.io/kubectl:v1.37.0
   # The image's Dockerfile USER is 0, so the pod's runAsNonRoot: true would fail
   # admission on its own. 65532/65532 is the `nonroot` account baked into the
   # image's /etc/passwd, and it owns a writable HOME (/home/nonroot) for

@@ -1,0 +1,129 @@
+# Gokapi — upload a file, get a link, link dies after N downloads or a deadline.
+#
+# Stays at 1 replica, and gets no PodDisruptionBudget.
+#
+# The whole of Gokapi's state — the SQLite database, the config file, and the
+# uploaded blobs themselves — lives on the single PVC below. A second replica
+# would open the same SQLite file over a shared NFS mount, which is exactly the
+# scenario SQLite's locking cannot survive. Chunked uploads make this worse:
+# /uploadChunk writes each chunk to the local data dir and only reassembles them
+# when the last one lands, so Caddy round-robining chunks across two pods would
+# corrupt every multi-chunk upload. This is not a service that needs HA.
+#
+# No PDB either: with one replica, minAvailable: 1 permits zero voluntary
+# disruptions, so `kubectl drain` would hang forever on whichever node this pod
+# is on. Same reasoning as adminer.
+replicaCount: 1
+
+image:
+  repository: docker.io/f0rc3/gokapi
+  tag: "v2.2.4"
+  pullPolicy: IfNotPresent
+
+resources:
+  requests:
+    cpu: 10m
+    memory: 64Mi
+  limits:
+    # Uploads are chunked and streamed to disk rather than buffered whole, so
+    # memory tracks GOKAPI_MAX_MEMORY_UPLOAD (50 MB of chunk buffer) plus the Go
+    # runtime — not the size of the file being uploaded. 256Mi is generous.
+    memory: 256Mi
+    cpu: 500m
+
+service:
+  type: ClusterIP
+  port: 53842
+
+# Uploaded files + SQLite DB + config.json, all under one mount.
+#
+# oci-fss, NOT oci-bv. The boot+block Always-Free budget is saturated at exactly
+# 200 GB (2x50 GB node boot volumes + pg-shared + uptime-kuma), and OCI block
+# volumes have a 50 GB hard minimum, so any oci-bv PVC here would take the
+# account from $0 to billed. FSS draws on the separate, near-empty 100 GB FSS
+# allotment and bills on actual usage. See oracle-cloud.md.
+#
+# The usual FSS blocker does not apply: the CSI driver ignores fsGroup, so only
+# root-writable workloads can use it — and the Gokapi image runs as root unless
+# DOCKER_NONROOT=true, which is deliberately left unset below. Do not add a
+# runAsUser/runAsNonRoot securityContext to this chart without also adding a
+# chown init container (see gym-booker for that pattern).
+#
+# `size` is a request, not a reservation — FSS bills what is actually stored.
+# It is the ceiling for how much can pile up before writes fail, which combined
+# with maxFileSizeMB is the real backstop against filling the FSS allotment.
+persistence:
+  size: 20Gi
+  storageClass: oci-fss
+
+config:
+  # Public base URL. Gokapi bakes this into every download link it generates,
+  # so it must match the Caddy vhost exactly, including the trailing slash
+  # (Gokapi's own setup wizard appends one; a seeded config must supply it).
+  serverUrl: https://send.stevegore.au/
+
+  # Shown in the page title and on the download page.
+  publicName: send.stevegore.au
+
+  # Where Gokapi's /index handler sends visitors. This is the ONLY place the
+  # setting is used (verified in v2.2.4 — it does not affect expired files or
+  # error pages), and Caddy already redirects the bare domain to /admin before
+  # it reaches Gokapi, so this is just a consistent fallback for anyone hitting
+  # /index directly. Leaving it empty renders a blank page.
+  redirectUrl: https://send.stevegore.au/admin
+
+  # Authentication.Method = 2 (AuthenticationHeader) — Gokapi reads the
+  # username out of a header set by the reverse proxy. Caddy's `import
+  # authentik` snippet already copies X-Authentik-Username through from the
+  # forward-auth outpost, so this needs no Authentik application of its own.
+  #
+  # SECURITY: Gokapi's isGrantedHeader() does NOT verify that the request came
+  # from a trusted proxy — it trusts this header verbatim and auto-creates the
+  # user named in it. Anything that can reach this Service on :53842 with a
+  # forged header is therefore an admin. Two things keep that shut, and both
+  # must stay in place:
+  #   1. The Service is ClusterIP, and the CiliumNetworkPolicy in this chart
+  #      restricts ingress to the Caddy pods.
+  #   2. The send.stevegore.au vhost strips any client-supplied
+  #      X-Authentik-Username *before* forward_auth re-adds the real one.
+  headerKey: X-authentik-username
+
+  # The account treated as superadmin. Must match the username Authentik sends
+  # for you, or you will be auto-created as an ordinary user with no admin menu.
+  # Verify with: kubectl -n authentik exec deploy/authentik-server -- \
+  #   ak shell -c "from authentik.core.models import User; \
+  #   print([u.username for u in User.objects.all()])"
+  adminUsername: stevegore
+
+  # true = a username Gokapi has never seen is rejected instead of being
+  # auto-created on first sight.
+  #
+  # This is the one protection against header forgery that does NOT depend on
+  # Caddy or Cilium being configured correctly, which is why it is on. Verified
+  # against v2.2.4 locally: with this false, a request carrying a made-up
+  # X-authentik-username lands on a fully functional upload page as a brand-new
+  # account; with it true, the same request gets bounced to /login.
+  #
+  # Cost of it being on: a genuinely new person cannot simply log in. Add them
+  # at /users first (as the admin user below), then they can.
+  onlyRegisteredUsers: true
+
+  # 10 GB. Gokapi's own default is 100 GB, which is larger than the entire FSS
+  # allotment — a single upload could fill it. This is deliberately well under
+  # persistence.size (20Gi) so one big file cannot wedge the volume and block
+  # every subsequent upload; raise both together if you ever need more.
+  maxFileSizeMB: 10240
+
+  # Log the uploader's IP against each file. Off: this is a personal instance,
+  # and the download log is not worth the retention question.
+  saveIp: false
+
+# See the header comment in templates/ciliumnetworkpolicy.yaml — with header
+# auth this is a real access control, not hardening. Only disable it if Cilium
+# itself is being rolled back (see reference cilium/ runbook), and switch
+# Gokapi to internal auth if you do.
+networkPolicy:
+  enabled: true
+  ingressFromNamespace: caddy
+  ingressFromPodLabels:
+    app.kubernetes.io/name: caddy

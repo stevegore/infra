@@ -1,0 +1,148 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "vault-kv-export.fullname" . }}-script
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "vault-kv-export.labels" . | nindent 4 }}
+data:
+  # Kept in a ConfigMap rather than baked into the image so the logic is pure
+  # GitOps — the image only ever needs rebuilding to move tool versions.
+  export.sh: |
+    #!/bin/sh
+    # Logical export of Vault kv/, policies and mount config, encrypted to an
+    # offline age key and uploaded to OCI Object Storage.
+    set -eu
+
+    fail() { echo "FATAL: $*" >&2; exit 1; }
+
+    # --- alerting -----------------------------------------------------------
+    # Pushover creds come from a k8s Secret (VSO-synced), not from Vault, so
+    # that a Vault outage — the failure most worth hearing about — can still
+    # page. Best-effort: a broken notifier must not mask the original error.
+    notify_failure() {
+      code=$?
+      trap - EXIT
+      [ "$code" -eq 0 ] && exit 0
+      if [ -n "${PUSHOVER_APP_TOKEN:-}" ] && [ -n "${PUSHOVER_USER_KEY:-}" ]; then
+        curl -s --max-time 20 \
+          --form-string "token=${PUSHOVER_APP_TOKEN}" \
+          --form-string "user=${PUSHOVER_USER_KEY}" \
+          --form-string "title=Vault kv export FAILED" \
+          --form-string "priority=1" \
+          --form-string "message=vault-kv-export exited ${code} at $(date -u +%Y-%m-%dT%H:%M:%SZ). This is the only backup that survives loss of the OCI KMS unseal key." \
+          https://api.pushover.net/1/messages.json >/dev/null 2>&1 || true
+      fi
+      exit "$code"
+    }
+    trap notify_failure EXIT
+
+    [ -n "${AGE_RECIPIENT:-}" ] || fail "AGE_RECIPIENT is empty — refusing to write an unencrypted export"
+    [ -n "${PAR_URL:-}" ]       || fail "PAR_URL is empty"
+
+    # WORK is a tmpfs (emptyDir medium: Memory), so plaintext secret material
+    # never touches disk, not even briefly.
+    WORK="${WORK:-/work}"
+    PATHS="$WORK/paths"
+    PENDING="$WORK/pending"
+    NEXT="$WORK/next"
+    SECRETS="$WORK/secrets.ndjson"
+    POLICIES="$WORK/policies.ndjson"
+    : > "$PATHS"
+    : > "$SECRETS"
+    : > "$POLICIES"
+
+    # --- authenticate -------------------------------------------------------
+    JWT=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
+    VAULT_TOKEN=$(vault write -field=token auth/kubernetes/login \
+      role="$VAULT_ROLE" jwt="$JWT") || fail "Vault login failed for role $VAULT_ROLE"
+    export VAULT_TOKEN
+
+    # --- discover every path under the kv mount -----------------------------
+    # Iterative breadth-first rather than a recursive shell function: this
+    # needs no IFS juggling, which inside a YAML block scalar is a real hazard
+    # (block indentation silently becomes part of the separator).
+    printf '\n' > "$PENDING"
+    while [ -s "$PENDING" ]; do
+      : > "$NEXT"
+      while IFS= read -r prefix; do
+        raw=$(vault kv list -format=json "${VAULT_MOUNT}/${prefix}" 2>/dev/null) || continue
+        printf '%s' "$raw" | jq -r '.[]?' | while IFS= read -r name; do
+          case "$name" in
+            */) printf '%s\n' "${prefix}${name}" >> "$NEXT" ;;
+            *)  printf '%s\n' "${prefix}${name}" >> "$PATHS" ;;
+          esac
+        done
+      done < "$PENDING"
+      mv "$NEXT" "$PENDING"
+    done
+
+    # --- read every secret --------------------------------------------------
+    # `while read < file` (not a pipeline) so COUNT increments in this shell.
+    COUNT=0
+    while IFS= read -r p; do
+      [ -n "$p" ] || continue
+      d=$(vault kv get -format=json "${VAULT_MOUNT}/${p}") \
+        || fail "could not read ${VAULT_MOUNT}/${p}"
+      printf '%s' "$d" | jq -c --arg p "$p" \
+        '{path: $p, data: .data.data, version: .data.metadata.version, created_time: .data.metadata.created_time}' \
+        >> "$SECRETS"
+      COUNT=$((COUNT + 1))
+    done < "$PATHS"
+
+    # A backup of nothing must never be recorded as a success. This is the
+    # check that stops a silently-empty export from propping up a false belief
+    # that backups are working.
+    [ "$COUNT" -gt 0 ] || fail "exported 0 secrets — refusing to upload an empty backup"
+    echo "==> ${COUNT} secrets"
+
+    # --- policies + mounts --------------------------------------------------
+    for pol in $(vault policy list); do
+      # `root` is implicit and has no readable body.
+      [ "$pol" = "root" ] && continue
+      hcl=$(vault policy read "$pol") || fail "could not read policy $pol"
+      jq -nc --arg n "$pol" --arg h "$hcl" '{name: $n, hcl: $h}' >> "$POLICIES"
+    done
+
+    vault secrets list -format=json > "$WORK/mounts.json" || fail "secrets list failed"
+    vault auth list -format=json    > "$WORK/auth.json"   || fail "auth list failed"
+
+    # --- assemble -----------------------------------------------------------
+    jq -n \
+      --arg exported_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+      --argjson secret_count "$COUNT" \
+      --slurpfile secrets  "$SECRETS" \
+      --slurpfile policies "$POLICIES" \
+      --slurpfile mounts   "$WORK/mounts.json" \
+      --slurpfile auth     "$WORK/auth.json" \
+      '{
+         exported_at:    $exported_at,
+         secret_count:   $secret_count,
+         secrets:        $secrets,
+         policies:       $policies,
+         secrets_mounts: ($mounts[0] // {}),
+         auth_mounts:    ($auth[0]   // {})
+       }' > "$WORK/bundle.json" || fail "failed to assemble bundle"
+
+    # --- encrypt ------------------------------------------------------------
+    # Asymmetric: this container holds only the public recipient, so a
+    # compromise here cannot decrypt this or any previous export.
+    age -r "$AGE_RECIPIENT" -o "$WORK/bundle.age" "$WORK/bundle.json" \
+      || fail "age encryption failed"
+    rm -f "$WORK/bundle.json"
+
+    # Guard against silently shipping plaintext: age files begin with the
+    # header "age-encryption.org/v1".
+    head -c 21 "$WORK/bundle.age" | grep -q "age-encryption.org" \
+      || fail "output is not an age file — refusing to upload"
+
+    SIZE=$(wc -c < "$WORK/bundle.age" | tr -d ' ')
+
+    # --- upload -------------------------------------------------------------
+    OBJECT="${OBJECT_PREFIX}/$(date -u +%Y)/kv-export-$(date -u +%Y%m%d-%H%M%S).json.age"
+    # PAR access URIs already end in "/".
+    STATUS=$(curl -s -o /dev/null -w '%{http_code}' --max-time 120 \
+      -X PUT --data-binary "@$WORK/bundle.age" "${PAR_URL}${OBJECT}")
+    [ "$STATUS" = "200" ] || fail "upload returned HTTP ${STATUS} (an expired PAR returns 404)"
+
+    echo "==> uploaded ${OBJECT} (${COUNT} secrets, ${SIZE} bytes)"

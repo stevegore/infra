@@ -22,13 +22,13 @@ services:
       - transmission
     ports:
       - "9093:9091"
-    image: haugene/transmission-openvpn:5.5@sha256:18e5789dfd8aa9c95506d8bf2e4ef88ccd5e4c6102fb75b43f488cb5d5e4dcc5
+    image: haugene/transmission-openvpn:5.5@sha256:845fe4f75bb723919dd72363fae3bb7a2a89b6cb6f807c3b0c4073ebfdd42293
     sysctls:
       - "net.ipv6.conf.all.disable_ipv6=0"
     security_opt:
       - seccomp:unconfined
   transmission-proxy:
-    image: haugene/transmission-openvpn-proxy:5.5@sha256:349695330df6740708b6232fb27a723fcff38333ca5f90141297419d871c5186
+    image: haugene/transmission-openvpn-proxy:5.5@sha256:9b7bab50e50939efbf2e6b8836b5bb5573b75d3088e7b3799b47fafe81876242
     restart: unless-stopped
     networks:
       - transmission

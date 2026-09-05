@@ -58,7 +58,11 @@ DEFAULT_RETRIES  = 1
 ACCEPT_OK        = '["200-299"]'
 ACCEPT_OK_REDIR  = '["200-399"]'
 ACCEPT_302       = '["302"]'
-ACCEPT_VAULT     = '["200-299","429","473","501","503"]'
+# Vault: 200 only. On /v1/sys/health, 501 = uninitialized and 503 = sealed --
+# the two states most worth paging for -- so accepting them (as this did until
+# 2026-08-18) left the monitor green through exactly the outages it exists to
+# catch. 429/473 are HA standby codes and cannot occur: ha.enabled is false.
+ACCEPT_VAULT     = '["200-299"]'
 
 retired_monitor_names = {
     "Gym Bookings (direct)",
@@ -93,6 +97,10 @@ monitors = [
     {"name": "Adminer",                    "type": "http", "kwargs": {"url": "https://adminer.stevegore.au/",                  "maxredirects": 0,  "accepted_statuscodes_json": ACCEPT_302},      "tags": ["public", "infra"],  "aliases": ["adminer.stevegore.au"]},
     {"name": "Desk Service",               "type": "http", "kwargs": {"url": "https://desk.stevegore.au/",                    "maxredirects": 0,  "accepted_statuscodes_json": ACCEPT_302},      "tags": ["public"],           "aliases": ["desk.stevegore.au"]},
     {"name": "Gym Bookings",               "type": "http", "kwargs": {"url": "https://gym.stevegore.au/",                     "maxredirects": 0,  "accepted_statuscodes_json": ACCEPT_302},      "tags": ["public"],           "aliases": ["gym.stevegore.au"]},
+    # /index, not /: Caddy redirects the bare root to /admin without consulting
+    # the backend, so a 302 there would stay green with Gokapi completely down.
+    # /index is served by Gokapi itself and returns 200.
+    {"name": "Send (Gokapi)",              "type": "http", "kwargs": {"url": "https://send.stevegore.au/index",               "maxredirects": 0,  "accepted_statuscodes_json": ACCEPT_OK},       "tags": ["public"],           "aliases": ["send.stevegore.au"]},
     {"name": "Uptime Kuma",                "type": "http", "kwargs": {"url": "https://uptime.stevegore.au/",                  "maxredirects": 5,  "accepted_statuscodes_json": ACCEPT_OK},       "tags": ["public", "infra"],  "aliases": ["uptime.stevegore.au"]},
     {"name": "Stats",                      "type": "http", "kwargs": {"url": "https://stats.stevegore.au/api/stats",          "maxredirects": 0,  "accepted_statuscodes_json": ACCEPT_OK},       "tags": ["public", "infra"],  "aliases": ["stats.stevegore.au"]},
     {"name": "Instagram Gallery",          "type": "http", "kwargs": {"url": "https://gallery.stevegore.au/",                "maxredirects": 0,  "accepted_statuscodes_json": ACCEPT_OK},       "tags": ["public", "photos"], "aliases": ["gallery.stevegore.au"]},
