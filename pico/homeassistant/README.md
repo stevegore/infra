@@ -15,6 +15,26 @@ covered by the repository-wide database holdback. Before approving any of them:
 4. After deployment, check Core logs, failed integrations, recorder/history,
    Matter state, and both `hass.stevegore.au` endpoints.
 
+> **Git leads the host here — check both before deploying.** This file is the
+> source of truth, but nothing deploys it automatically; `/opt/ha-container`
+> only changes when someone copies the definition over and runs
+> `docker compose up -d`. So a merged Renovate PR is *not* deployed, and the
+> two can differ for weeks. Diff them first:
+>
+> ```bash
+> diff -u /opt/ha-container/compose.yaml ~/code/infra/pico/homeassistant/compose.yaml
+> ```
+>
+> **As of 2026-09-05** the host runs Home Assistant **2026.7.4** and MariaDB
+> **11.8.8**, while this file carries HA **2026.9.0** (PR #56, merged
+> 2026-09-05 without the review above — do steps 1-4 before deploying it).
+> MariaDB was also bumped to 12.3.3 by PR #46 the same day and has been
+> reverted to 11.8.8; see the comment in `compose.yaml`.
+>
+> This is a different failure from `/opt/portainer`, which held a *stale
+> abandoned* copy that silently downgraded the control plane. Here the split is
+> intentional — the risk is only that git runs ahead of the host unnoticed.
+
 The nightly backup is installed in Steve's crontab on pico at 00:30, before the
 existing 01:00 Duplicati Home Assistant job and the 04:00 HACS automation:
 

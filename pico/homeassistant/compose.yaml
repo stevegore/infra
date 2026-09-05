@@ -2,7 +2,15 @@ name: homeassistant
 
 services:
   homeassistant-db:
-    image: mariadb:12.3.3@sha256:dd9b303aed4f4890ed09f766d8ca9ddfd176c0c6f6267feff53b3192ec65a979
+    # Pinned to the version actually running in /opt/ha-container. Renovate's
+    # 11.8.8 -> 12.3.3 bump (PR #46, labelled database/manual-review) was merged
+    # on 2026-09-05 without the review this repo's own holdback requires, and
+    # reverted the same day. MariaDB majors must be stepped one at a time with
+    # mariadb-upgrade run against a backed-up datadir; 11.8 -> 12.3 skips
+    # several and would have hit a live recorder database on the next deploy.
+    # Take the 11.8.x patch updates (PR #87) instead until a stepwise upgrade
+    # is planned.
+    image: mariadb:11.8.8
     container_name: homeassistant-db
     restart: unless-stopped
     command: >-
