@@ -1,10 +1,14 @@
 services:
   portainer:
-    # Reconciled to the tag actually running on pico. Git previously pinned
-    # 2.39.5 while the host had been moved to 2.39.7 out of band, so deploying
-    # from this file would have downgraded the binary against an already
-    # migrated portainer_data DB.
-    image: portainer/portainer-ee:2.39.7@sha256:22ad511ad1341f2f7dfaa7447fae4f3018389a1670dd06f7b920052cd9e9f692
+    # Moved off the 2.39.x LTS train onto STS on 2026-09-05. Renovate had been
+    # proposing this jump since 2026-08-01 (PR #45) and it is held for manual
+    # review by renovate.json, because Portainer migrates portainer_data on
+    # startup and controls every git-backed stack on this host.
+    #
+    # Portainer fails closed if the binary is older than the database schema,
+    # so this pin only ever moves forward. Cold backup of portainer_data taken
+    # before the upgrade lives in /opt/portainer/backups/.
+    image: portainer/portainer-ee:2.45.0@sha256:18750221de87f489fffc3d52a23799e9c6a83aab0f1a5337824c81e12bf552b5
     network_mode: host
     restart: always
     volumes:

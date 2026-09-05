@@ -2,7 +2,7 @@
 
 **Endpoint:** pico-docker (Local Docker Engine)  
 **Docker Version:** 29.0.1  
-**Portainer Version:** portainer-ee 2.39.7 LTS<br>
+**Portainer Version:** portainer-ee 2.45.0<br>
 **Portainer Compose:** `pico/portainer/compose.yaml` (host network mode; deployed directly on pico)<br>
 **Total Containers:** 31<br>
 **Total Volumes:** 48  
@@ -40,9 +40,34 @@
 > **Version drift corrected 2026-09-05:** the host had been moved to 2.39.7
 > out of band while this repo still pinned 2.39.5, so a deploy from the tracked
 > compose file would have *downgraded* the binary against an already-migrated
-> `portainer_data`. `pico/portainer/compose.yaml` is now pinned to 2.39.7 by
-> tag and digest, matching the running image. The circumstances of the 2.39.5
-> -> 2.39.7 move are unrecorded.
+> `portainer_data`. `pico/portainer/compose.yaml` was pinned to 2.39.7 by tag
+> and digest to match the running image.
+>
+> **The drift had a cause: Portainer EE auto-patches itself.**
+> `AutoPatchSettings` is `{Enabled: true, PatchCron: "0 4 * * *"}` — a daily
+> 04:00 in-place upgrade that never touches git. **It is still enabled as of
+> 2026-09-05.** That is almost certainly the unrecorded 2.39.5 -> 2.39.7 move.
+> Two writers to one database with no shared record is what turned an ordinary
+> `docker compose up -d` into an outage.
+> Check this setting before trusting the pin in this repo:
+>
+> ```bash
+> curl -s http://pico.local:9000/api/settings \
+>   -H "X-API-Key: $(cat ~/code/infra/portainer.token)" \
+>   | python3 -c 'import sys,json;print(json.load(sys.stdin)["AutoPatchSettings"])'
+> ```
+>
+> **Moved to STS 2026-09-05: 2.39.7 -> 2.45.0.** Renovate had proposed this
+> since 2026-08-01 (PR #45) and `renovate.json` holds all Portainer updates for
+> manual review. 2.39.x was the LTS train and 2.43/2.44/2.45 the STS train, so
+> the six-minor gap was a train jump, not neglect. Procedure followed: cold
+> `portainer_data` backup to
+> `/opt/portainer/backups/portainer_data-2.39.7-pre-2.45.0-20260905.tar.gz`
+> (25M, gzip- and content-verified), then `docker compose up -d` from
+> `pico/portainer/compose.yaml`. The migrator logged `DB migrated
+> to_version=2.45.0`; InstanceID `6fea906c-7c38-42d1-bc12-06124ea2b264` and the
+> `pico-docker` endpoint were preserved, and all 14 stacks kept their IDs
+> (66-80) and statuses. Note the API reports `VersionSupport: LTS` for 2.45.0.
 >
 > **This repo is public.** The compose snippets below use `${VAR}` for every
 > credential; the real values live in each stack's Portainer Env, never in git.
@@ -1789,7 +1814,7 @@ the personal photo library.
 ### Portainer
 
 **Container:** portainer-portainer-1  
-**Image:** portainer/portainer-ee:2.39.7 (digest-pinned)<br>
+**Image:** portainer/portainer-ee:2.45.0 (digest-pinned)<br>
 **Status:** Running<br>
 **Network:** host (all ports exposed directly)  
 **Compose Config:** `~/code/infra/pico/portainer/compose.yaml`<br>
