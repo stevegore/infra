@@ -2,7 +2,7 @@
 
 **Endpoint:** pico-docker (Local Docker Engine)  
 **Docker Version:** 29.0.1  
-**Portainer Version:** portainer-ee 2.39.5 LTS<br>
+**Portainer Version:** portainer-ee 2.39.7 LTS<br>
 **Portainer Compose:** `pico/portainer/compose.yaml` (host network mode; deployed directly on pico)<br>
 **Total Containers:** 31<br>
 **Total Volumes:** 48  
@@ -22,16 +22,55 @@
 > `pico/portainer/compose.yaml` but holds every update for a cold
 > `portainer_data` backup and manual deployment.
 >
+> **Deploy it only from `pico/portainer/compose.yaml`.** A stale copy pinning
+> 2.33.6 was still sitting in `/opt/portainer/docker-compose.yml` — the
+> pre-2026-08-01 deploy location — and running `docker compose up -d` there on
+> 2026-09-05 downgraded the control plane against a 2.39.x database. Portainer
+> crash-looped on `The database schema version does not align with the server
+> version` and the UI returned 502 until it was redeployed at 2.39.7. Nothing
+> was lost: Portainer fails closed at the schema check rather than migrating
+> backwards. That file is now renamed to `docker-compose.yml.superseded-20260905`
+> with a README pointing here, so the old path errors instead of deploying.
+>
 > **Last control-plane upgrade:** 2.33.6 → 2.39.5 LTS on 2026-08-01. The
 > database migration completed cleanly, the instance ID and `pico-docker`
 > endpoint were preserved, and all 14 stack names/statuses matched the
 > pre-upgrade inventory. Both Portainer Uptime Kuma monitors returned to green.
+>
+> **Version drift corrected 2026-09-05:** the host had been moved to 2.39.7
+> out of band while this repo still pinned 2.39.5, so a deploy from the tracked
+> compose file would have *downgraded* the binary against an already-migrated
+> `portainer_data`. `pico/portainer/compose.yaml` is now pinned to 2.39.7 by
+> tag and digest, matching the running image. The circumstances of the 2.39.5
+> -> 2.39.7 move are unrecorded.
 >
 > **This repo is public.** The compose snippets below use `${VAR}` for every
 > credential; the real values live in each stack's Portainer Env, never in git.
 > Anything shown as `<REDACTED>` belongs to a decommissioned stack and should be
 > treated as compromised — it was committed in plaintext before 2026-07-31 and
 > is still recoverable from git history.
+>
+> **Timezone convention.** Do **not** bind `/etc/timezone`. Ubuntu 26.04's
+> `tzdata` stopped shipping that file, so the 2026-09-04 release upgrade deleted
+> it, Docker recreated the path as an empty *directory*, and all seven services
+> binding it died with exit 127 — a directory cannot be bind-mounted onto a file.
+>
+> Which replacement is correct depends on whether the **image** ships zoneinfo:
+>
+> - **Ships zoneinfo** (`huginn`, `nuraspace`, `goldenboards` — verified): set
+>   `TZ=Australia/Sydney`. It resolves, and it is what applications read.
+> - **Ships no zoneinfo** (`portainer-ee` — verified by exporting the image):
+>   set **no** `TZ` and bind `/etc/localtime` read-only. A named zone the image
+>   cannot resolve falls back to UTC *and takes precedence over the bind*, so
+>   setting `TZ` actively breaks it. Portainer had `TZ=Australia/Sydney` set and
+>   was timestamping in UTC for exactly this reason — fixed 2026-09-05.
+> - **Dormant stacks** (`gymbooking2`, `stravakeeper` — both migrated to OKE,
+>   neither image still on pico): bind `/etc/localtime` read-only and set no
+>   `TZ`. Their zoneinfo cannot be checked, so this keeps behaviour identical
+>   to the old two-bind setup, minus the broken bind.
+>
+> A POSIX `TZ` string (`AEST-10AEDT,M10.1.0,M4.1.0/3`) also works without
+> zoneinfo, but hardcodes the DST rules; the bind follows the host instead.
 
 ---
 
@@ -86,9 +125,9 @@ curl -s -X POST http://pico.local:9000/api/endpoints/1/docker/exec/$EXEC_ID/star
 7. [huggin](#huggin) - Task automation  
 8. [nuraspace2](#nuraspace2) - NuraSpace application  
 9. [pdf](#pdf) - Stirling PDF document processor  
-10. [gymmaster-rest](#gymmaster-rest) - Gym booking system  
+10. [gymmaster-rest](#gymmaster-rest) - Gym booking system (**migrated to OKE 2026-07-05**)  
 11. [goldenboards](#goldenboards) - Golden Boards application  
-12. [stravakeeper](#stravakeeper) - Strava data keeper  
+12. [stravakeeper](#stravakeeper) - Strava data keeper (**migrated to OKE 2026-06-06**)  
 13. [transmission-wg](#transmission-wg) - WireGuard-based torrent (stopped)  
 14. [stravabot-rs](#stravabot-rs) - Strava bot in Rust  
 15. [immich](#immich) - Photo management (Portainer-managed)  
@@ -915,11 +954,11 @@ services:
       - HUGINN_DATABASE_USERNAME=root
       - HUGINN_DATABASE_NAME=huginn
       - APP_SECRET_TOKEN=${APP_SECRET_TOKEN}
+      - TZ=Australia/Sydney
     depends_on:
       - mysql
     volumes:
-      - /etc/timezone:/etc/timezone
-      - /etc/localtime:/etc/localtime
+      - /etc/localtime:/etc/localtime:ro
 
   threaded:
     image: ghcr.io/huginn/huginn-single-process
@@ -932,12 +971,12 @@ services:
       - HUGINN_DATABASE_USERNAME=root
       - HUGINN_DATABASE_NAME=huginn
       - APP_SECRET_TOKEN=${APP_SECRET_TOKEN}
+      - TZ=Australia/Sydney
     depends_on:
       - mysql
       - web
     volumes:
-      - /etc/timezone:/etc/timezone
-      - /etc/localtime:/etc/localtime
+      - /etc/localtime:/etc/localtime:ro
 
   mysqladmin:
     image: phpmyadmin
@@ -999,11 +1038,12 @@ services:
     image: nuraspace  # Built manually and kept local currently due to credentials
     ports:
       - 8111:5000
+    environment:
+      TZ: Australia/Sydney
     restart: unless-stopped
     volumes:
       - /var/nura:/var/nura
-      - /etc/timezone:/etc/timezone
-      - /etc/localtime:/etc/localtime
+      - /etc/localtime:/etc/localtime:ro
 ```
 
 **Purpose:** NuraSpace application (custom Python deployment)  
@@ -1117,8 +1157,7 @@ services:
     restart: unless-stopped
     volumes:
       - /var/elixr:/var/elixr
-      - /etc/timezone:/etc/timezone
-      - /etc/localtime:/etc/localtime
+      - /etc/localtime:/etc/localtime:ro
 ```
 
 **Purpose:** Gym booking system (Elixr gym)  
@@ -1150,12 +1189,20 @@ version: '3.5'
 services:
   goldenboards:
     image: goldenboards
+    environment:
+      TZ: Australia/Sydney
     restart: unless-stopped
     volumes:
       - /var/goldenboards:/var/goldenboards
-      - /etc/timezone:/etc/timezone
-      - /etc/localtime:/etc/localtime
+      - /etc/localtime:/etc/localtime:ro
 ```
+
+> **`ForcePullImage` is still ON — turn it off before merging any change to
+> `pico/goldenboards/compose.yaml`.** The image is built locally on pico and
+> exists in no registry, so the 5-minute auto-update job resolves it to
+> `docker.io/library/goldenboards`, and the redeploy dies on a failed pull.
+> This is the same trap that was disarmed for [nuraspace2](#nuraspace2) on
+> 2026-08-08; Portainer's log records the failed pull on every poll.
 
 **Purpose:** Golden Boards application (custom Go binary)  
 **Ports:** None exposed  
@@ -1167,7 +1214,17 @@ services:
 
 ### stravakeeper
 
-**Status:** Running  
+> **Migrated to OKE 2026-06-06** (`731442e`) — now runs as `apps/strava-keeper`
+> (namespace `strava-keeper`), image `docker.io/stevegore/stravakeeper` pinned
+> by git-SHA tag in `values.yaml`, secrets in Vault `kv/strava-keeper/config`,
+> served at `strava.stevegore.au`. The pico stack is stopped.
+>
+> Unlike [gymmaster-rest](#gymmaster-rest), this is **not** a working rollback
+> path: the local-only `stravakeeper` image is no longer on pico, so falling
+> back here would need a rebuild first. The OKE image is arm64-only and will
+> not run on pico.
+
+**Status:** Stopped (migrated to OKE)  
 **Stack ID:** 79  
 **Project Path:** `/data/compose/79`  
 **Compose Version:** v1  
@@ -1177,7 +1234,7 @@ services:
 
 | Container                   | Image                 | Status     |
 | --------------------------- | --------------------- | ---------- |
-| stravakeeper-stravakeeper-1 | stravakeeper (custom) | Up 2 weeks |
+| stravakeeper-stravakeeper-1 | stravakeeper (custom) | Not present (OKE) |
 
 **Docker Compose:**
 
@@ -1190,8 +1247,7 @@ services:
     restart: unless-stopped
     volumes:
       - /var/stravakeeper:/var/stravakeeper
-      - /etc/timezone:/etc/timezone
-      - /etc/localtime:/etc/localtime
+      - /etc/localtime:/etc/localtime:ro
 ```
 
 **Purpose:** Strava data keeper and archiver (custom Go binary)  
@@ -1733,7 +1789,7 @@ the personal photo library.
 ### Portainer
 
 **Container:** portainer-portainer-1  
-**Image:** portainer/portainer-ee:2.39.5 (digest-pinned)<br>
+**Image:** portainer/portainer-ee:2.39.7 (digest-pinned)<br>
 **Status:** Running<br>
 **Network:** host (all ports exposed directly)  
 **Compose Config:** `~/code/infra/pico/portainer/compose.yaml`<br>
@@ -1741,9 +1797,12 @@ the personal photo library.
 **Mounts:**  
 
 - `portainer_data` volume -> `/data`  
-- `/etc/localtime` bind -> `/etc/localtime`  
-- `/etc/timezone` bind -> `/etc/timezone`  
+- `/etc/localtime` bind -> `/etc/localtime` (read-only)  
 - `/run/docker.sock` bind -> `/var/run/docker.sock`
+
+**Timezone:** no `TZ` env var by design — the image ships no zoneinfo, so the
+`/etc/localtime` bind is what supplies the zone. See the timezone convention at
+the top of this file before adding one back.
 
 **Purpose:** Container management UI (Enterprise Edition)
 
@@ -1976,9 +2035,9 @@ bash ~/code/infra/scripts/vw-mysql-to-sqlite.sh
 | 8090  | Instagram Gallery     | ig-gallery                        | TCP      |
 | 8191  | FlareSolverr          | flaresolverr                      | TCP      |
 | 8111  | NuraSpace             | nuraspace2-nuraspace-1            | TCP      |
-| 8112  | GymBooking            | gymmaster-rest-gymbooking-1       | TCP      |
+| ~~8112~~ | ~~GymBooking~~     | *(migrated to OKE — port free)*   | —        |
 | 8123  | Home Assistant        | homeassistant-app                 | TCP      |
-| 8180  | StravaKeeper          | stravakeeper-stravakeeper-1       | TCP      |
+| ~~8180~~ | ~~StravaKeeper~~   | *(migrated to OKE — port free)*   | —        |
 | 8200  | Duplicati             | duplicati                         | TCP      |
 | 8324  | Plex Roku             | plex                              | TCP      |
 | 8788  | ttyd Terminal         | stevegore-au-ttyd-1               | TCP      |

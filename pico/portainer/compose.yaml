@@ -1,14 +1,22 @@
 services:
   portainer:
-    image: portainer/portainer-ee:2.39.5@sha256:465c705cccfda51e0b5aeffbb67d36038ac07a8704aa58251c6ec544e46ec5f2
-    environment:
-      TZ: Australia/Sydney
+    # Reconciled to the tag actually running on pico. Git previously pinned
+    # 2.39.5 while the host had been moved to 2.39.7 out of band, so deploying
+    # from this file would have downgraded the binary against an already
+    # migrated portainer_data DB.
+    image: portainer/portainer-ee:2.39.7@sha256:22ad511ad1341f2f7dfaa7447fae4f3018389a1670dd06f7b920052cd9e9f692
     network_mode: host
     restart: always
     volumes:
       - /run/docker.sock:/var/run/docker.sock
-      - /etc/timezone:/etc/timezone
-      - /etc/localtime:/etc/localtime
+      # Deliberately NO TZ env var here. This image ships no zoneinfo, so a
+      # named zone like Australia/Sydney cannot be resolved and the runtime
+      # falls back to UTC -- and because TZ takes precedence, setting it also
+      # defeats this bind. That is exactly what was happening: Portainer had
+      # TZ=Australia/Sydney set and was timestamping in UTC regardless.
+      # With TZ unset, the bind alone gives the correct local time.
+      # /etc/timezone is not mounted: Ubuntu 26.04's tzdata dropped that file.
+      - /etc/localtime:/etc/localtime:ro
       - portainer_data:/data
 
 volumes:

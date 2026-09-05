@@ -8,6 +8,5 @@ services:
     restart: unless-stopped
     volumes:
       - /var/elixr:/var/elixr    
-      - /etc/timezone:/etc/timezone
-      - /etc/localtime:/etc/localtime
+      - /etc/localtime:/etc/localtime:ro
     

@@ -24,11 +24,11 @@ services:
       - HUGINN_DATABASE_USERNAME=root
       - HUGINN_DATABASE_NAME=huginn
       - APP_SECRET_TOKEN=${APP_SECRET_TOKEN}
+      - TZ=Australia/Sydney
     depends_on:
       - mysql
     volumes:
-      - /etc/timezone:/etc/timezone
-      - /etc/localtime:/etc/localtime      
+      - /etc/localtime:/etc/localtime:ro
 
   threaded:
     image: ghcr.io/huginn/huginn-single-process
@@ -41,12 +41,12 @@ services:
       - HUGINN_DATABASE_USERNAME=root
       - HUGINN_DATABASE_NAME=huginn
       - APP_SECRET_TOKEN=${APP_SECRET_TOKEN}
+      - TZ=Australia/Sydney
     depends_on:
       - mysql
       - web
     volumes:
-      - /etc/timezone:/etc/timezone
-      - /etc/localtime:/etc/localtime      
+      - /etc/localtime:/etc/localtime:ro
 
 
   mysqladmin:
