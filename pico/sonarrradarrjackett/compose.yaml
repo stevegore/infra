@@ -41,7 +41,7 @@ services:
    - jackett-config:/config
   environment:
    - TZ=Australia/Sydney
-  image: linuxserver/jackett:0.24.2531@sha256:ef4b5b9f09d0c014f48c8e6999abb782b53b4cea8b170ca049c96046950c8524  # https://hub.docker.com/r/linuxserver/jackett/tags
+  image: linuxserver/jackett:0.24.2541@sha256:f6a9486783c779d125066558b936756ecb916064a7e1ca5ddff7fab1e48c2ecb  # https://hub.docker.com/r/linuxserver/jackett/tags
 
  flaresolverr:
   container_name: flaresolverr
