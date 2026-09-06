@@ -4,7 +4,7 @@ replicaCount: 1
 
 image:
   repository: syd.ocir.io/sdajdczqv0qo/gym-booker
-  tag: "a853eaf4cd3e1d61faba76c9db3354818c332834"
+  tag: "e1d60e9d9fda5c72ead6aeb9b0dac3ad51c0c0cc"
   pullPolicy: IfNotPresent
 
 # OCIR pull secret — manual bootstrap once after the namespace first syncs
