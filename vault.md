@@ -185,7 +185,7 @@ Key-value secrets engine for application credentials.
 | kv/homelab/pushover | Pushover "Homelab notification" app: `app_token`, `user_key`, `app_name`. Written by hand, **not** by `vault-token-sync.sh` (that script only walks `*.token` files and writes a single `token` field). Read by `scripts/arr-malware-watchdog.sh` and `scripts/pushover-notify.sh` (the generic systemd `OnFailure=` alerter) via the same AppRole. | pico-token-sync |
 | kv/homelab/renovate | GitHub fine-grained PAT for the Renovate workflow: `token`, plus `purpose`/`scopes`/`consumer`/`created` metadata. Scoped to `stevegore/infra` only (contents, pull requests, workflows — all read+write). Written by hand. **Vault is the origin of record; GitHub Actions holds a copy as the repo secret `RENOVATE_TOKEN`.** Nothing reads this path automatically — on rotation, re-push it with:<br>`vault kv get -field=token kv/homelab/renovate \| gh secret set RENOVATE_TOKEN --repo stevegore/infra`<br>See [`AUTO_UPDATES.md`](AUTO_UPDATES.md). | pico-token-sync |
 | kv/strava-keeper/config | Strava Keeper: STRAVA_CLIENT_ID, STRAVA_CLIENT_SECRET, STRAVA_VERIFY_TOKEN, MYSQL_DSN | strava-keeper |
-| kv/gym-booker/config | Gym Booker: USERS_YAML (full users.yaml — gym credentials, swim schedule, pushover tokens) | gym-booker |
+| kv/gym-booker/config | Gym Booker: USERS_YAML (credential references, gym passwords/API keys and Pushover tokens only), MYSQL_DSN, FLASK_SECRET_KEY, ADMIN_PASSWORD. Profiles, schedules and exclusions moved to MySQL on 2026-09-06 | gym-booker |
 
 > **This table is not exhaustive.** A walk of the live mount on 2026-08-18 found
 > 25 paths, including several never documented here (`cloudflare`, `github/orm-pat`,
