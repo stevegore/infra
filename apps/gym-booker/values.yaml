@@ -4,7 +4,7 @@ replicaCount: 0
 
 image:
   repository: syd.ocir.io/sdajdczqv0qo/gym-booker
-  tag: "042152223a9cb8b16e475c4ce0e0e1e4e9c5ca3d"
+  tag: "a853eaf4cd3e1d61faba76c9db3354818c332834"
   pullPolicy: IfNotPresent
 
 # OCIR pull secret — manual bootstrap once after the namespace first syncs
@@ -49,6 +49,6 @@ vault:
 
 # One-time migration. Enable only while replicaCount is zero; source is read-only.
 migration:
-  enabled: false
+  enabled: true
   statePath: /var/elixr
   adminUser: steve
