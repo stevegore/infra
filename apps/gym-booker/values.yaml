@@ -1,6 +1,6 @@
 # Keep a single scheduler replica: concurrent schedulers can book the same class.
 # Non-secret state is in MySQL; the legacy PVC is retained for migration/rollback.
-replicaCount: 0
+replicaCount: 1
 
 image:
   repository: syd.ocir.io/sdajdczqv0qo/gym-booker
@@ -49,6 +49,6 @@ vault:
 
 # One-time migration. Enable only while replicaCount is zero; source is read-only.
 migration:
-  enabled: true
+  enabled: false
   statePath: /var/elixr
   adminUser: steve
