@@ -1,0 +1,65 @@
+{{- if .Values.migration.enabled }}
+{{- if ne (int .Values.replicaCount) 0 }}
+{{- fail "MySQL migration requires replicaCount: 0 to stop the scheduler first" }}
+{{- end }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "gym-booker.fullname" . }}-mysql-migration
+  labels:
+    {{- include "gym-booker.labels" . | nindent 4 }}
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 300
+  template:
+    metadata:
+      labels:
+        {{- include "gym-booker.selectorLabels" . | nindent 8 }}
+    spec:
+      restartPolicy: Never
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: migrate
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          command: ["python", "migrate.py"]
+          args:
+            - --users
+            - /config/users.yaml
+            - --state
+            - {{ .Values.migration.statePath | quote }}
+            - --admin-user
+            - {{ .Values.migration.adminUser | quote }}
+          env:
+            - name: MYSQL_DSN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.vault.secretName }}
+                  key: MYSQL_DSN
+          volumeMounts:
+            - name: config
+              mountPath: /config
+              readOnly: true
+            - name: legacy-data
+              mountPath: /var/elixr
+              readOnly: true
+          resources:
+            requests:
+              memory: 64Mi
+              cpu: 25m
+            limits:
+              memory: 256Mi
+              cpu: 250m
+      volumes:
+        - name: config
+          secret:
+            secretName: {{ .Values.vault.secretName }}
+            items:
+              - key: USERS_YAML
+                path: users.yaml
+        - name: legacy-data
+          persistentVolumeClaim:
+            claimName: {{ include "gym-booker.fullname" . }}-data
+{{- end }}

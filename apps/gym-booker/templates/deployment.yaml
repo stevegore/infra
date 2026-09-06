@@ -20,17 +20,6 @@ spec:
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      initContainers:
-        # The FSS CSI driver ignores fsGroup, so root must chown the export
-        # for gymuser (uid/gid 1000) before the app can write its state.
-        - name: chown-data
-          image: busybox:1.38
-          command: ["chown", "1000:1000", "/var/elixr"]
-          securityContext:
-            runAsUser: 0
-          volumeMounts:
-            - name: data
-              mountPath: /var/elixr
       containers:
         - name: gym-booker
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
@@ -40,13 +29,26 @@ spec:
               containerPort: {{ .Values.service.port }}
               protocol: TCP
           env:
+            - name: MYSQL_DSN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.vault.secretName }}
+                  key: MYSQL_DSN
+            - name: FLASK_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.vault.secretName }}
+                  key: FLASK_SECRET_KEY
+            - name: ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.vault.secretName }}
+                  key: ADMIN_PASSWORD
             - name: USERS_CONFIG
               value: /config/users.yaml
             - name: TZ
               value: Australia/Sydney
           volumeMounts:
-            - name: data
-              mountPath: /var/elixr
             - name: config
               mountPath: /config
               readOnly: true
@@ -65,9 +67,6 @@ spec:
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
       volumes:
-        - name: data
-          persistentVolumeClaim:
-            claimName: {{ include "gym-booker.fullname" . }}-data
         - name: config
           secret:
             secretName: {{ .Values.vault.secretName }}

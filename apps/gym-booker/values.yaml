@@ -1,16 +1,6 @@
-# Stays at 1, and gets no PodDisruptionBudget.
-#
-# This is a scheduler, not a web service: it books classes on a timer and
-# records what it did in bookings.pickle on the PVC below. Two replicas would
-# each run the same schedule, so every class would be attempted twice, and both
-# would rewrite the same pickle with no locking. Duplicate bookings against a
-# real gym account are not a recoverable kind of bug. The PVC is claimed
-# ReadWriteOnce as well.
-#
-# No PDB: with one replica, minAvailable: 1 forbids all voluntary disruption and
-# `kubectl drain` never completes. A few minutes offline while it reschedules is
-# acceptable — the booking window is checked continuously, not once.
-replicaCount: 1
+# Keep a single scheduler replica: concurrent schedulers can book the same class.
+# Non-secret state is in MySQL; the legacy PVC is retained for migration/rollback.
+replicaCount: 0
 
 image:
   repository: syd.ocir.io/sdajdczqv0qo/gym-booker
@@ -38,26 +28,27 @@ service:
   type: ClusterIP
   port: 5000
 
-# Booking state (bookings.pickle, token.txt, skip_classes.txt per user),
-# previously /var/elixr on pico. A few KB of data — oci-fss, not oci-bv:
-# block volumes have a 50 GB minimum and the boot+block Always-Free cap is
-# saturated (see oracle-cloud.md). FSS ignores fsGroup and the app runs as
-# gymuser (1000), so an init container chowns the export on startup.
+# Legacy state retained for migration/rollback. New pods do not mount this claim.
+# Do not remove it until MySQL migration and backups have been verified.
 persistence:
   size: 1Gi
   storageClass: oci-fss
 
-# VSO config — secret at kv/gym-booker/config with fields:
-#   USERS_YAML — full users.yaml (user credentials, swim schedule, pushover
-#                tokens). Mounted at /config/users.yaml; the app reads it via
-#                the USERS_CONFIG env var. Deploys to change the schedule:
-#                `vault kv patch kv/gym-booker/config USERS_YAML=@users.yaml`
-#                (VSO re-syncs within refreshAfter and rolloutRestartTargets
-#                restarts the Deployment automatically).
+# VSO config at kv/gym-booker/config:
+# USERS_YAML: stable user-name references + gym credentials + Pushover tokens only.
+# MYSQL_DSN, FLASK_SECRET_KEY, ADMIN_PASSWORD: injected as environment variables.
+# Profiles, schedules and cancellation exclusions must be migrated to MySQL before
+# deploying the new image. See gym-booker/MIGRATION.md for the ordered cutover.
 vault:
   enabled: true
   mount: kv
   path: gym-booker/config
-  refreshAfter: 1h
+  refreshAfter: 1m
   authRole: vault-secrets-operator
   secretName: gym-booker-config
+
+# One-time migration. Enable only while replicaCount is zero; source is read-only.
+migration:
+  enabled: false
+  statePath: /var/elixr
+  adminUser: steve
