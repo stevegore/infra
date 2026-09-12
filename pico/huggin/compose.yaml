@@ -13,7 +13,7 @@ services:
       - mysqldata:/var/lib/mysql
 
   web:
-    image: ghcr.io/huginn/huginn-single-process
+    image: ghcr.io/huginn/huginn-single-process@sha256:22896b24bc464a7ed1feb1197b8dfa0961a443eb12dee874be85c18f545fc5ed
     restart: always
     ports:
       - "3000:3000"
@@ -31,7 +31,7 @@ services:
       - /etc/localtime:/etc/localtime:ro
 
   threaded:
-    image: ghcr.io/huginn/huginn-single-process
+    image: ghcr.io/huginn/huginn-single-process@sha256:22896b24bc464a7ed1feb1197b8dfa0961a443eb12dee874be85c18f545fc5ed
     command: /scripts/init bin/threaded.rb
     restart: always
     environment:
@@ -50,7 +50,7 @@ services:
 
 
   mysqladmin:
-    image: phpmyadmin
+    image: phpmyadmin@sha256:3a8a8d6b5289091f959ba0293f21163b3a2fc5741991a53de70b3497fe8d31db
     restart: always
     ports:
       - "3011:80"

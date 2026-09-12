@@ -13,7 +13,7 @@ services:
    - /srv/movies:/movies
   environment:
    - TZ=Australia/Sydney
-  image: linuxserver/radarr:6.3.0 # https://hub.docker.com/r/linuxserver/radarr/tags
+  image: linuxserver/radarr:6.3.0@sha256:95ba0801df4d9d1d79d0d9a3849f656542497dab061d91b87ad4f53a71aff3ef # https://hub.docker.com/r/linuxserver/radarr/tags
  
  sonarr:
   container_name: sonarr
@@ -28,7 +28,7 @@ services:
    - /srv/tv:/tv
   environment:
    - TZ=Australia/Sydney
-  image: linuxserver/sonarr:4.0.19  # https://hub.docker.com/r/linuxserver/sonarr/tags
+  image: linuxserver/sonarr:4.0.19@sha256:82172b363f9eddc02aca544f880a044f2ceb9aaf190bc87e4454e2f705eb91d0  # https://hub.docker.com/r/linuxserver/sonarr/tags
  
  jackett:
   container_name: jackett
@@ -55,7 +55,7 @@ services:
    - LOG_HTML=false
    - CAPTCHA_SOLVER=none
    - TZ=Australia/Sydney
-  image: ghcr.io/flaresolverr/flaresolverr:latest
+  image: ghcr.io/flaresolverr/flaresolverr:latest@sha256:c80ae007ce2ccdcd217a12426e4f039ef763ff90738c808d38810c3e59323767
  
 volumes:
   radarr-config:
