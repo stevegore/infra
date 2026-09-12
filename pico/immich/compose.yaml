@@ -1,6 +1,6 @@
 services:
   immich-server:
-    image: ghcr.io/immich-app/immich-server:release
+    image: ghcr.io/immich-app/immich-server:release@sha256:ae13784ffcfcce8f4178113eb6661602a1fd1912f3d539880b8ac0dd95fc8ac2
     container_name: immich-immich-server-1
     restart: unless-stopped
     ports:
@@ -27,7 +27,7 @@ services:
       disable: false
 
   immich-machine-learning:
-    image: ghcr.io/immich-app/immich-machine-learning:release
+    image: ghcr.io/immich-app/immich-machine-learning:release@sha256:f8b2869891c861a58dde969d86e7ea8a186e6059a55886632ee3249e51fb574a
     container_name: immich-immich-machine-learning-1
     restart: unless-stopped
     environment:
@@ -45,7 +45,7 @@ services:
       test: redis-cli ping || exit 1
 
   immich-database:
-    image: ghcr.io/immich-app/postgres:16-vectorchord0.3.0-pgvectors0.2.0
+    image: ghcr.io/immich-app/postgres:16-vectorchord0.3.0-pgvectors0.2.0@sha256:5b434f184ec644c4e1a4076e2e7d4bee45631646a52e956b5ff74ac51e79cc00
     container_name: immich-immich-database-1
     restart: unless-stopped
     environment:
