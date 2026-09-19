@@ -4,7 +4,7 @@
 # Build & push (OKE nodes are aarch64; OCIR creds in Vault at kv/oci/ocir):
 #   docker build --platform linux/arm64 -t syd.ocir.io/sdajdczqv0qo/garmin-mcp:0.1.0 images/garmin-mcp
 #   docker push syd.ocir.io/sdajdczqv0qo/garmin-mcp:0.1.0
-FROM python:3.14-slim
+FROM python:3.14-slim@sha256:caaf356f40667c496d405780745b9ac25771c189a51dfcc42430d531ea09f8a2
 
 RUN apt-get update && apt-get install -y --no-install-recommends git \
     && pip install --no-cache-dir \
