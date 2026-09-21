@@ -76,7 +76,7 @@ persistence:
 # the single Kuma pod only after both idempotent scripts commit successfully.
 reconcile:
   enabled: true
-  image: python:3.14-alpine@sha256:016508ba505da24f7139765bc4bb669df4e88eb2f12eeadd571bf2f88d7533df
+  image: python:3.14-alpine@sha256:9e9fde4d32eedce0b661d9ab91e826b62dddf28e928c230ec55f1866cac66b01
   pymysqlVersion: "1.1.2"
 
 # MySQL backend — uses the OCI MySQL HeatWave Free instance shared with
