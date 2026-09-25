@@ -93,7 +93,7 @@ restarter:
   # NOTE: this image is distroless — it contains /bin/kubectl and nothing else,
   # no /bin/sh. That is fine because templates/cronjob.yaml execs kubectl
   # directly via exec-form `command:`. Never rewrite that into `sh -c`.
-  image: registry.k8s.io/kubectl:v1.37.0
+  image: registry.k8s.io/kubectl:v1.37.1
   # The image's Dockerfile USER is 0, so the pod's runAsNonRoot: true would fail
   # admission on its own. 65532/65532 is the `nonroot` account baked into the
   # image's /etc/passwd, and it owns a writable HOME (/home/nonroot) for
@@ -124,7 +124,7 @@ denyCidrs:
 egressLockdown:
   # Official Kubernetes iptables build image (what kube-proxy ships on). Pinned
   # tag, pulled from registry.k8s.io — no Docker Hub rate-limit exposure.
-  image: registry.k8s.io/build-image/distroless-iptables:v0.9.6
+  image: registry.k8s.io/build-image/distroless-iptables:v0.11.0
 
 networkPolicy:
   enabled: true
