@@ -110,8 +110,11 @@ fi
 log "upgrading Portainer: ${RUNNING_VER:-unknown} -> $DESIRED_TAG"
 
 # --- 4. Pull first: a registry failure must not cost us the running instance --
+# alpine:3 does the backup; the weekly docker-prune timer removes it, and the
+# first live run (2026-09-28) pulled it while Portainer was already stopped.
 docker compose -p "$PROJECT" -f "$COMPOSE_FILE" pull --quiet \
-  || die "pull of $DESIRED_IMAGE failed; Portainer left running at ${RUNNING_VER:-?}"
+  && docker pull --quiet alpine:3 >/dev/null \
+  || die "image pull failed; Portainer left running at ${RUNNING_VER:-?}"
 
 # --- 5. Cold backup -----------------------------------------------------------
 # Cold, not hot: Portainer writes BoltDB pages continuously and a tar of a live
