@@ -36,7 +36,7 @@ services:
       - /media/m2/immich/ml-cache:/cache
 
   immich-redis:
-    image: redis:8.10-alpine@sha256:5cca2f8a01ef2264c52dac86f14ec6a5abe973a93331e1b62522cfc5e63e4691
+    image: redis:8.10-alpine@sha256:3811787313eba226a2ef38658c6ccb91cd5e110edc89c37767de373120a0e5a0
     container_name: immich-immich-redis-1
     restart: unless-stopped
     environment:
