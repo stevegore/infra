@@ -1,0 +1,14 @@
+[Unit]
+Description=Daily check for a new Portainer pin in stevegore/infra@main
+
+[Timer]
+# Renovate automerges between 01:00 and 06:00 AEST. 06:30 lets the merge land
+# and keeps any control-plane restart ahead of the household's day. The host
+# reboots at 05:00 for unattended-upgrades; Persistent catches a missed run.
+OnCalendar=*-*-* 06:30:00
+Persistent=true
+AccuracySec=5min
+Unit=portainer-auto-update.service
+
+[Install]
+WantedBy=timers.target

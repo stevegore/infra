@@ -18,9 +18,10 @@
 > bumped automatically by Renovate. See [`AUTO_UPDATES.md`](AUTO_UPDATES.md).
 >
 > **Portainer itself is the exception:** it cannot safely use its own Git polling
-> to replace its control-plane container. Renovate tracks
-> `pico/portainer/compose.yaml` but holds every update for a cold
-> `portainer_data` backup and manual deployment.
+> to replace its control-plane container. `pico/portainer/compose.yaml` is
+> deployed by the `portainer-auto-update` timer instead (backup-first, refuses
+> downgrades, pages on failure) — see *Portainer itself* in
+> [`AUTO_UPDATES.md`](AUTO_UPDATES.md).
 >
 > **Deploy it only from `pico/portainer/compose.yaml`.** A stale copy pinning
 > 2.33.6 was still sitting in `/opt/portainer/docker-compose.yml` — the
@@ -44,12 +45,13 @@
 > and digest to match the running image.
 >
 > **The drift had a cause: Portainer EE auto-patches itself.**
-> `AutoPatchSettings` is `{Enabled: true, PatchCron: "0 4 * * *"}` — a daily
-> 04:00 in-place upgrade that never touches git. **It is still enabled as of
-> 2026-09-05.** That is almost certainly the unrecorded 2.39.5 -> 2.39.7 move.
+> `AutoPatchSettings` was `{Enabled: true, PatchCron: "0 4 * * *"}` — a daily
+> 04:00 in-place upgrade that never touches git. **Disabled 2026-09-28**; the
+> reconciler timer is now the only writer. That setting is almost certainly the
+> unrecorded 2.39.5 -> 2.39.7 move.
 > Two writers to one database with no shared record is what turned an ordinary
 > `docker compose up -d` into an outage.
-> Check this setting before trusting the pin in this repo:
+> If the pin and the host ever disagree again, check it has not been re-enabled:
 >
 > ```bash
 > curl -s http://pico.local:9000/api/settings \

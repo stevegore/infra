@@ -1,0 +1,22 @@
+[Unit]
+Description=Reconcile the Portainer control plane to the pin in stevegore/infra@main
+Wants=network-online.target docker.service
+After=network-online.target docker.service
+# Portainer is the control plane for every git-backed stack on this host. A
+# silent failure here means the host quietly stops tracking git -- the drift
+# that caused the 2026-09-05 downgrade outage. A refused downgrade also exits
+# non-zero on purpose, so it pages too.
+OnFailure=pushover-failure@%n.service
+
+[Service]
+Type=oneshot
+# steve is in the docker group, which is all this needs; no root.
+User=steve
+Group=steve
+ExecStart=/home/steve/.local/bin/portainer-auto-update
+# A slow image pull on a bad morning.
+TimeoutStartSec=30min
+StandardOutput=journal
+StandardError=journal
+NoNewPrivileges=true
+PrivateTmp=true

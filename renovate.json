@@ -132,16 +132,31 @@
       "prPriority": 20
     },
     {
-      "description": "Portainer controls every git-backed pico stack. Hold all of its updates for a cold portainer_data backup and post-migration API/stack verification.",
+      "description": [
+        "Portainer controls every git-backed pico stack and migrates portainer_data on startup, so its patch and minor updates automerge only after a 3-day soak, and never deploy through Portainer's own git polling.",
+        "The deploy is scripts/portainer-auto-update.sh on a pico systemd timer (06:30): it pulls first, takes a verified cold portainer_data backup, refuses to downgrade, and pages via Pushover if the new version is not healthy. Portainer's built-in AutoPatchSettings is disabled so that path is the only writer (it caused the 2026-09-05 downgrade outage)."
+      ],
       "matchPackageNames": [
         "/(^|\\/)portainer\\/portainer-ee$/"
       ],
-      "automerge": false,
+      "minimumReleaseAge": "3 days",
       "addLabels": [
-        "critical",
-        "manual-review"
+        "critical"
       ],
       "prPriority": 20
+    },
+    {
+      "description": "Portainer majors change the API and the stack model; keep them manual.",
+      "matchPackageNames": [
+        "/(^|\\/)portainer\\/portainer-ee$/"
+      ],
+      "matchUpdateTypes": [
+        "major"
+      ],
+      "automerge": false,
+      "addLabels": [
+        "manual-review"
+      ]
     },
     {
       "description": "Critical platform major upgrades require manual review.",

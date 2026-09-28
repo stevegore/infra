@@ -13,7 +13,7 @@ Set up 2026-07-31.
 | --- | --- | --- | --- |
 | OKE apps, Helm charts, Terraform providers, GitHub Actions | **Renovate** (`renovate.json`) | nightly 01:00–06:00 AEST | PR → automerge → `argocd-sync.yml` |
 | pico Docker stacks | **Renovate** + git-backed Portainer stacks | nightly, then Portainer polls every 5 min | PR → automerge → Portainer redeploy |
-| Portainer control plane | **Renovate**, manual review after a cold data-volume backup | nightly scan | PR → review → pico Compose deployment |
+| Portainer control plane | **Renovate** + `portainer-auto-update` timer on pico | nightly scan, 3-day soak, deploy 06:30 | PR → automerge → cold backup → Compose redeploy |
 | Home Assistant HACS integrations/cards/themes | HA automation `Auto-update: HA core, Apps and HACS` | nightly 04:00 | `update.install` |
 | Home Assistant Core, Matter and MariaDB containers | **Renovate**, manual review after a verified backup | nightly scan | PR → review → pico Compose deployment |
 | pico OS packages | `unattended-upgrades` | daily, reboot 05:00 | apt |
@@ -50,7 +50,7 @@ Terraform configuration are valid. Uptime Kuma is the post-deploy smoke test.
 | --- | --- |
 | Postgres, MySQL, MariaDB, Redis, CloudNativePG | A bad major here is a restore, not a rollback. Opens a PR labelled `database` / `manual-review` and waits. |
 | Home Assistant Core and Matter Server | Container-mode migrations need a verified snapshot and compatibility review. |
-| Portainer (all updates) | It controls every git-backed pico stack and migrates its database on startup. Back up `portainer_data`, then verify the API, environment and stack inventory. |
+| Portainer majors | They change the API and stack model. Patch/minor updates automerge after a 3-day soak and deploy through the backup-first reconciler (see *Portainer itself*). |
 | Huginn MySQL beyond 5.7 | Its existing data directory is 5.7 format and cannot jump directly to a current MySQL release. Renovate is constrained to 5.7 and CI enforces the boundary until a staged logical migration is performed. |
 | ArgoCD (all updates); Vault, VSO, Cilium, Tailscale Operator and Authentik majors | These coordinate or secure the platform and need release-note/order review. |
 | `apps/caddy/Dockerfile` | Caddy is a custom `xcaddy` build. Merging the base-image bump is not enough — the image must be rebuilt and pushed, then `image.tag` bumped in `values.yaml`. The PR body carries the buildx command. |
@@ -184,20 +184,45 @@ If a future run brings something unexpected up,
 
 ### Portainer itself
 
-Portainer is intentionally **not** one of the stacks it manages. Its reviewed
-source is [`pico/portainer/compose.yaml`](pico/portainer/compose.yaml), but a
-merge cannot self-deploy the control plane. Renovate holds every Portainer PR
-for manual review. After merging:
+Portainer is intentionally **not** one of the stacks it manages — it cannot
+safely replace its own container through its own git polling. Its source is
+[`pico/portainer/compose.yaml`](pico/portainer/compose.yaml), and since
+2026-09-28 it is deployed automatically:
 
-1. Pull `main` on pico and pre-pull the new image.
-2. Stop Portainer and take a cold archive of the external `portainer_data`
-   volume under `~/.local/state/infra/portainer-backups/`.
-3. Run `docker compose -f ~/code/infra/pico/portainer/compose.yaml up -d`.
-4. Verify `/api/status`, the `pico-docker` environment, all stack names/statuses,
-   and both Uptime Kuma monitors.
+1. Renovate opens the bump; patch/minor automerge after CI and a **3-day
+   `minimumReleaseAge` soak** (majors stay `manual-review`).
+2. [`scripts/portainer-auto-update.sh`](scripts/portainer-auto-update.sh) runs
+   daily at 06:30 as `steve` from `portainer-auto-update.timer`. It syncs a
+   dedicated clone (`~/.local/state/portainer-auto-update/infra`, never the
+   working copy), and if the pin differs from the running image it:
+   - **refuses to downgrade** (exits non-zero → Pushover);
+   - **pulls first**, so a registry failure leaves Portainer running;
+   - stops Portainer and writes a verified cold backup of `portainer_data` to
+     `/opt/portainer/backups/` (keeps the newest 5);
+   - runs `docker compose up -d`, waits for the API to report the new version,
+     and checks endpoints and stacks are still visible.
+3. Any failure exits non-zero and `OnFailure=pushover-failure@%n.service` pages.
 
-The old image is retained until verification, so rollback is: stop Portainer,
-restore the archived volume, change the Compose tag/digest back, and redeploy.
+Portainer's own `AutoPatchSettings` is **disabled** (2026-09-28). It upgraded
+the control plane in place without touching git, which produced the drift
+behind the 2026-09-05 downgrade outage. Keep it off: two writers to one
+database is the failure mode this pipeline exists to remove.
+
+Useful commands:
+
+```bash
+~/.local/bin/portainer-auto-update --dry-run      # what would happen now
+journalctl -u portainer-auto-update.service -n 50  # last runs
+sudo bash scripts/install-portainer-auto-update.sh # (re)install script + units
+```
+
+Rollback after a bad upgrade is manual, because the new binary has already
+migrated the database and the old one refuses to start against it: stop
+Portainer, restore the newest `/opt/portainer/backups/portainer_data-*` tarball
+into the volume, set the old tag/digest in the compose file, and deploy with
+`docker compose -p portainer -f pico/portainer/compose.yaml up -d`. Commit the
+pin in the same breath, or the next timer run (correctly) refuses the
+"downgrade" and pages.
 
 The verified 2.33.6 rollback set created before the 2026-08-01 upgrade to
 2.39.5 LTS is:
@@ -325,6 +350,7 @@ rollback does not need a re-pull. It never touches volumes —
 | One package | Add a `packageRules` entry with `"enabled": false` |
 | Automerge only (still get PRs) | Set `"automerge": false` at the top of `renovate.json` |
 | pico stack redeploys | Portainer → Stacks → *stack* → turn off GitOps updates |
+| Portainer control-plane upgrades | `sudo systemctl disable --now portainer-auto-update.timer` |
 | HA updates | Turn off `automation.auto_update_ha_core_apps_and_hacs` |
 | apt updates | `sudo rm /etc/apt/apt.conf.d/52homelab-auto-upgrades` |
 | Just the auto-reboot | Set `Unattended-Upgrade::Automatic-Reboot "false";` in that drop-in |
