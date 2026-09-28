@@ -73,16 +73,27 @@ spec:
               mountPath: /app/config
             - name: logs
               mountPath: /app/config/logs
+          # Homepage v2 rejects any request whose Host is not in
+          # HOMEPAGE_ALLOWED_HOSTS, and kubelet probes arrive as <podIP>:3000.
+          # Without this header every v2 pod failed liveness and crash-looped
+          # while the v1.13.2 ReplicaSet kept serving -- from v2.1.2 (2026-08)
+          # to v2.4.0 unnoticed, because the old pods stayed green.
           readinessProbe:
             httpGet:
               path: /
               port: http
+              httpHeaders:
+                - name: Host
+                  value: {{ first .Values.allowedHosts | quote }}
             initialDelaySeconds: 5
             periodSeconds: 10
           livenessProbe:
             httpGet:
               path: /
               port: http
+              httpHeaders:
+                - name: Host
+                  value: {{ first .Values.allowedHosts | quote }}
             initialDelaySeconds: 30
             periodSeconds: 30
           resources:
