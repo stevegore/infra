@@ -3,8 +3,8 @@
 # Single-writer by construction: python-garminconnect refreshes the Garmin OAuth
 # tokens *in place* on the PVC below, and Garmin rotates the refresh token on
 # every use. Two pods refreshing against the same garmin_tokens.json would
-# invalidate each other's token and lock the integration out until it is
-# re-seeded by hand (see README.md — renewal needs an interactive MFA prompt).
+# invalidate each other's token, and each would then fall back to a full
+# credential login, fighting over the token file.
 # The PVC is also claimed ReadWriteOnce, so a second pod would not schedule to
 # the other node anyway.
 #
@@ -15,7 +15,7 @@ replicaCount: 1
 
 image:
   repository: syd.ocir.io/sdajdczqv0qo/garmin-mcp
-  tag: "0.1.0"
+  tag: "0.2.0"
   pullPolicy: IfNotPresent
 
 # OCIR pull secret — manual bootstrap once after the namespace first syncs
@@ -50,9 +50,11 @@ persistence:
   storageClass: oci-fss
 
 # VSO config — secret at kv/garmin-mcp/config with fields:
-#   GARMIN_TOKENS_JSON — contents of garmin_tokens.json produced by
-#                        `garmin-mcp-auth` (run locally; handles MFA).
-#                        Tokens are valid ~6 months; see README.md for renewal.
+#   GARMIN_USERNAME / GARMIN_PASSWORD — Garmin login (account has no MFA). The
+#                        launcher logs in with these whenever the refresh token
+#                        is rejected, so tokens never need manual renewal.
+#   GARMIN_TOKENS_JSON — optional initial seed / MFA escape hatch: contents of
+#                        garmin_tokens.json from `garmin-mcp-auth` (see README).
 vault:
   enabled: true
   mount: kv

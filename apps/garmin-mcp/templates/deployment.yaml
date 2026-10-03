@@ -23,7 +23,8 @@ spec:
       initContainers:
         # Seed the token file from Vault only when absent — garminconnect
         # refreshes tokens in place on the PVC, and a stale Vault copy must
-        # not clobber a newer refreshed token.
+        # not clobber a newer refreshed token. Stale seeds are harmless: the
+        # launcher re-logs in with GARMIN_USERNAME/GARMIN_PASSWORD.
         - name: seed-tokens
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
@@ -55,9 +56,19 @@ spec:
           env:
             - name: GARMINTOKENS
               value: /data/garmintokens
+            # Read by the launcher to re-mint tokens when Garmin rejects the
+            # refresh token (account has no MFA). Files, not env values, so the
+            # password stays out of `kubectl describe` / process environ.
+            - name: GARMIN_EMAIL_FILE
+              value: /credentials/GARMIN_USERNAME
+            - name: GARMIN_PASSWORD_FILE
+              value: /credentials/GARMIN_PASSWORD
           volumeMounts:
             - name: data
               mountPath: /data
+            - name: credentials
+              mountPath: /credentials
+              readOnly: true
           readinessProbe:
             httpGet:
               path: /status
@@ -76,3 +87,11 @@ spec:
             items:
               - key: GARMIN_TOKENS_JSON
                 path: GARMIN_TOKENS_JSON
+        - name: credentials
+          secret:
+            secretName: {{ .Values.vault.secretName }}
+            items:
+              - key: GARMIN_USERNAME
+                path: GARMIN_USERNAME
+              - key: GARMIN_PASSWORD
+                path: GARMIN_PASSWORD
