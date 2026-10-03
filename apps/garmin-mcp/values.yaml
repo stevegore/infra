@@ -15,7 +15,7 @@ replicaCount: 0  # TEMP 2026-10-04: Garmin demands MFA on credential login; stop
 
 image:
   repository: syd.ocir.io/sdajdczqv0qo/garmin-mcp
-  tag: "0.2.0"
+  tag: "0.2.1"
   pullPolicy: IfNotPresent
 
 # OCIR pull secret — manual bootstrap once after the namespace first syncs

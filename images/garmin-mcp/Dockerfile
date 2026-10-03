@@ -2,8 +2,8 @@
 # streamable HTTP by mcp-proxy so it can be used as a remote MCP connector.
 #
 # Build & push (OKE nodes are aarch64; OCIR creds in Vault at kv/oci/ocir):
-#   docker build --platform linux/arm64 -t syd.ocir.io/sdajdczqv0qo/garmin-mcp:0.2.0 images/garmin-mcp
-#   docker push syd.ocir.io/sdajdczqv0qo/garmin-mcp:0.2.0
+#   docker build --platform linux/arm64 -t syd.ocir.io/sdajdczqv0qo/garmin-mcp:0.2.1 images/garmin-mcp
+#   docker push syd.ocir.io/sdajdczqv0qo/garmin-mcp:0.2.1
 FROM python:3.14-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends git \

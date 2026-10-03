@@ -26,40 +26,40 @@ echo "https://garmin.stevegore.au/$(vault kv get -field=garmin_mcp_path_secret k
 
 ## Garmin token lifecycle
 
-The account has **no MFA**, so auth is self-healing: `GARMIN_USERNAME` / `GARMIN_PASSWORD`
-in `kv/garmin-mcp/config` are mounted into the pod as files, and
-`images/garmin-mcp/garmin_mcp_launcher.py` wraps the server:
+`images/garmin-mcp/garmin_mcp_launcher.py` wraps the server so auth stays up without
+manual renewal:
 
-- **Normal path:** garminconnect refreshes the ~19 h DI access token with the refresh token
-  and rewrites `/data/garmintokens/garmin_tokens.json` on the PVC.
-- **Refresh token rejected** (`400 invalid_grant` — seen after ~3 months, 2026-07 → 2026-10):
-  the launcher's patch on `Client._refresh_di_token` does a full credential login and the
-  new tokens are persisted. Happens at startup or mid-request; no restart needed. At most
-  one credential login per 15 min, so a wrong password can't hammer Garmin SSO.
-- **Token file missing:** startup does a credential login and writes it.
+- **Refresh:** garminconnect refreshes the ~19 h DI access token with the refresh token
+  (which rotates on every use) and rewrites `/data/garmintokens/garmin_tokens.json`.
+- **Keepalive:** a background thread refreshes the live client every 12 h. The original
+  outage (refresh token last used 2026-07-14, rejected with `400 invalid_grant` by
+  2026-10-03) was an idle refresh token. Upstream garminconnect, checked up to 0.3.17,
+  swallows that error at DEBUG.
+- **Credential fallback:** if a refresh is rejected, the launcher logs in with
+  `GARMIN_USERNAME` / `GARMIN_PASSWORD` from `kv/garmin-mcp/config`, mounted as files.
+  **Caveat:** on 2026-10-04 Garmin answered that login from the cluster with an MFA
+  challenge, even though the account has no MFA (probably a risk check on a new
+  device/IP). The fallback is a bonus; keepalive is what keeps auth up.
+- **Rate limiting:** credential attempts are recorded in
+  `/data/garmintokens/.credential_login_state.json`, which survives restarts. At most one
+  attempt per 15 min, and none for 24 h after an MFA challenge, so a crash-looping pod
+  can't spam logins or verification emails.
+- garmin_mcp's own password fallback never fires here. `Garmin(email, password).login()`
+  with no argument falls back to `$GARMINTOKENS` and reloads the same dead file.
 
-Why a wrapper is needed: upstream garminconnect (checked up to 0.3.17) swallows refresh
-failures at DEBUG and never re-logs in, and garmin_mcp's own password fallback is dead
-code here. `Garmin(email, password).login()` with no argument falls back to
-`$GARMINTOKENS`, reloads the same dead file, and fails again.
-
-Changing the password: update `GARMIN_PASSWORD` in Vault, force a VSO resync (`vault.md`),
-then `kubectl -n garmin-mcp rollout restart deploy/garmin-mcp`. Confirm with
-`kubectl -n garmin-mcp logs deploy/garmin-mcp | grep garmin-mcp-launcher` (expect
-`Garmin auth OK`).
-
-**If MFA is ever enabled**, credential login raises instead of prompting. Fall back to
-the manual flow: mint tokens locally with
-`uvx --python 3.12 --from git+https://github.com/Taxuspt/garmin_mcp garmin-mcp-auth`,
-then `vault kv put kv/garmin-mcp/config ... GARMIN_TOKENS_JSON=@"$HOME/.garminconnect/garmin_tokens.json"`
-(`kv put` replaces every field, so pass the others too, or use `kv patch`). Then delete
-the on-PVC copy so the init container re-seeds it:
+**Re-minting tokens** (logs show `Garmin wants MFA`, or after a long outage):
 
 ```bash
-export KUBECONFIG=~/.kube/oke-homelab.config
-kubectl -n garmin-mcp exec deploy/garmin-mcp -- rm /data/garmintokens/garmin_tokens.json
+uvx --python 3.12 --from git+https://github.com/Taxuspt/garmin_mcp garmin-mcp-auth   # email/password/code
+vault kv patch kv/garmin-mcp/config GARMIN_TOKENS_JSON=@"$HOME/.garminconnect/garmin_tokens.json"
+# force VSO resync (vault.md), confirm the Secret updated, then:
 kubectl -n garmin-mcp rollout restart deploy/garmin-mcp
 ```
+
+The `seed-tokens` init container re-seeds the PVC whenever the Vault seed differs from the
+last one it seeded (tracked in `.seed.sha256`), and clears the login backoff. An unchanged
+seed never clobbers tokens refreshed on the PVC. Check health with
+`kubectl -n garmin-mcp logs deploy/garmin-mcp | grep garmin-mcp-launcher`.
 
 ## Bootstrap notes (first deploy)
 

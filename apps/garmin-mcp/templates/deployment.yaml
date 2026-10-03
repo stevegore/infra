@@ -21,10 +21,10 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       initContainers:
-        # Seed the token file from Vault only when absent — garminconnect
-        # refreshes tokens in place on the PVC, and a stale Vault copy must
-        # not clobber a newer refreshed token. Stale seeds are harmless: the
-        # launcher re-logs in with GARMIN_USERNAME/GARMIN_PASSWORD.
+        # Seed the token file from Vault when absent or when the Vault seed
+        # has changed since it was last seeded (i.e. freshly minted tokens
+        # were put in Vault). An unchanged seed never clobbers the newer
+        # tokens garminconnect has refreshed in place on the PVC.
         - name: seed-tokens
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
@@ -32,12 +32,17 @@ spec:
             - sh
             - -c
             - |
-              if [ ! -f /data/garmintokens/garmin_tokens.json ]; then
-                mkdir -p /data/garmintokens
-                cp /seed/GARMIN_TOKENS_JSON /data/garmintokens/garmin_tokens.json
+              D=/data/garmintokens
+              mkdir -p "$D"
+              NEW=$(sha256sum /seed/GARMIN_TOKENS_JSON | cut -d' ' -f1)
+              OLD=$(cat "$D/.seed.sha256" 2>/dev/null || true)
+              if [ ! -f "$D/garmin_tokens.json" ] || [ "$NEW" != "$OLD" ]; then
+                cp /seed/GARMIN_TOKENS_JSON "$D/garmin_tokens.json"
+                echo "$NEW" > "$D/.seed.sha256"
+                rm -f "$D/.credential_login_state.json"
                 echo "Seeded garmin_tokens.json from Vault secret"
               else
-                echo "Token file already present; leaving as-is"
+                echo "Vault seed unchanged; keeping refreshed token file"
               fi
           volumeMounts:
             - name: data
