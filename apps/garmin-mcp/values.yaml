@@ -11,7 +11,7 @@
 # No PDB: minAvailable: 1 on one replica means no eviction is ever permitted and
 # node drains hang. This is an on-demand MCP endpoint; a gap while it moves
 # nodes costs nothing.
-replicaCount: 1
+replicaCount: 0  # TEMP 2026-10-04: Garmin demands MFA on credential login; stops crash-loop login attempts
 
 image:
   repository: syd.ocir.io/sdajdczqv0qo/garmin-mcp
