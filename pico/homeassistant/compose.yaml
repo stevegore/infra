@@ -56,7 +56,7 @@ services:
       - /run/dbus:/run/dbus:ro
 
   homeassistant:
-    image: ghcr.io/home-assistant/home-assistant:2026.9.0@sha256:372d991e58882a1d8c68c07e9aa3f3b509276e695355f73ccdb03baa70407293
+    image: ghcr.io/home-assistant/home-assistant:2026.10.1@sha256:130241f28d01fa80dfa3b44f7d89781c188d8642ecab9024f079f19f9f82baa0
     container_name: homeassistant-app
     restart: unless-stopped
     network_mode: host
