@@ -92,6 +92,13 @@ spec:
                 secretKeyRef:
                   name: {{ .Values.vault.secretName }}
                   key: database_url
+            # 1.37.4 bundles a MariaDB Connector/C that verifies the server cert
+            # by default (ssl_mode=required in the URL does NOT stop it). HeatWave
+            # presents a self-signed chain → "self-signed certificate in
+            # certificate chain" crashloop. TLS stays on; only peer verification
+            # is skipped, matching <=1.37.3 behaviour. Traffic is VCN-private.
+            - name: MARIADB_TLS_DISABLE_PEER_VERIFICATION
+              value: "1"
             - name: ADMIN_TOKEN
               valueFrom:
                 secretKeyRef:
