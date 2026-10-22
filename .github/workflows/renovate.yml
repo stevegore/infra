@@ -14,7 +14,8 @@ name: Renovate
 #   pico/**  -> Portainer polls this repo (5 min) and redeploys the stack
 #
 # Auth: repo secret RENOVATE_TOKEN — a fine-grained PAT scoped to stevegore/infra
-# with Contents: read+write, Pull requests: read+write, Workflows: read+write.
+# with Contents, Pull requests, Workflows and Issues: read+write (Issues is for
+# the Dependency Dashboard, issue #9 — without it the dashboard silently froze).
 # (GITHUB_TOKEN is deliberately not used: PRs it opens cannot self-merge.)
 #
 # Alternative if you would rather not hold a PAT: install the Mend Renovate
@@ -47,16 +48,47 @@ on:
         required: false
         default: false
         type: boolean
-
-concurrency:
-  group: renovate
-  cancel-in-progress: false
+  # Ticking a Dependency Dashboard checkbox edits the issue. The Mend app reacts
+  # to that; self-hosted Renovate only would at the next 01:00 run, which reads
+  # as "nothing happened". The gate job below runs Renovate only for a new tick.
+  issues:
+    types: [edited]
 
 permissions:
   contents: read
 
 jobs:
+  gate:
+    # Loop guard. RENOVATE_TOKEN is Steve's PAT, so Renovate's own dashboard
+    # rewrites arrive as edits by the same sender as a human tick — the sender
+    # can't tell them apart. The checkbox count can: a human tick adds an [x];
+    # Renovate only ever clears them (after acting) or rewrites unticked boxes.
+    if: github.event_name != 'issues' || contains(github.event.issue.title, 'dashboard')
+    runs-on: ubuntu-latest
+    outputs:
+      run: ${{ steps.check.outputs.run }}
+    steps:
+      - id: check
+        env:
+          EVENT: ${{ github.event_name }}
+          NEW_BODY: ${{ github.event.issue.body }}
+          OLD_BODY: ${{ github.event.changes.body.from }}
+        run: |
+          if [ "$EVENT" != issues ]; then echo run=true >> "$GITHUB_OUTPUT"; exit 0; fi
+          new=$(printf '%s' "$NEW_BODY" | grep -c -- '- \[x\]' || true)
+          old=$(printf '%s' "$OLD_BODY" | grep -c -- '- \[x\]' || true)
+          echo "ticked boxes: $old -> $new"
+          [ "$new" -gt "$old" ] && echo run=true >> "$GITHUB_OUTPUT" || echo run=false >> "$GITHUB_OUTPUT"
+
   renovate:
+    needs: gate
+    if: needs.gate.outputs.run == 'true'
+    # Job-level, not workflow-level: at workflow level every no-op gate run
+    # from Renovate's own dashboard edit would queue here and could replace a
+    # pending run that a real tick started.
+    concurrency:
+      group: renovate
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
