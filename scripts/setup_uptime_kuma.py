@@ -12,6 +12,13 @@ Credentials are read from environment variables:
     UPTIME_KUMA_DB_NAME      default: uptime_kuma
     UPTIME_KUMA_DB_USER      default: uptime_kuma
     UPTIME_KUMA_DB_PASSWORD  required (or pass --password)
+    PUSHOVER_APP_TOKEN       required unless --no-notifications
+    PUSHOVER_USER_KEY        required unless --no-notifications
+
+The Pushover pair is kv/homelab/pushover. Monitors inserted here get no
+notification links from Kuma itself (its "default enabled" flag is applied by
+the UI form, not the database), which is how every monitor ran with zero
+alerting from 2026-06-06 until 2026-10-22.
 
 On a fresh cluster where the uptime-kuma pod is not yet up, run inside a
 MySQL client pod instead:
@@ -24,6 +31,7 @@ Quickest rebuild path:
     UPTIME_KUMA_DB_PASSWORD=$PASS python3 scripts/setup_uptime_kuma.py
 """
 import argparse
+import json
 import os
 import sys
 
@@ -63,6 +71,8 @@ ACCEPT_302       = '["302"]'
 # 2026-08-18) left the monitor green through exactly the outages it exists to
 # catch. 429/473 are HA standby codes and cannot occur: ha.enabled is false.
 ACCEPT_VAULT     = '["200-299"]'
+
+NOTIFICATION_NAME = "Pushover"
 
 retired_monitor_names = {
     "Gym Bookings (direct)",
@@ -185,6 +195,54 @@ def reconcile_monitor(cur, spec, tag_ids):
                     (monitor_id, tag_ids[tag_name]))
 
 
+def reconcile_notification(cur, app_token, user_key):
+    """Upsert the managed Pushover provider; return its id.
+
+    config mirrors what Kuma's UI saves (Notification.save stores the whole
+    form as JSON), so the provider is editable in the UI afterwards -- but
+    the next reconcile overwrites it.
+    """
+    config = json.dumps({
+        "name": NOTIFICATION_NAME,
+        "type": "pushover",
+        "isDefault": True,
+        "applyExisting": False,
+        "pushoverapptoken": app_token,
+        "pushoveruserkey": user_key,
+        # Normal priority: 39 monitors include flappy pico media services,
+        # and high priority bypasses quiet hours.
+        "pushoverpriority": "0",
+        "pushovertitle": "Uptime Kuma",
+    })
+    cur.execute("SELECT id FROM notification WHERE name=%s ORDER BY id LIMIT 1", (NOTIFICATION_NAME,))
+    row = cur.fetchone()
+    if row:
+        cur.execute(
+            "UPDATE notification SET config=%s, active=1, is_default=1, user_id=%s WHERE id=%s",
+            (config, USER_ID, row[0]))
+        return row[0]
+    cur.execute(
+        "INSERT INTO notification (name, config, active, is_default, user_id) VALUES (%s, %s, 1, 1, %s)",
+        (NOTIFICATION_NAME, config, USER_ID))
+    return cur.lastrowid
+
+
+def link_notification(cur, notification_id):
+    """Attach the notification to every managed monitor, exactly once each."""
+    names = [spec["name"] for spec in monitors]
+    placeholders = ",".join(["%s"] * len(names))
+    cur.execute(f"SELECT id FROM monitor WHERE name IN ({placeholders})", names)
+    monitor_ids = [row[0] for row in cur.fetchall()]
+    for monitor_id in monitor_ids:
+        cur.execute(
+            "DELETE FROM monitor_notification WHERE monitor_id=%s AND notification_id=%s",
+            (monitor_id, notification_id))
+        cur.execute(
+            "INSERT INTO monitor_notification (monitor_id, notification_id) VALUES (%s, %s)",
+            (monitor_id, notification_id))
+    return len(monitor_ids)
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--host",     default=os.environ.get("UPTIME_KUMA_DB_HOST", "heatwave.sub02040931041.nebula.oraclevcn.com"))
@@ -192,10 +250,21 @@ def main():
     parser.add_argument("--database", default=os.environ.get("UPTIME_KUMA_DB_NAME", "uptime_kuma"))
     parser.add_argument("--user",     default=os.environ.get("UPTIME_KUMA_DB_USER", "uptime_kuma"))
     parser.add_argument("--password", default=os.environ.get("UPTIME_KUMA_DB_PASSWORD"))
+    parser.add_argument("--no-notifications", action="store_true",
+                        help="leave notification config untouched (local runs without Pushover creds)")
     args = parser.parse_args()
 
     if not args.password:
         print("ERROR: set UPTIME_KUMA_DB_PASSWORD or pass --password", file=sys.stderr)
+        sys.exit(1)
+
+    # Fail rather than skip: a reconcile that "succeeds" without alerting is
+    # the silent failure this exists to prevent.
+    pushover_token = os.environ.get("PUSHOVER_APP_TOKEN")
+    pushover_user = os.environ.get("PUSHOVER_USER_KEY")
+    if not args.no_notifications and not (pushover_token and pushover_user):
+        print("ERROR: set PUSHOVER_APP_TOKEN and PUSHOVER_USER_KEY, or pass --no-notifications",
+              file=sys.stderr)
         sys.exit(1)
 
     print(f"Connecting to {args.host}:{args.port}/{args.database} as {args.user}...")
@@ -218,11 +287,18 @@ def main():
     for retired_name in retired_monitor_names:
         cur.execute("UPDATE monitor SET active=0 WHERE name=%s", (retired_name,))
 
+    linked = None
+    if not args.no_notifications:
+        notification_id = reconcile_notification(cur, pushover_token, pushover_user)
+        linked = link_notification(cur, notification_id)
+
     conn.commit()
     cur.execute("SELECT COUNT(*) FROM monitor")
     total = cur.fetchone()[0]
     print(f"Tags ready: {list(tag_ids.keys())}")
     print(f"Managed monitors: {len(monitors)}, Total in DB: {total}")
+    if linked is not None:
+        print(f"{NOTIFICATION_NAME} notification linked to {linked} monitors")
     conn.close()
 
 

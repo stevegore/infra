@@ -25,4 +25,21 @@ spec:
     create: true
   refreshAfter: 1h
   vaultAuthRef: {{ include "uptime-kuma.fullname" . }}
+---
+# Pushover creds for Kuma's notification provider, written into MySQL by the
+# reconcile hook. Kuma itself reads them from the DB, never from this Secret.
+apiVersion: secrets.hashicorp.com/v1beta1
+kind: VaultStaticSecret
+metadata:
+  name: {{ include "uptime-kuma.fullname" . }}-pushover
+  namespace: {{ .Release.Namespace }}
+spec:
+  type: kv-v2
+  mount: kv
+  path: {{ .Values.mysql.vault.pushoverPath }}
+  destination:
+    name: uptime-kuma-pushover
+    create: true
+  refreshAfter: 1h
+  vaultAuthRef: {{ include "uptime-kuma.fullname" . }}
 {{- end }}

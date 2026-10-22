@@ -34,6 +34,15 @@ Changes to either setup script trigger an immediate `uptime-kuma` sync through
 `.github/workflows/argocd-sync.yml`. No laptop database route, copied secret, temporary
 ConfigMap, or imperative Deployment mutation is required.
 
+**Alerting:** `setup_uptime_kuma.py` also upserts a `Pushover` notification (creds from
+`kv/homelab/pushover`, synced by VSO into the `uptime-kuma-pushover` Secret) and links it to
+every managed monitor. It is not set up in the UI. Kuma only applies "default enabled" from the
+UI form, so monitors inserted with SQL get no notifications unless the script links them. That
+is why Kuma sent nothing from 2026-06-06 to 2026-10-22. The script exits non-zero if the
+Pushover env vars are missing (`--no-notifications` skips this for local runs), so the hook
+can't succeed without alerting. Edits to the provider in the UI are overwritten on the next
+reconcile.
+
 **Adding a monitor for a new service** means editing `scripts/setup_uptime_kuma.py` and
 re-running the above. Adding it to the **public** status page is a separate, deliberate step —
 append the monitor name to a group in `scripts/setup_status_page.py` and run that script the

@@ -83,8 +83,11 @@ reconcile:
 # Vaultwarden (separate database: uptime_kuma). Credentials synced from
 # Vault kv/uptime-kuma/config by VSO into k8s Secret uptime-kuma-db.
 # With MySQL, monitor data survives cluster rebuilds (no pre-snapshot needed).
+# pushoverPath feeds the reconcile hook, which provisions Kuma's Pushover
+# notification and links it to every managed monitor.
 mysql:
   enabled: true
   vault:
     path: uptime-kuma/config
+    pushoverPath: homelab/pushover
     authRole: vault-secrets-operator

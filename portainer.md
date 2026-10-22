@@ -1658,8 +1658,10 @@ the `uptimekuma` widget, which correctly points at the in-cluster Service.
 **Monitor set:** 40 managed monitors as of 2026-07-26 (42 rows in the DB). Still covers pings,
 TCP ports, Caddy-fronted public URLs, and pico's internal ports — but pico is now reached over
 the Tailscale egress Service (`http://pico:9092`, …), not `extra_hosts`.  
-**Notifications:** Pushover, configured via UI (Settings → Notifications). Default-on for all
-monitors.  
+**Notifications:** Pushover, provisioned by `scripts/setup_uptime_kuma.py` (creds from
+`kv/homelab/pushover`) and linked to every managed monitor. **Not** UI-configured: from the
+2026-06-06 MySQL switch until 2026-10-22 there was no notification at all, so Kuma alerted on
+nothing (e.g. the 38h Vaultwarden crashloop in October).  
 **Config provisioning:** see [`apps/uptime-kuma/README.md`](apps/uptime-kuma/README.md). Short
 version: monitors live in MySQL on OCI HeatWave, which is only reachable from inside the
 cluster, so `scripts/setup_uptime_kuma.py` runs from a short-lived pod in the `uptime-kuma`

@@ -134,6 +134,18 @@ spec:
                 secretKeyRef:
                   name: uptime-kuma-db
                   key: db_password
+            # Not optional: setup_uptime_kuma.py fails without these, so a
+            # missing Secret fails the sync instead of silently dropping alerts.
+            - name: PUSHOVER_APP_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: uptime-kuma-pushover
+                  key: app_token
+            - name: PUSHOVER_USER_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: uptime-kuma-pushover
+                  key: user_key
           resources:
             requests:
               cpu: 25m
