@@ -8,7 +8,7 @@ services:
     # Portainer fails closed if the binary is older than the database schema,
     # so this pin only ever moves forward. Cold backup of portainer_data taken
     # before the upgrade lives in /opt/portainer/backups/.
-    image: portainer/portainer-ee:2.45.1@sha256:0cd22f754ac52fcfceb362d5ce8f47ee23a5f6427484db17ebfaa4c8a00f7718
+    image: portainer/portainer-ee:2.45.2@sha256:64593d0645eec314e84b93c03aba51db67c72ec12c760927335b52b1652765d7
     network_mode: host
     restart: always
     volumes:
