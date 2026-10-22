@@ -10,7 +10,7 @@ services:
     # several and would have hit a live recorder database on the next deploy.
     # Take the 11.8.x patch updates (PR #87) instead until a stepwise upgrade
     # is planned.
-    image: mariadb:11.8.8
+    image: mariadb:11.8.8@sha256:24e76fcec8c003a0362d0dd53f4806e7e79458d7fdeaf47437760e19496f5a9c
     container_name: homeassistant-db
     restart: unless-stopped
     command: >-
