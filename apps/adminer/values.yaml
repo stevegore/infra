@@ -19,7 +19,7 @@ image:
   # Digest-pinned: a bare "6" with IfNotPresent never re-pulls, so the node kept
   # serving PHP 8.4.24 after the php2shell fix (CVE-2026-109618/109619, fixed in
   # 8.4.27). Renovate bumps the digest.
-  tag: "6@sha256:4e3a6514c26c625de2020c549d1eb24ddd2515f18311aa4bf32c823713c2f6fe"
+  tag: "6@sha256:251295c1cd51d3889f1c42ffa4864b24eeab51f0caf395cfe5bf4726c5ec9a2a"
   pullPolicy: IfNotPresent
 
 resources:
