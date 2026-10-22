@@ -69,6 +69,38 @@ jobs:
         # Renovate keeps this in step with the action version below.
         run: npx --yes --package renovate@44.4.5 -- renovate-config-validator --strict
 
+      - name: Docker Hub host rules
+        # Authenticated Docker Hub. Anonymous tag listing stops at 1000 tags
+        # (403 "pagination offset too large"); portainer-ee has ~1600, so
+        # Renovate lost every releaseTimestamp for it and minimumReleaseAge
+        # held each release as pending forever (stuck on 2.45.1, 2026-10).
+        #
+        # Two hosts, two auth schemes. The registry (docker.io) takes the PAT
+        # as Basic auth. The tags API (hub.docker.com) 403s Basic+PAT and only
+        # accepts a Bearer JWT from /v2/auth/token (verified 2026-10-22), so
+        # mint one per run. Best-effort: if the exchange fails, Renovate still
+        # runs, just with Portainer stuck as before.
+        # Source of truth: Vault kv/docker; mirrored to these repo secrets.
+        env:
+          DH_USER: ${{ secrets.DOCKERHUB_USERNAME }}
+          DH_PAT: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          jwt=$(curl -fsS -X POST https://hub.docker.com/v2/auth/token \
+                  -H 'Content-Type: application/json' \
+                  -d "$(jq -nc --arg i "$DH_USER" --arg s "$DH_PAT" '{identifier:$i,secret:$s}')" \
+                | jq -r '.access_token // empty') || jwt=
+          if [ -n "$jwt" ]; then
+            echo "::add-mask::$jwt"
+            rules=$(jq -nc --arg u "$DH_USER" --arg p "$DH_PAT" --arg t "$jwt" \
+              '[{hostType:"docker",matchHost:"docker.io",username:$u,password:$p},
+                {hostType:"docker",matchHost:"hub.docker.com",token:$t}]')
+          else
+            echo "::warning::Docker Hub JWT exchange failed; hub.docker.com tag listing stays anonymous"
+            rules=$(jq -nc --arg u "$DH_USER" --arg p "$DH_PAT" \
+              '[{hostType:"docker",matchHost:"docker.io",username:$u,password:$p}]')
+          fi
+          echo "RENOVATE_HOST_RULES=$rules" >> "$GITHUB_ENV"
+
       - uses: renovatebot/github-action@a63d9a7bc606f7336fd20b47f2f32259a35e6213 # v46.3.9
         env:
           RENOVATE_REPOSITORIES: ${{ github.repository }}
@@ -85,14 +117,7 @@ jobs:
           # without waiting until 1am. It does NOT override automerge, so the
           # database and caddy-Dockerfile hold-backs still apply.
           RENOVATE_FORCE: ${{ inputs.ignoreSchedule && '{"schedule":null,"automergeSchedule":null}' || '' }}
-          # Authenticated Docker Hub. Anonymous tag listing stops at 1000 tags
-          # (403 "pagination offset too large"); portainer-ee has ~1600, so
-          # Renovate lost every releaseTimestamp for it and minimumReleaseAge
-          # held each release as pending forever (stuck on 2.45.1, 2026-10).
-          # hub.docker.com (tags API) is a separate host from docker.io (registry).
-          # Source of truth: Vault kv/docker; mirrored to these repo secrets.
-          RENOVATE_HOST_RULES: >-
-            [{"hostType":"docker","matchHost":"docker.io","username":"${{ secrets.DOCKERHUB_USERNAME }}","password":"${{ secrets.DOCKERHUB_TOKEN }}"},
-            {"hostType":"docker","matchHost":"hub.docker.com","username":"${{ secrets.DOCKERHUB_USERNAME }}","password":"${{ secrets.DOCKERHUB_TOKEN }}"}]
+          # RENOVATE_HOST_RULES comes from $GITHUB_ENV (Docker Hub step above);
+          # setting it here would override that.
         with:
           token: ${{ secrets.RENOVATE_TOKEN }}
