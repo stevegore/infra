@@ -14,8 +14,11 @@ name: Renovate
 #   pico/**  -> Portainer polls this repo (5 min) and redeploys the stack
 #
 # Auth: repo secret RENOVATE_TOKEN — a fine-grained PAT scoped to stevegore/infra
-# with Contents, Pull requests, Workflows and Issues: read+write (Issues is for
-# the Dependency Dashboard, issue #9 — without it the dashboard silently froze).
+# with Contents, Pull requests, Workflows, Issues and Commit statuses: read+write.
+#   Issues: the Dependency Dashboard (issue #9) — without it the dashboard froze.
+#   Commit statuses: minimumReleaseAge posts a renovate/stability-days status;
+#   a 403 there is misreported as "Repository has changed during renovation -
+#   aborting", so any package with a soak (Portainer) never gets its PR.
 # (GITHUB_TOKEN is deliberately not used: PRs it opens cannot self-merge.)
 #
 # Alternative if you would rather not hold a PAT: install the Mend Renovate
