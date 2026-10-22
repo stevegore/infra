@@ -92,7 +92,7 @@ monitors = [
     {"name": "Auth Service",               "type": "http", "kwargs": {"url": "https://auth.stevegore.au/",                    "maxredirects": 10, "accepted_statuscodes_json": ACCEPT_OK},       "tags": ["public", "infra"],  "aliases": ["auth.stevegore.au"]},
     {"name": "Home Assistant",             "type": "http", "kwargs": {"url": "https://hass.stevegore.au/",                    "maxredirects": 5,  "accepted_statuscodes_json": ACCEPT_OK_REDIR}, "tags": ["public"],           "aliases": ["hass.stevegore.au"]},
     {"name": "Home Assistant (CF Tunnel)", "type": "http", "kwargs": {"url": "https://hass2.stevegore.au/",                   "maxredirects": 5,  "accepted_statuscodes_json": ACCEPT_OK_REDIR}, "tags": ["public"],           "aliases": ["hass2.stevegore.au"]},
-    {"name": "Immich",                     "type": "http", "kwargs": {"url": "https://photos.stevegore.au/api/server/ping",   "maxredirects": 0,  "accepted_statuscodes_json": ACCEPT_OK,        "keyword": "pong"},            "tags": ["public", "photos"], "aliases": ["photos.stevegore.au", "immich.stevegore.au"]},
+    {"name": "Immich",                     "type": "keyword", "kwargs": {"url": "https://photos.stevegore.au/api/server/ping",   "maxredirects": 0,  "accepted_statuscodes_json": ACCEPT_OK,        "keyword": "pong"},            "tags": ["public", "photos"], "aliases": ["photos.stevegore.au", "immich.stevegore.au"]},
     {"name": "Plex",                       "type": "http", "kwargs": {"url": "https://plex.stevegore.au/identity",            "maxredirects": 0,  "accepted_statuscodes_json": ACCEPT_OK},       "tags": ["public", "media"],  "aliases": ["plex.stevegore.au"]},
     {"name": "Huginn",                     "type": "http", "kwargs": {"url": "https://huginn.stevegore.au/",                  "maxredirects": 5,  "accepted_statuscodes_json": ACCEPT_OK},       "tags": ["public"],           "aliases": ["huginn.stevegore.au"]},
     {"name": "Portainer",                  "type": "http", "kwargs": {"url": "https://port.stevegore.au/",                    "maxredirects": 5,  "accepted_statuscodes_json": ACCEPT_OK},       "tags": ["public", "infra"],  "aliases": ["port.stevegore.au"]},
@@ -102,6 +102,7 @@ monitors = [
     {"name": "Stirling PDF",               "type": "http", "kwargs": {"url": "https://pdf.stevegore.au/",                     "maxredirects": 0,  "accepted_statuscodes_json": ACCEPT_OK},       "tags": ["public"],           "aliases": ["pdf.stevegore.au"]},
     {"name": "Vault",                      "type": "http", "kwargs": {"url": "https://vault.stevegore.au/v1/sys/health",      "maxredirects": 0,  "accepted_statuscodes_json": ACCEPT_VAULT},    "tags": ["public", "infra"],  "aliases": ["vault.stevegore.au"]},
     {"name": "Argo CD",                    "type": "http", "kwargs": {"url": "https://argocd.stevegore.au/",                  "maxredirects": 5,  "accepted_statuscodes_json": ACCEPT_OK},       "tags": ["public", "infra"],  "aliases": ["argocd.stevegore.au"]},
+    {"name": "Headlamp",                   "type": "http", "kwargs": {"url": "https://headlamp.stevegore.au/",                "maxredirects": 0,  "accepted_statuscodes_json": ACCEPT_302},      "tags": ["public", "infra"]},
     {"name": "Hubble UI",                  "type": "http", "kwargs": {"url": "https://hubble.stevegore.au/",                  "maxredirects": 0,  "accepted_statuscodes_json": ACCEPT_302},      "tags": ["public", "infra"],  "aliases": ["hubble.stevegore.au"]},
     {"name": "Homepage",                   "type": "http", "kwargs": {"url": "https://homepage.stevegore.au/",                "maxredirects": 0,  "accepted_statuscodes_json": ACCEPT_302},      "tags": ["public"],           "aliases": ["homepage.stevegore.au"]},
     {"name": "Adminer",                    "type": "http", "kwargs": {"url": "https://adminer.stevegore.au/",                  "maxredirects": 0,  "accepted_statuscodes_json": ACCEPT_302},      "tags": ["public", "infra"],  "aliases": ["adminer.stevegore.au"]},
@@ -111,9 +112,25 @@ monitors = [
     # the backend, so a 302 there would stay green with Gokapi completely down.
     # /index is served by Gokapi itself and returns 200.
     {"name": "Send (Gokapi)",              "type": "http", "kwargs": {"url": "https://send.stevegore.au/index",               "maxredirects": 0,  "accepted_statuscodes_json": ACCEPT_OK},       "tags": ["public"],           "aliases": ["send.stevegore.au"]},
+    {"name": "Status Page",                "type": "http", "kwargs": {"url": "https://status.stevegore.au/status/homelab",    "maxredirects": 0,  "accepted_statuscodes_json": ACCEPT_OK},       "tags": ["public"]},
     {"name": "Uptime Kuma",                "type": "http", "kwargs": {"url": "https://uptime.stevegore.au/",                  "maxredirects": 5,  "accepted_statuscodes_json": ACCEPT_OK},       "tags": ["public", "infra"],  "aliases": ["uptime.stevegore.au"]},
     {"name": "Stats",                      "type": "http", "kwargs": {"url": "https://stats.stevegore.au/api/stats",          "maxredirects": 0,  "accepted_statuscodes_json": ACCEPT_OK},       "tags": ["public", "infra"],  "aliases": ["stats.stevegore.au"]},
     {"name": "Instagram Gallery",          "type": "http", "kwargs": {"url": "https://gallery.stevegore.au/",                "maxredirects": 0,  "accepted_statuscodes_json": ACCEPT_OK},       "tags": ["public", "photos"], "aliases": ["gallery.stevegore.au"]},
+
+    # OKE backends, probed in-cluster. The public monitors for Authentik-gated
+    # hosts only see the 302 to the login page, which Caddy serves whether or
+    # not the backend is alive: Adminer fatalled on every page on 2026-10-22
+    # while "Adminer" stayed green. Keyword monitors also catch a 200 error page.
+    {"name": "Adminer (in-cluster)",    "type": "keyword", "kwargs": {"url": "http://adminer.adminer.svc.cluster.local/",          "keyword": "Select a database"},                                                "tags": ["internal", "infra"]},
+    {"name": "Gym Bookings (in-cluster)","type": "http",   "kwargs": {"url": "http://gym-booker.gym-booker.svc.cluster.local:5000/"},                                                                                  "tags": ["internal"]},
+    # Homepage rejects requests whose Host is not in HOMEPAGE_ALLOWED_HOSTS.
+    {"name": "Homepage (in-cluster)",   "type": "http",    "kwargs": {"url": "http://homepage.homepage.svc.cluster.local:3000/",    "headers": '{"Host": "homepage.stevegore.au"}'},                               "tags": ["internal"]},
+    {"name": "Hubble UI (in-cluster)",  "type": "http",    "kwargs": {"url": "http://hubble-ui.kube-system.svc.cluster.local/"},                                                                                       "tags": ["internal", "infra"]},
+    {"name": "Headlamp (in-cluster)",   "type": "http",    "kwargs": {"url": "http://headlamp.headlamp.svc.cluster.local/"},                                                                                           "tags": ["internal", "infra"]},
+    # The public URL needs the secret path, so probe the backend directly: a
+    # plain GET on /mcp gets 406 (no event-stream Accept) from a live server.
+    {"name": "Garmin MCP (in-cluster)", "type": "http",    "kwargs": {"url": "http://garmin-mcp.garmin-mcp.svc.cluster.local:8080/mcp", "accepted_statuscodes_json": '["406"]'},                                  "tags": ["internal"]},
+    {"name": "pg-shared",               "type": "port",    "kwargs": {"hostname": "pg-shared-rw.databases.svc.cluster.local", "port": 5432},                                                                  "tags": ["internal", "infra"]},
 
     # pico-direct services (Tailscale Operator egress)
     {"name": "Radarr",              "type": "http", "kwargs": {"url": "http://pico:7878/",                     "maxredirects": 5, "accepted_statuscodes_json": ACCEPT_OK},       "tags": ["internal", "media"]},
@@ -124,7 +141,7 @@ monitors = [
     {"name": "Duplicati",           "type": "http", "kwargs": {"url": "http://pico:8200/",                     "maxredirects": 0, "accepted_statuscodes_json": ACCEPT_OK_REDIR}, "tags": ["internal", "infra"]},
     {"name": "Stirling PDF (direct)","type":"http", "kwargs": {"url": "http://pico:8083/",                     "maxredirects": 5, "accepted_statuscodes_json": ACCEPT_OK},       "tags": ["internal"]},
     {"name": "StravaBot",           "type": "port", "kwargs": {"hostname": "pico", "port": 8082},                                                                                "tags": ["internal"]},
-    {"name": "Immich (direct)",     "type": "http", "kwargs": {"url": "http://pico:2283/api/server/ping",      "maxredirects": 0, "accepted_statuscodes_json": ACCEPT_OK,        "keyword": "pong"}, "tags": ["internal", "photos"], "aliases": ["Immich (local)"]},
+    {"name": "Immich (direct)",     "type": "keyword", "kwargs": {"url": "http://pico:2283/api/server/ping",      "maxredirects": 0, "accepted_statuscodes_json": ACCEPT_OK,        "keyword": "pong"}, "tags": ["internal", "photos"], "aliases": ["Immich (local)"]},
     {"name": "Huginn (direct)",     "type": "http", "kwargs": {"url": "http://pico:3000/",                     "maxredirects": 5, "accepted_statuscodes_json": ACCEPT_OK},       "tags": ["internal"],           "aliases": ["Huginn (local)"]},
     {"name": "Homepage (direct)",   "type": "http", "kwargs": {"url": "http://pico:8080/",                     "maxredirects": 0, "accepted_statuscodes_json": ACCEPT_OK},       "tags": ["internal", "infra"],  "aliases": ["Homepage (local)"]},
     {"name": "NuraSpace",           "type": "http", "kwargs": {"url": "http://pico:8111/",                     "maxredirects": 5, "accepted_statuscodes_json": ACCEPT_OK_REDIR}, "tags": ["internal"]},
@@ -132,9 +149,9 @@ monitors = [
     {"name": "phpMyAdmin",          "type": "http", "kwargs": {"url": "http://pico:3011/",                     "maxredirects": 5, "accepted_statuscodes_json": ACCEPT_OK_REDIR}, "tags": ["internal", "infra"]},
 ]
 
-OPTIONAL_FIELDS = ["url", "hostname", "port", "accepted_statuscodes_json", "maxredirects", "keyword"]
+OPTIONAL_FIELDS = ["url", "hostname", "port", "accepted_statuscodes_json", "maxredirects", "keyword", "headers"]
 OPTIONAL_DEFAULTS = {"url": None, "hostname": None, "port": None,
-                     "accepted_statuscodes_json": ACCEPT_OK, "maxredirects": 0, "keyword": None}
+                     "accepted_statuscodes_json": ACCEPT_OK, "maxredirects": 0, "keyword": None, "headers": None}
 
 
 def connect(host, port, database, user, password):
@@ -209,7 +226,7 @@ def reconcile_notification(cur, app_token, user_key):
         "applyExisting": False,
         "pushoverapptoken": app_token,
         "pushoveruserkey": user_key,
-        # Normal priority: 39 monitors include flappy pico media services,
+        # Normal priority: the monitors include flappy pico media services,
         # and high priority bypasses quiet hours.
         "pushoverpriority": "0",
         "pushovertitle": "Uptime Kuma",

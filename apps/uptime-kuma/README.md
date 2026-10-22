@@ -43,6 +43,13 @@ Pushover env vars are missing (`--no-notifications` skips this for local runs), 
 can't succeed without alerting. Edits to the provider in the UI are overwritten on the next
 reconcile.
 
+**Authentik-gated hosts need an in-cluster monitor too.** The public monitor for a host behind
+`import authentik` only sees Caddy's 302 to the login page, which is served whether the backend
+is alive or not. On 2026-10-22 Adminer returned a PHP fatal error on every page for hours while
+its monitor stayed green. Each such OKE backend therefore also has a `(... in-cluster)` monitor
+that probes its Service directly. Use a `keyword` monitor when the app can answer 200 with an
+error page. Kuma only checks `keyword` on monitors of type `keyword` and ignores it on `http`.
+
 **Adding a monitor for a new service** means editing `scripts/setup_uptime_kuma.py` and
 re-running the above. Adding it to the **public** status page is a separate, deliberate step —
 append the monitor name to a group in `scripts/setup_status_page.py` and run that script the
