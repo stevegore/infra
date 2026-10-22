@@ -11,7 +11,13 @@ data:
      * Adminer with environment-based autologin.
      * Identity auth is handled upstream by Caddy + Authentik.
      * Users click a server link, then click Login — no credentials to type.
+     *
+     * Adminer 5+ lives in the Adminer namespace: the base class, h() and the
+     * SERVER constant must be referenced as Adminer\..., or every page fatals
+     * with 'Class "Adminer" not found'.
      */
+
+    use function Adminer\h;
 
     $ADMINER_SERVERS = [
         getenv('ADMINER_PG_SERVER') => [
@@ -33,7 +39,7 @@ data:
         global $ADMINER_SERVERS;
 
         // Class defined here so Adminer base class is loaded before this runs.
-        class AdminerAutologin extends Adminer {
+        class AdminerAutologin extends \Adminer\Adminer {
             private $servers;
 
             public function __construct(array $servers) {
@@ -41,7 +47,7 @@ data:
             }
 
             public function loginForm() {
-                $current = defined('SERVER') ? SERVER : '';
+                $current = defined('Adminer\SERVER') ? \Adminer\SERVER : '';
                 if ($current !== '' && isset($this->servers[$current])) {
                     $s = $this->servers[$current];
                     echo '<p>Connecting to <strong>' . h($s['label']) . '</strong></p>';
@@ -70,12 +76,12 @@ data:
             }
 
             public function login($login, $password) {
-                $current = defined('SERVER') ? SERVER : '';
+                $current = defined('Adminer\SERVER') ? \Adminer\SERVER : '';
                 return $current !== '' && isset($this->servers[$current]);
             }
 
             public function credentials() {
-                $current = defined('SERVER') ? SERVER : '';
+                $current = defined('Adminer\SERVER') ? \Adminer\SERVER : '';
                 if ($current !== '' && isset($this->servers[$current])) {
                     $s = $this->servers[$current];
                     return [$current, $s['username'], $s['password']];

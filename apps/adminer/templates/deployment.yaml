@@ -11,6 +11,9 @@ spec:
       {{- include "adminer.selectorLabels" . | nindent 6 }}
   template:
     metadata:
+      annotations:
+        # index.php is a subPath mount, which never picks up ConfigMap edits.
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
       labels:
         {{- include "adminer.selectorLabels" . | nindent 8 }}
     spec:
