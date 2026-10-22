@@ -1,11 +1,11 @@
 # Source this to set up Vault env for interactive use.
 # Add this line to ~/.bashrc (or ~/.zshrc) to make it permanent:
 #
-#     source ~/code/infra/scripts/vault-env.sh
+#     source ~/Code/Personal/infra/scripts/vault-env.sh
 #
 # Provides:
 #   VAULT_ADDR — always exported (just a URL, safe to be set)
-#   vlogin     — function: load root token from ~/code/infra/vault-root.token
+#   vlogin     — function: load root token from ~/Code/Personal/infra/vault-root.token
 #   vlogout    — function: clear VAULT_TOKEN from this shell
 
 export VAULT_ADDR="${VAULT_ADDR:-https://vault.stevegore.au}"
@@ -18,7 +18,7 @@ vlogin() {
     return 0
   fi
 
-  local token_file="${VAULT_ROOT_TOKEN_FILE:-$HOME/code/infra/vault-root.token}"
+  local token_file="${VAULT_ROOT_TOKEN_FILE:-$HOME/Code/Personal/infra/vault-root.token}"
   if [[ ! -r "$token_file" ]]; then
     echo "✗ no token file at $token_file"
     echo "  set VAULT_ROOT_TOKEN_FILE=<path> to override"

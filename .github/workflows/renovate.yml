@@ -85,5 +85,14 @@ jobs:
           # without waiting until 1am. It does NOT override automerge, so the
           # database and caddy-Dockerfile hold-backs still apply.
           RENOVATE_FORCE: ${{ inputs.ignoreSchedule && '{"schedule":null,"automergeSchedule":null}' || '' }}
+          # Authenticated Docker Hub. Anonymous tag listing stops at 1000 tags
+          # (403 "pagination offset too large"); portainer-ee has ~1600, so
+          # Renovate lost every releaseTimestamp for it and minimumReleaseAge
+          # held each release as pending forever (stuck on 2.45.1, 2026-10).
+          # hub.docker.com (tags API) is a separate host from docker.io (registry).
+          # Source of truth: Vault kv/docker; mirrored to these repo secrets.
+          RENOVATE_HOST_RULES: >-
+            [{"hostType":"docker","matchHost":"docker.io","username":"${{ secrets.DOCKERHUB_USERNAME }}","password":"${{ secrets.DOCKERHUB_TOKEN }}"},
+            {"hostType":"docker","matchHost":"hub.docker.com","username":"${{ secrets.DOCKERHUB_USERNAME }}","password":"${{ secrets.DOCKERHUB_TOKEN }}"}]
         with:
           token: ${{ secrets.RENOVATE_TOKEN }}
