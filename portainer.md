@@ -1935,13 +1935,12 @@ unreferenced Supervisor images plus `os-agent` package remain for rollback.
 **Mounts:** `/usr/share/bitwarden` bind -> `/data`  
 **Domain:** <https://bw2.stevegore.au> (Cloudflare Tunnel; standby only — primary is `bw.stevegore.au` on OKE)
 
-**Sync:** Hourly systemd timer (`vw-mysql-to-sqlite.timer`) pulls MySQL HeatWave → `/usr/share/bitwarden/db.sqlite3`. Script source: `~/code/infra/scripts/vw-mysql-to-sqlite.sh` (Python/pymysql). Installed at `/usr/local/bin/vw-mysql-to-sqlite.sh`. MySQL reachable at `10.0.1.51:3306` via Tailscale (oke-connector advertises `10.0.1.0/24`). Password in `~/.vw-mysql-sync.pass`.
+**Sync:** Hourly systemd timer (`vw-mysql-to-sqlite.timer`) pulls MySQL HeatWave → `/usr/share/bitwarden/db.sqlite3`. Script source: `~/code/infra/scripts/vw-mysql-to-sqlite.sh` (Python/pymysql). Installed at `~/.local/bin/vw-mysql-to-sqlite.sh` (the unit's `ExecStart`). MySQL reachable at `10.0.1.51:3306` via Tailscale (oke-connector advertises `10.0.1.0/24`). Password in `~/.vw-mysql-sync.pass`.
 
 **To install or reinstall the timer:**
 ```bash
 # Copy script
-sudo cp ~/code/infra/scripts/vw-mysql-to-sqlite.sh /usr/local/bin/vw-mysql-to-sqlite.sh
-sudo chmod +x /usr/local/bin/vw-mysql-to-sqlite.sh
+install -m 755 ~/code/infra/scripts/vw-mysql-to-sqlite.sh ~/.local/bin/vw-mysql-to-sqlite.sh
 
 # Copy and enable systemd units (service + timer files live in ~/code/infra/scripts/)
 sudo cp ~/code/infra/scripts/vw-mysql-to-sqlite.service /etc/systemd/system/
