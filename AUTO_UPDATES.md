@@ -187,7 +187,9 @@ If a future run brings something unexpected up,
 Portainer is intentionally **not** one of the stacks it manages — it cannot
 safely replace its own container through its own git polling. Its source is
 [`pico/portainer/compose.yaml`](pico/portainer/compose.yaml), and since
-2026-09-28 it is deployed automatically:
+2026-10-23 it is deployed automatically (the pipeline was written 2026-09-28,
+but the systemd units weren't installed until 2026-10-23; if Portainer lags the
+pin, check the timer exists first):
 
 1. Renovate opens the bump; patch/minor automerge after CI and a **3-day
    `minimumReleaseAge` soak** (majors stay `manual-review`).

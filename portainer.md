@@ -2,7 +2,7 @@
 
 **Endpoint:** pico-docker (Local Docker Engine)  
 **Docker Version:** 29.0.1  
-**Portainer Version:** portainer-ee 2.45.1<br>
+**Portainer Version:** portainer-ee 2.45.2<br>
 **Portainer Compose:** `pico/portainer/compose.yaml` (host network mode; deployed directly on pico)<br>
 **Total Containers:** 31<br>
 **Total Volumes:** 48  
@@ -72,11 +72,18 @@
 > (66-80) and statuses. Note the API reports `VersionSupport: LTS` for 2.45.0.
 >
 > **First automated upgrade 2026-09-28: 2.45.0 -> 2.45.1**, by
-> `scripts/portainer-auto-update.sh` (run by hand to supervise it; the timer
-> does this unattended from then on). Pull, cold backup
+> `scripts/portainer-auto-update.sh` (run by hand to supervise it). Pull, cold backup
 > (`/opt/portainer/backups/portainer_data-2.45.0-pre-2.45.1-20260928-185655.tar.gz`),
 > redeploy and health gate took 15s; `DB migrated to_version=2.45.1`, same
 > InstanceID, all 14 stacks unchanged.
+>
+> **The timer was not actually installed until 2026-10-23.** The 2026-09-28
+> run was manual and `install-portainer-auto-update.sh` (needs sudo) was never
+> run, so Renovate's 2.45.2 bump merged on 2026-10-22 and sat undeployed. Once
+> installed, the first timer-driven run did 2.45.1 -> 2.45.2 (backup
+> `portainer_data-2.45.1-pre-2.45.2-20261023-155414.tar.gz`, 1 endpoint, 14
+> stacks). If Portainer lags the pin, check
+> `systemctl list-timers portainer-auto-update.timer` first.
 >
 > **This repo is public.** The compose snippets below use `${VAR}` for every
 > credential; the real values live in each stack's Portainer Env, never in git.
@@ -1825,7 +1832,7 @@ the personal photo library.
 ### Portainer
 
 **Container:** portainer-portainer-1  
-**Image:** portainer/portainer-ee:2.45.1 (digest-pinned)<br>
+**Image:** portainer/portainer-ee:2.45.2 (digest-pinned)<br>
 **Status:** Running<br>
 **Network:** host (all ports exposed directly)  
 **Compose Config:** `~/code/infra/pico/portainer/compose.yaml`<br>
