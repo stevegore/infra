@@ -97,6 +97,11 @@ rebasing the whole queue after every merge. Real conflicts still rebase.
 - Dry run without opening PRs: `gh workflow run renovate.yml -f dryRun=true -f logLevel=debug`
 - Validate a config change before pushing:
   `npx --package renovate@44.4.5 -- renovate-config-validator --strict`
+- **A dashboard entry whose only "update" is its current value means Renovate can't compare that tag.**
+  `plexinc/pms-docker` sat like that from July to October because Docker versioning reads its `-<githash>`
+  suffix as a compatibility marker. The unpatched server was then compromised
+  ([pico/plex/INCIDENT-2026-10-27.md](pico/plex/INCIDENT-2026-10-27.md)). Package rule 10 now gives it regex
+  versioning; do the same for any other image whose dashboard entry looks like this.
 
 ---
 
