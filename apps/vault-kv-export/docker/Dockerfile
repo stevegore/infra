@@ -5,7 +5,7 @@
 # Based on hashicorp/vault purely for the `vault` CLI: it is Alpine, it is
 # already pulled onto both nodes for the Vault StatefulSet, and pinning it to
 # the same tag as apps/vault/values.yaml keeps client and server in step.
-FROM docker.io/hashicorp/vault:2.1.1@sha256:47f14a6acb98f48d798a07df7c83f23a6e636e1cf724c5f8ff165cb32667a1e2
+FROM docker.io/hashicorp/vault:2.2.1@sha256:962a92876e168d68eaaa24b0b8b49bbce1cb63024060a67bba95cd158a366fc2
 
 USER root
 # age  — asymmetric encryption to the offline recipient key
