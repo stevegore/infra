@@ -77,7 +77,7 @@ GitHub-authorized SSH key, so do not change `origin` back to a
 
     `scripts/vault-token-sync.sh` no longer depends on any of this — it resolves
     through `tailscale ip -4` instead — but everything else on pico still does.
-- **Cloudflare Tunnel** — `cloudflared.service`, exposes HA at `hass2.stevegore.au`
+- **Cloudflare Tunnel** — `cloudflared.service`, exposes HA at `hass2.stevegore.au`. Package from Cloudflare's apt repo, auto-updated by unattended-upgrades (see [`AUTO_UPDATES.md`](AUTO_UPDATES.md) §4)
 - **Docker services** — managed via Portainer (`port.stevegore.au`)
 - **Stats Server** — Python HTTP server (systemd `stats-server.service`)
   - Port: 8001 (HTTP)

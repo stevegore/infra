@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Host-level auto-updates for pico (Ubuntu 24.04).
+# Host-level auto-updates for pico (Ubuntu 26.04).
 #
 # Run this ON pico, with sudo — passwordless sudo is not configured there, so it
 # cannot be driven remotely:
@@ -44,6 +44,22 @@
 #     volumes: `docker system prune --volumes` on pico would destroy live
 #     application data.
 #
+#  6. apt: own the third-party sources that (2) and (7) depend on. The
+#     2026-09 do-release-upgrade to 26.04 disabled tailscale.list ("could not
+#     be automatically migrated"), so the Tailscale origin in (2) matched
+#     nothing and tailscaled sat on 1.102.3 with nobody noticing. Both repos
+#     are now written here as deb822 .sources. A release upgrade will disable
+#     them again: RE-RUN THIS SCRIPT AFTER EVERY do-release-upgrade.
+#
+#  7. cloudflared (hass2.stevegore.au tunnel): install from Cloudflare's apt
+#     repo and allow it unattended. It was a one-off 2023.8.2 .deb with no
+#     repo behind it, run with --no-autoupdate, and the old
+#     cloudflared-update.timer (`cloudflared update`, which refuses to touch a
+#     package-managed binary anyway) was disabled — so it was 3 years stale.
+#     The package does not manage the service (the unit, which holds the tunnel
+#     token, came from `cloudflared service install`), so a DPkg::Post-Invoke
+#     hook restarts it whenever its binary has been replaced underneath it.
+#
 # Everything here is idempotent — safe to re-run.
 
 set -euo pipefail
@@ -54,6 +70,53 @@ if [[ $EUID -ne 0 ]]; then
 fi
 
 APT_DROPIN=/etc/apt/apt.conf.d/52homelab-auto-upgrades
+CODENAME=$(. /etc/os-release && echo "$VERSION_CODENAME")
+
+echo "==> writing third-party apt sources (Tailscale: $CODENAME, cloudflared: any)"
+curl -fsSL "https://pkgs.tailscale.com/stable/ubuntu/$CODENAME.noarmor.gpg" \
+    -o /usr/share/keyrings/tailscale-archive-keyring.gpg
+cat > /etc/apt/sources.list.d/tailscale.sources <<EOF
+Types: deb
+URIs: https://pkgs.tailscale.com/stable/ubuntu
+Suites: $CODENAME
+Components: main
+Signed-By: /usr/share/keyrings/tailscale-archive-keyring.gpg
+EOF
+# The release upgrader's disabled leftovers; the .sources above replaces them.
+rm -f /etc/apt/sources.list.d/tailscale.list /etc/apt/sources.list.d/tailscale.list.disabled
+
+curl -fsSL https://pkg.cloudflare.com/cloudflare-main.gpg \
+    -o /usr/share/keyrings/cloudflare-main.gpg
+# Suite `any`, not the codename: Cloudflare publishes one suite for every
+# release, so this line never goes stale on an Ubuntu upgrade.
+cat > /etc/apt/sources.list.d/cloudflared.sources <<'EOF'
+Types: deb
+URIs: https://pkg.cloudflare.com/cloudflared
+Suites: any
+Components: main
+Signed-By: /usr/share/keyrings/cloudflare-main.gpg
+EOF
+
+echo "==> installing restart-if-replaced hook"
+cat > /usr/local/sbin/homelab-restart-replaced <<'EOF'
+#!/bin/sh
+# Restart each named service whose running binary has been replaced on disk
+# (/proc/PID/exe then reads "... (deleted)"). Called from DPkg::Post-Invoke for
+# packages whose postinst does not restart their own service. Managed by
+# scripts/setup-host-auto-updates.sh in stevegore/infra.
+for svc in "$@"; do
+    pid=$(systemctl show -p MainPID --value "$svc" 2>/dev/null)
+    [ -n "$pid" ] && [ "$pid" != 0 ] || continue
+    case "$(readlink "/proc/$pid/exe")" in
+        *" (deleted)") logger -t homelab-restart-replaced "restarting $svc"; systemctl restart "$svc" ;;
+    esac
+done
+EOF
+chmod 755 /usr/local/sbin/homelab-restart-replaced
+
+echo "==> removing the dead cloudflared-update timer"
+systemctl disable --now cloudflared-update.timer 2>/dev/null || true
+rm -f /etc/systemd/system/cloudflared-update.timer /etc/systemd/system/cloudflared-update.service
 
 echo "==> writing $APT_DROPIN"
 # A drop-in rather than editing 50unattended-upgrades: that file is package-owned
@@ -74,12 +137,17 @@ Unattended-Upgrade::Allowed-Origins {
     "${distro_id}ESM:${distro_codename}-infra-security";
 };
 
-// Tailscale is intentionally the only third-party origin allowed unattended:
-// it is pico's remote recovery path. Docker currently has no configured apt
-// repository on pico; Code, Brave and other workstation packages stay manual.
+// Third-party origins allowed unattended: Tailscale (pico's remote recovery
+// path) and cloudflared (internet-facing tunnel daemon). Docker's repository
+// is disabled on pico; Code, Brave and other workstation packages stay manual.
 Unattended-Upgrade::Origins-Pattern {
     "origin=Tailscale,codename=${distro_codename},label=Tailscale";
+    "origin=cloudflared,codename=any,label=cloudflared";
 };
+
+// cloudflared's package does not restart the service; this does, but only
+// when the binary was actually replaced. `|| true`: never fail an apt run.
+DPkg::Post-Invoke { "/usr/local/sbin/homelab-restart-replaced cloudflared.service || true"; };
 
 // Keep the root filesystem from filling: drop superseded kernels and
 // orphaned dependencies instead of accumulating them.
@@ -107,6 +175,15 @@ EOF
 echo "==> validating apt config parses"
 apt-config dump > /dev/null
 echo "    ok"
+
+echo "==> bringing cloudflared and tailscale current now"
+apt-get update -q
+# Post-Invoke restarts cloudflared once its binary is replaced. tailscaled's own
+# postinst restarts it; run this from the LAN (pico.local), not over Tailscale.
+apt-get install -y -q cloudflared tailscale
+cloudflared --version
+tailscale version | head -1
+systemctl is-active cloudflared
 
 echo "==> dry-run of unattended-upgrades"
 unattended-upgrade --dry-run --debug 2>&1 | tail -15 || true
