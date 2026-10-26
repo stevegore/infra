@@ -566,7 +566,7 @@ Creating notifications via the API needs `?forceSave=true`, same as indexers.
 
 | Container | Image                                     | Status               |
 | --------- | ----------------------------------------- | -------------------- |
-| plex      | plexinc/pms-docker:1.43.2.10687-563d026ea | Up 2 weeks (healthy) |
+| plex      | plexinc/pms-docker:1.43.5.11079-b3b13e506 | Up 2 weeks (healthy) |
 
 **Docker Compose:**
 
@@ -575,7 +575,7 @@ version: '2'
 services:
   plex:
     container_name: plex
-    image: plexinc/pms-docker:1.43.2.10687-563d026ea
+    image: plexinc/pms-docker:1.43.5.11079-b3b13e506
     restart: unless-stopped
     ports:
       - 32400:32400/tcp

@@ -251,6 +251,19 @@
         "helm/helm"
       ],
       "allowedVersions": "<4.0.0"
+    },
+    {
+      "description": [
+        "10. Plex tags are `<major>.<minor>.<patch>.<build>-<githash>`. Docker versioning reads the githash as a compatibility suffix, so no other release ever matched and Renovate sat on 1.43.2.10687-563d026ea from July to October listing it as its own only update — while 1.43.4 and 1.43.5 shipped security fixes.",
+        "That stale server was compromised through the companion-proxy SSRF and mined crypto from 2026-10-18 to 2026-10-27 (see pico/plex/INCIDENT-2026-10-27.md). The regex drops the hash and requires it, which also excludes the per-arch `-amd64`/`-arm64` tags."
+      ],
+      "matchPackageNames": [
+        "plexinc/pms-docker"
+      ],
+      "versioning": "regex:^(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)\\.(?<build>\\d+)-[0-9a-f]{9}$",
+      "addLabels": [
+        "internet-facing"
+      ]
     }
   ]
 }
