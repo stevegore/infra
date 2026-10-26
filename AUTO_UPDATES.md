@@ -16,7 +16,7 @@ Set up 2026-07-31.
 | Portainer control plane | **Renovate** + `portainer-auto-update` timer on pico | nightly scan, 3-day soak, deploy 06:30 | PR → automerge → cold backup → Compose redeploy |
 | Home Assistant HACS integrations/cards/themes | HA automation `Auto-update: HA core, Apps and HACS` | nightly 04:00 | `update.install` |
 | Home Assistant Core, Matter and MariaDB containers | **Renovate**, manual review after a verified backup | nightly scan | PR → review → pico Compose deployment |
-| pico OS packages (incl. Tailscale, cloudflared) | `unattended-upgrades` | daily, reboot 05:00 | apt |
+| pico OS packages (incl. Docker CE, Tailscale, cloudflared) | `unattended-upgrades` | daily, reboot 05:00 | apt |
 
 Everything routes through this repo except the HACS automation and apt. Stateful
 and platform-coordinated upgrades deliberately require a human approval.
@@ -302,8 +302,9 @@ automatic reboot at 05:00 (verified safe — pico has no LUKS, so an unattended
 boot cannot hang on a passphrase prompt).
 
 **Third-party apt repos are managed by the same script**, as deb822 `.sources`:
-Tailscale (`pkgs.tailscale.com`, suite = release codename) and cloudflared
-(`pkg.cloudflare.com`, suite `any`). Both origins are allowed unattended.
+Tailscale (`pkgs.tailscale.com`, suite = release codename), Docker CE
+(`download.docker.com`, suite = release codename) and cloudflared
+(`pkg.cloudflare.com`, suite `any`). All three origins are allowed unattended.
 cloudflared's package doesn't restart its own service, so a `DPkg::Post-Invoke`
 hook (`/usr/local/sbin/homelab-restart-replaced`) restarts `cloudflared.service`
 whenever its running binary has been replaced on disk.
@@ -313,8 +314,15 @@ whenever its running binary has been replaced on disk.
 > nothing and tailscaled silently stopped updating (stuck on 1.102.3). Until
 > 2026-10-27 cloudflared had no repo at all: a 2023.8.2 one-off `.deb` with
 > `--no-autoupdate` and a disabled `cloudflared-update.timer` (now removed).
-> Docker's repo (`docker.list.save`, still pointing at `noble`) was disabled by the
-> same upgrade and has not been re-enabled.
+> Docker's repo was disabled by the same upgrade (engine stuck on noble's
+> 29.0.1); since 2026-10-27 it is a managed `docker.sources` too.
+
+**Docker CE is auto-updated** (decided 2026-10-27). Every engine upgrade
+restarts `dockerd` and therefore every container on pico, at unattended-upgrades
+time (~06:00–07:00), and brings back any `restart: always` container that was
+only stopped — which is why stacks that must stay down are deleted, not stopped.
+Docker's Release file has no `Codename`, so its origin is matched on
+`archive=` (the suite), not `codename=`.
 
 Major Ubuntu release upgrades remain reviewed operations. The current
 24.04→26.04 preparation, private baseline capture, rollback, and verification

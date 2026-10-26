@@ -49,7 +49,13 @@
 #     be automatically migrated"), so the Tailscale origin in (2) matched
 #     nothing and tailscaled sat on 1.102.3 with nobody noticing. Both repos
 #     are now written here as deb822 .sources. A release upgrade will disable
-#     them again: RE-RUN THIS SCRIPT AFTER EVERY do-release-upgrade.
+#     them again: RE-RUN THIS SCRIPT AFTER EVERY do-release-upgrade. The same
+#     upgrade disabled docker.list, leaving Docker CE on noble's 29.0.1.
+#
+#     Docker CE is allowed unattended too (chosen 2026-10-27). Every engine
+#     upgrade restarts dockerd, which restarts every container on pico —
+#     including any `restart: always` container that was stopped by hand.
+#     Stacks that must stay down are deleted, not stopped (AUTO_UPDATES.md).
 #
 #  7. cloudflared (hass2.stevegore.au tunnel): install from Cloudflare's apt
 #     repo and allow it unattended. It was a one-off 2023.8.2 .deb with no
@@ -84,6 +90,18 @@ Signed-By: /usr/share/keyrings/tailscale-archive-keyring.gpg
 EOF
 # The release upgrader's disabled leftovers; the .sources above replaces them.
 rm -f /etc/apt/sources.list.d/tailscale.list /etc/apt/sources.list.d/tailscale.list.disabled
+
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+cat > /etc/apt/sources.list.d/docker.sources <<EOF
+Types: deb
+URIs: https://download.docker.com/linux/ubuntu
+Suites: $CODENAME
+Components: stable
+Architectures: amd64
+Signed-By: /etc/apt/keyrings/docker.asc
+EOF
+rm -f /etc/apt/sources.list.d/docker.list /etc/apt/sources.list.d/docker.list.disabled \
+    /etc/apt/sources.list.d/docker.list.save
 
 curl -fsSL https://pkg.cloudflare.com/cloudflare-main.gpg \
     -o /usr/share/keyrings/cloudflare-main.gpg
@@ -138,11 +156,13 @@ Unattended-Upgrade::Allowed-Origins {
 };
 
 // Third-party origins allowed unattended: Tailscale (pico's remote recovery
-// path) and cloudflared (internet-facing tunnel daemon). Docker's repository
-// is disabled on pico; Code, Brave and other workstation packages stay manual.
+// path), cloudflared (internet-facing tunnel daemon) and Docker CE (engine
+// upgrades restart every container). Code, Brave and other workstation
+// packages stay manual.
 Unattended-Upgrade::Origins-Pattern {
     "origin=Tailscale,codename=${distro_codename},label=Tailscale";
     "origin=cloudflared,codename=any,label=cloudflared";
+    "origin=Docker,archive=${distro_codename},label=Docker CE";  // no Codename in its Release file
 };
 
 // cloudflared's package does not restart the service; this does, but only
@@ -176,14 +196,19 @@ echo "==> validating apt config parses"
 apt-config dump > /dev/null
 echo "    ok"
 
-echo "==> bringing cloudflared and tailscale current now"
+echo "==> bringing cloudflared, tailscale and docker current now"
 apt-get update -q
 # Post-Invoke restarts cloudflared once its binary is replaced. tailscaled's own
 # postinst restarts it; run this from the LAN (pico.local), not over Tailscale.
 apt-get install -y -q cloudflared tailscale
+# --only-upgrade: bring the installed Docker CE packages forward without
+# pulling in ones pico never had. This restarts dockerd and every container.
+apt-get install -y -q --only-upgrade docker-ce docker-ce-cli containerd.io \
+    docker-buildx-plugin docker-compose-plugin docker-ce-rootless-extras
 cloudflared --version
 tailscale version | head -1
-systemctl is-active cloudflared
+docker version --format 'docker {{.Server.Version}}'
+systemctl is-active cloudflared docker
 
 echo "==> dry-run of unattended-upgrades"
 unattended-upgrade --dry-run --debug 2>&1 | tail -15 || true
