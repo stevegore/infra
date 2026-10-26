@@ -192,6 +192,28 @@ APT::Periodic::Unattended-Upgrade "1";
 APT::Periodic::AutocleanInterval "7";
 EOF
 
+echo "==> scheduling the upgrade window to 05:30-06:00"
+# Stock: lists refresh at 06:00/18:00 + up to 12h random, upgrade at 06:00 + up
+# to 60m. Pin the upgrade (and with it any Docker engine restart, which bounces
+# every container) to 05:30-06:00, and refresh lists just before it so the run
+# doesn't install from day-old metadata. Sits after the 05:00 auto-reboot and
+# before the 06:30 Portainer reconciler.
+mkdir -p /etc/systemd/system/apt-daily.timer.d /etc/systemd/system/apt-daily-upgrade.timer.d
+cat > /etc/systemd/system/apt-daily.timer.d/homelab-window.conf <<'EOF'
+[Timer]
+OnCalendar=
+OnCalendar=*-*-* 05:00,17:00
+RandomizedDelaySec=20m
+EOF
+cat > /etc/systemd/system/apt-daily-upgrade.timer.d/homelab-window.conf <<'EOF'
+[Timer]
+OnCalendar=
+OnCalendar=*-*-* 05:30
+RandomizedDelaySec=30m
+EOF
+systemctl daemon-reload
+systemctl restart apt-daily.timer apt-daily-upgrade.timer
+
 echo "==> validating apt config parses"
 apt-config dump > /dev/null
 echo "    ok"
@@ -250,7 +272,7 @@ systemctl enable --now docker-prune.timer
 echo
 echo "==> done. current state:"
 systemctl is-enabled apt-daily-upgrade.timer && echo "    apt-daily-upgrade.timer: enabled"
-systemctl list-timers docker-prune.timer --no-pager | tail -2
+systemctl list-timers apt-daily.timer apt-daily-upgrade.timer docker-prune.timer --no-pager | head -4
 df -h / | tail -1
 if [[ -f /var/run/reboot-required ]]; then
     echo

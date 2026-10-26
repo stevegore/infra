@@ -16,7 +16,7 @@ Set up 2026-07-31.
 | Portainer control plane | **Renovate** + `portainer-auto-update` timer on pico | nightly scan, 3-day soak, deploy 06:30 | PR → automerge → cold backup → Compose redeploy |
 | Home Assistant HACS integrations/cards/themes | HA automation `Auto-update: HA core, Apps and HACS` | nightly 04:00 | `update.install` |
 | Home Assistant Core, Matter and MariaDB containers | **Renovate**, manual review after a verified backup | nightly scan | PR → review → pico Compose deployment |
-| pico OS packages (incl. Docker CE, Tailscale, cloudflared) | `unattended-upgrades` | daily, reboot 05:00 | apt |
+| pico OS packages (incl. Docker CE, Tailscale, cloudflared) | `unattended-upgrades` | daily 05:30–06:00, reboot 05:00 | apt |
 
 Everything routes through this repo except the HACS automation and apt. Stateful
 and platform-coordinated upgrades deliberately require a human approval.
@@ -297,7 +297,10 @@ drop-in at `/etc/apt/apt.conf.d/52homelab-auto-upgrades`.
 The stock config only allowed the release and `-security` pockets, which meant
 ordinary package updates in `-updates` were never applied. The drop-in adds
 `-updates` plus the signed Tailscale stable origin, enables unused-kernel and
-unused-dependency removal, and turns on
+unused-dependency removal, pins the upgrade window to **05:30–06:00** (timer
+drop-ins `homelab-window.conf` on `apt-daily-upgrade.timer`, plus
+`apt-daily.timer` at 05:00/17:00 + ≤20m so lists are fresh; stock is
+06:00–07:00 with lists up to 12h stale), and turns on
 automatic reboot at 05:00 (verified safe — pico has no LUKS, so an unattended
 boot cannot hang on a passphrase prompt).
 
@@ -318,8 +321,8 @@ whenever its running binary has been replaced on disk.
 > 29.0.1); since 2026-10-27 it is a managed `docker.sources` too.
 
 **Docker CE is auto-updated** (decided 2026-10-27). Every engine upgrade
-restarts `dockerd` and therefore every container on pico, at unattended-upgrades
-time (~06:00–07:00), and brings back any `restart: always` container that was
+restarts `dockerd` and therefore every container on pico, in the unattended-upgrades
+window (05:30–06:00), and brings back any `restart: always` container that was
 only stopped — which is why stacks that must stay down are deleted, not stopped.
 Docker's Release file has no `Codename`, so its origin is matched on
 `archive=` (the suite), not `codename=`.
