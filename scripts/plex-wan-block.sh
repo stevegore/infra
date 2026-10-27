@@ -27,12 +27,14 @@ PORTS="${PLEX_TCP_PORTS:-32400,3005,8324,32469}"
 LAN_V4="${LAN_V4:-192.168.0.0/16}"
 TAG="plex-wan-block"
 
-IFACE=$(ip -4 route show default | awk '{for (i=1;i<NF;i++) if ($i=="dev") {print $(i+1); exit}}')
+# The awks never `exit` early: that would SIGPIPE `ip`, and pipefail + set -e
+# would turn that into a failure that depends on timing.
+IFACE=$(ip -4 route show default | awk '!f {for (i=1;i<NF;i++) if ($i=="dev") {print $(i+1); f=1; break}}')
 [[ -n $IFACE ]] || { echo "no default route; refusing to guess the LAN interface" >&2; exit 1; }
 
 # The delegated /64 is dynamic, so read it at apply time; the unit reruns on
 # every boot and Docker restart.
-V6_PREFIX=$(ip -6 route show dev "$IFACE" | awk '$1 ~ /^2[0-9a-f]*:.*\/64$/ {print $1; exit}')
+V6_PREFIX=$(ip -6 route show dev "$IFACE" | awk '!f && $1 ~ /^2[0-9a-f]*:.*\/64$/ {print $1; f=1}')
 
 v4_rule=(DOCKER-USER -i "$IFACE" -p tcp -m multiport --dports "$PORTS"
          ! -s "$LAN_V4" -m comment --comment "$TAG" -j DROP)
@@ -48,7 +50,9 @@ remove() {
   local tool chain
   for tool in iptables ip6tables; do
     for chain in DOCKER-USER INPUT; do
-      $tool -S "$chain" 2>/dev/null | grep -- "--comment $TAG" | sed 's/^-A/-D/' |
+      # `|| true`: no match (always, on first apply) makes grep exit 1, which
+      # pipefail + set -e would turn into a silent exit.
+      { $tool -S "$chain" 2>/dev/null || true; } | { grep -- "--comment $TAG" || true; } | sed 's/^-A/-D/' |
         while read -r spec; do eval "$tool $spec"; done
     done
   done
