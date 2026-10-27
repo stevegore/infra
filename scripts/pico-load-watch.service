@@ -1,0 +1,20 @@
+[Unit]
+Description=Pushover alert when pico's 15-minute load is abnormal
+Documentation=file:///home/steve/code/infra/pico/plex/INCIDENT-2026-10-27.md
+OnFailure=pushover-failure@%n.service
+
+[Service]
+Type=oneshot
+User=steve
+Group=steve
+ExecStart=/home/steve/code/infra/scripts/pico-load-watch.sh
+StateDirectory=pico-load-watch
+# Hardening. Needs the Docker socket (container names) and ~/.config/vault-token-sync
+# (Pushover creds via pushover-notify.sh), both readable under ProtectHome=read-only.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true

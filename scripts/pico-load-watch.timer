@@ -1,0 +1,11 @@
+[Unit]
+Description=Check pico's sustained load every 5 minutes
+
+[Timer]
+OnBootSec=10min
+OnUnitActiveSec=5min
+AccuracySec=1min
+Unit=pico-load-watch.service
+
+[Install]
+WantedBy=timers.target

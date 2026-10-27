@@ -611,7 +611,11 @@ volumes:
 **Hostname:** PlexOnPico  
 **Storage:** Media from `/srv/tv` and `/srv/movies`, USB passthrough via `/dev/bus/usb`  
 **Volumes:** `plex_plex-config`, `plex_plex-temp`  
-**Note:** NVIDIA GPU passthrough is commented out but available
+**Note:** NVIDIA GPU passthrough is commented out but available  
+**Internet exposure:** none directly. `plex-wan-block.service` drops TCP 32400/3005/8324/32469 arriving on
+`enp3s0` from outside the LAN, because the eero still forwards 32400 (it has no API, so that forward is
+removed by hand in the eero app). Remote clients use `plex.stevegore.au` (Caddy → Tailscale). Compromised
+via that forward in Oct 2026: [pico/plex/INCIDENT-2026-10-27.md](pico/plex/INCIDENT-2026-10-27.md).
 
 ---
 

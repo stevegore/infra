@@ -88,6 +88,16 @@ GitHub-authorized SSH key, so do not change `origin` back to a
   - Dashboard integration: embedded as iframe widget in `https://homepage.stevegore.au`
   - Deployment: `~/code/infra/scripts/stats-server.py` + systemd service
   - See `scripts/STATS_SERVER.md` for setup and troubleshooting
+- **Plex WAN block** — `plex-wan-block.service` (root, `/usr/local/sbin/plex-wan-block`). Drops TCP
+  32400/3005/8324/32469 arriving on `enp3s0` from outside `192.168.0.0/16` (IPv4 in `DOCKER-USER`, IPv6
+  in `INPUT` with the LAN /64, link-local and ULA allowed). `PartOf=docker.service`, so it reapplies after
+  every Docker restart. `plex-wan-block status` shows the rules. Added after
+  [the Plex compromise](pico/plex/INCIDENT-2026-10-27.md).
+- **Load watch** — `pico-load-watch.timer` runs every 5 min. It sends a Pushover alert (priority 1) when the
+  15-min load is > 6, repeats every 6 h while it stays high, and sends one on recovery. The alert lists the
+  top processes with their container names.
+  - Both are installed by `sudo ~/code/infra/scripts/install-pico-guards.sh`. Re-run it after editing
+    `plex-wan-block.sh`, because the unit runs a root-owned copy.
 
 **Network:**
 

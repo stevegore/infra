@@ -1,0 +1,22 @@
+[Unit]
+Description=Drop internet traffic to Plex's TCP ports (the eero still forwards 32400)
+Documentation=file:///home/steve/code/infra/pico/plex/INCIDENT-2026-10-27.md
+# PartOf + WantedBy docker.service: stopping or restarting Docker restarts this
+# unit too, so the rules come back after every Docker upgrade (unattended-upgrades
+# restarts dockerd) as well as at boot.
+After=docker.service
+Requires=docker.service
+PartOf=docker.service
+OnFailure=pushover-failure@%n.service
+# Root-owned copy installed by scripts/install-pico-guards.sh, not the git
+# checkout: a root unit must not run a file steve (uid 1000 = Plex's plex
+# user) can rewrite.
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/plex-wan-block apply
+ExecStop=/usr/local/sbin/plex-wan-block remove
+
+[Install]
+WantedBy=docker.service
