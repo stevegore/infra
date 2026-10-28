@@ -63,7 +63,7 @@ This was fixed on the now-terminated ampere-ubuntu instance by manually installi
 
 ## OKE Cluster Health & Capacity (homelab)
 
-**Cluster Status:** ACTIVE (v1.36.1, upgraded 2026-07-14 — node IPs change every rebuild/cycle; treat these as point-in-time)
+**Cluster Status:** ACTIVE (control plane v1.36.4 since 2026-10-28; workers cycle onto the 2026.09.18 OL 8.10 image — node IPs change every rebuild/cycle; treat these as point-in-time)
 
 | Node | Internal IP | Status | Capacity | Mem used | CPU used |
 |------|-------------|--------|----------|----------|----------|
@@ -443,7 +443,7 @@ OCI users are capped at 2 active Customer Secret Keys. List + delete via
 | Property                | Value                                                                                                |
 | ----------------------- | ---------------------------------------------------------------------------------------------------- |
 | OCID                    | `ocid1.cluster.oc1.ap-sydney-1.aaaaaaaayyadaznxbxlzv7qz6drid3w3erh3yunv2zp7wdqzjclxsok2k6nq`         |
-| Kubernetes version      | `v1.36.1` (control plane + workers upgraded in-place 2026-07-14; workers cycled via drain + `delete-node --is-decrement-size false`) |
+| Kubernetes version      | `v1.36.4` (control plane upgraded via ORM 2026-10-28; workers cycled via drain + `delete-node --is-decrement-size false`). **v1.37.0 held:** Cilium 1.20 is only tested against k8s 1.33–1.36 — bump the OKE minor only after a Cilium release lists it. |
 | Type                    | BASIC_CLUSTER (free — Enhanced incurs ~$0.15/hr; downgrade requires full cluster rebuild)            |
 | API endpoint            | Public, NSG-restricted to the home IP (`var.home_ip_cidr`)                                           |
 | CNI                     | OKE `FLANNEL_OVERLAY` remains the primary CNI (pods 10.244.0.0/16, services 10.96.0.0/16); Cilium 1.20.0-rc.0 is chained in policy-only `generic-veth` mode and now enforces NetworkPolicy and supplies Hubble observability. |

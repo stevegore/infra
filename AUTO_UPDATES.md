@@ -391,13 +391,15 @@ rollback does not need a re-pull. It never touches volumes —
   `OpenSSH_7.9p1 Raspbian-10+deb10u2`: Raspbian 10 *buster*, which has had no security
   updates since mid-2024. Reflash or retire it. Details in [`hosts.md`](hosts.md).
 - **OKE Kubernetes version and node replacement** — owned by the `homelab-tf`
-  ORM stack and deliberately manual. The control plane is pinned at current
-  `v1.36.1`; the node-pool definition is pinned to the 2026-07-20 OKE image.
+  ORM stack and deliberately manual. The control plane is pinned at
+  `v1.36.4` (2026-10-28); the node-pool definition is pinned to the 2026-09-18
+  OL 8.10 OKE image. v1.37.0 is offered but held until Cilium supports it.
   Applying the Terraform change updates future-node configuration; cycle the two
   workers one at a time only after reviewing the ORM plan and workload health.
 - **ArgoCD rollout** — Renovate opens a held PR for the pinned release. After
-  merge, re-run `bootstrap/argocd-init.sh`; it upgrades the upstream manifests,
-  waits for the server, and reapplies the Cilium/Flannel probe patches.
+  merge, re-run `bootstrap/argocd-init.sh`; it rewrites the Cilium/Flannel-safe
+  probes into the upstream manifest with `yq`, server-side applies it and waits
+  for every ArgoCD workload (the old apply-then-patch flow broke the 3.5 upgrade).
 - **The ArgoCD ApplicationSet** — not self-managed. Editing
   `argocd/applicationset.yaml` still needs a manual
   `kubectl apply --server-side --force-conflicts`.
