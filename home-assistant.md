@@ -9,7 +9,7 @@
 | Stack dir | `/opt/ha-container` (`compose.yaml`, `README.md`, `.env`) |
 | Core container | `homeassistant-app` (`ghcr.io/home-assistant/home-assistant`), host networking, `:8123` |
 | Config root | `/opt/ha-container/config` (host) = `/config` (in container) |
-| Database | `homeassistant-db` — MariaDB 11, bound to `127.0.0.1:3307`, data in `./dbdata` |
+| Database | `homeassistant-db` — MariaDB 13.0 (stepped up from 11.8 on 2026-10-28), bound to `127.0.0.1:3307`, data in `./dbdata` |
 | Matter | `homeassistant-matter` — `python-matter-server`, fabric in `./matter-data` |
 | Secrets | `/opt/ha-container/.env` (mode 600) — DB password + `HA_DB_URL` |
 
@@ -124,7 +124,7 @@ Default to the official server for everyday on/off + state, switch to `ha-mcp` f
 
 | Component | Status | Notes |
 |---|---|---|
-| `tuya_local` | active | Local control (`local_push`), bundles `tinytuya==1.20.0`. Version `2026.7.2`. Source: [`make-all/tuya-local`](https://github.com/make-all/tuya-local). |
+| `tuya_local` | active | Local control (`local_push`), bundles `tinytuya==1.20.0`. Version `2026.10.0`. Source: [`make-all/tuya-local`](https://github.com/make-all/tuya-local). |
 | `eero` | active | Read-only sensors + device tracker, **115 registry entities**. **No services exposed** — cannot create DHCP reservations from HA. |
 | `eero_tracker` | legacy, **archived upstream** | v1.0.10. [`jrlucier/eero_tracker`](https://github.com/jrlucier/eero_tracker) has been **archived since May 2021** — no fixes will ever land. Legacy YAML `device_tracker` platform (`configuration.yaml`), creates **0 registry entities** — it writes to `known_devices.yaml` (107 devices tracked). Kept with `interval_seconds: 30` to avoid scan overrun. Redundant with the modern `eero` component; removal is a presence-detection behaviour change, so it has not been done. |
 
@@ -135,6 +135,14 @@ Core upgrade. `tuya_local` 2026.4.2 broke on Core 2026.7.4 with
 `ImportError: cannot import name 'ATTR_MODE' from 'homeassistant.components.text.const'`
 (Core moved it to `homeassistant.const`). Check HACS for pending updates
 **before** bumping the Core image tag.
+
+**The reverse also happens: an old Core blocks HACS updates silently.**
+`tuya_local` 2026.10.0 (released 2026-10-23) requires Core ≥ 2026.8.0. While Core
+sat on 2026.7.4, the nightly auto-update automation's `update.install` failed every
+night with *"This version requires Home Assistant 2026.8.0 or newer"*, and
+`continue_on_error` hid it — visible only in the automation trace. A HACS entity
+that stays `on` for days after 04:00 means its install is failing; read the trace.
+Core went 2026.7.4 → 2026.10.4 on 2026-10-28 and `tuya_local` installed then.
 
 ## State storage
 

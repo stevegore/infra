@@ -38,7 +38,7 @@ GitHub-authorized SSH key, so do not change `origin` back to a
 - **Home Assistant** — **HA Container** via `docker compose` (migrated from Supervised 2026-08-01)
   - Stack: `/opt/ha-container` (`homeassistant-app`, `homeassistant-db`, `homeassistant-matter`)
   - Config: `/opt/ha-container/config/`
-  - DB: own MariaDB 11 container on `127.0.0.1:3307` (data in `/opt/ha-container/dbdata`)
+  - DB: own MariaDB 13 container on `127.0.0.1:3307` (data in `/opt/ha-container/dbdata`)
   - External access: `hass2.stevegore.au` (Cloudflare Tunnel, direct) and `hass.stevegore.au` (via Tailscale egress in OKE → Caddy → pico:8123)
   - `trusted_proxies` includes `10.0.0.0/8` (covers OKE pod CIDR) and `100.64.0.0/10` (Tailscale) so Caddy pods are trusted for X-Forwarded-For
   - Custom components: `tuya_local`, `eero` (new), `eero_tracker` (legacy — kept for now, `interval_seconds: 30` set to avoid scan overrun)

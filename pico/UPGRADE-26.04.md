@@ -203,7 +203,7 @@ Specifically confirm:
 - **cloudflared:** `hass2.stevegore.au` depends on `cloudflared.service`.
 - **Ubuntu Pro:** ESM and Livepatch remain attached and compatible with the new
   kernel.
-- **Custom units:** verify `grafana-agent`, `stats-server`,
+- **Custom units:** verify `stats-server`,
   `arr-malware-watchdog`, `docker-prune`, `vault-token-sync`,
   `vw-mysql-to-sqlite`, Samba, OpenVPN, and LXD.
 
