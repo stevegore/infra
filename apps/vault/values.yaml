@@ -17,6 +17,12 @@ vault:
       repository: "docker.io/hashicorp/vault"
       tag: "2.2.1"
 
+    # The chart defaults to OnDelete, which only changes the pod template: a
+    # merged tag bump sat undeployed until vault-0 happened to restart (2.2.1
+    # merged 2026-10-28 while 2.1.1 kept running). Standalone with OCI KMS
+    # auto-unseal, so a rolling restart needs no manual unseal.
+    updateStrategyType: "RollingUpdate"
+
     # No IPC_LOCK / mlock override here, deliberately. `standalone.config` below
     # omits disable_mlock, so the chart appends `disable_mlock = true` for us
     # (_helpers.tpl) — the sanctioned Kubernetes setting, since kubelet runs with
