@@ -63,7 +63,7 @@ This was fixed on the now-terminated ampere-ubuntu instance by manually installi
 
 ## OKE Cluster Health & Capacity (homelab)
 
-**Cluster Status:** ACTIVE (control plane v1.36.4 since 2026-10-28; workers cycle onto the 2026.09.18 OL 8.10 image — node IPs change every rebuild/cycle; treat these as point-in-time)
+**Cluster Status:** ACTIVE (v1.36.4 since 2026-10-28: control plane via ORM, both workers replaced onto the 2026.09.18 OL 8.10 image — node IPs change every rebuild/cycle; treat these as point-in-time)
 
 | Node | Internal IP | Status | Capacity | Mem used | CPU used |
 |------|-------------|--------|----------|----------|----------|
@@ -559,6 +559,8 @@ drain takes them all out; they come back on the replacement node.
    - `kubectl drain <node> --ignore-daemonsets --delete-emptydir-data`
    - The `caddy` / `authentik-server` / `homepage` / `headlamp` PDBs allow exactly 1 disruption each, so the *first* drain proceeds normally. Their evicted pods stay **Pending** — the spread constraint counts a cordoned node as a domain, so they will not double up on the survivor — which is expected; `drain` only has to evict, not reschedule.
    - `oci ce node-pool delete-node --node-pool-id <id> --node-id <instance-ocid> --is-decrement-size false --force` → pool backfills a node on the new version/image. Watch for A1 out-of-capacity on the backfill before touching the second node.
+   - Check capacity first — a backfill that can't get A1 capacity leaves the cluster on one node: `oci compute compute-capacity-report create --compartment-id <tenancy> --availability-domain tbGS:AP-SYDNEY-1-AD-1 --shape-availabilities '[{"instanceShape":"VM.Standard.A1.Flex","faultDomain":"FAULT-DOMAIN-1","instanceShapeConfig":{"ocpus":2,"memoryInGBs":12}}]'` (repeat for FD-2) must say `AVAILABLE`.
+   - On the second node the drain sits on the last `authentik-server` pod after `pg-shared` moves: the other replica crash-loops until the DB is back, so its PDB allows 0. It clears on its own within a few minutes (2026-10-28).
    - **Wait for those Pending pods to go Ready on the replacement node before draining the second one.** If you don't, the second drain will sit retrying evictions instead of completing — that block is the PDBs doing their job, not a hang. `kubectl get pdb -A` shows `ALLOWED DISRUPTIONS 0` while it is unsafe to proceed.
 5. Expect ~5–10 min of pod churn after each replacement (1.3 GB authentik image pull is the slowest; Vault auto-unseals via KMS).
 6. `authentik-server` / `authentik-worker` may sit in `Init:0/1` for a while — that is the `wait-for-postgres` init container doing its job, not a hang. Authentik's bootstrap gives up and exits 1 after exactly 30 s without a database, and on the 2026-07-14 rebuild `pg-shared` came back *last*, costing 5 restarts and an 8-minute CrashLoopBackOff. The init container converts that into a clean wait. Check it with `kubectl logs -n authentik <pod> -c wait-for-postgres`; it prints one line per attempt and clears itself the moment the DB answers. Since `pg-shared` is single-instance, moving it first (step 4) still shortens the wait.
