@@ -1568,21 +1568,22 @@ volumes:
 ### homepage
 
 **Status:** Running  
-**Stack ID:** 60  
-**Created:** 2026-05-17 (migrated from manual compose at `/home/steve/dashboards` to Portainer-managed)
+**Stack ID:** 82 (git-backed, `pico/homepage/compose.yaml`, since 2026-10-28)  
+**Created:** 2026-05-17 as stack 60; that stack was later lost and the container ran
+unmanaged on `:latest` (stuck on v1.13.1) until it was re-created from git on 2026-10-28.
 
 **Containers:**
 
 | Container | Image                                  | Status  |
 | --------- | -------------------------------------- | ------- |
-| homepage  | ghcr.io/gethomepage/homepage:latest    | Running |
+| homepage  | ghcr.io/gethomepage/homepage:v2.7.0 (digest-pinned) | Running |
 
-**Docker Compose:**
+**Docker Compose:** (source of truth is `pico/homepage/compose.yaml`)
 
 ```yaml
 services:
   homepage:
-    image: ghcr.io/gethomepage/homepage:latest
+    image: ghcr.io/gethomepage/homepage:v2.7.0@sha256:…
     container_name: homepage
     restart: unless-stopped
     ports:
@@ -1929,7 +1930,8 @@ unreferenced Supervisor images plus `os-agent` package remain for rollback.
 ### Bitwarden (Vaultwarden) — warm standby
 
 **Container:** bitwarden  
-**Image:** vaultwarden/server:1.36.0-alpine  
+**Image:** vaultwarden/server:1.37.4-alpine (keep in step with `apps/vaultwarden`)  
+**Stack:** `vaultwarden-standby` (id 81, git-backed `pico/vaultwarden-standby/compose.yaml`, since 2026-10-28 — before that a hand-made container on 1.36.0)  
 **Status:** Running (warm standby — primary is OKE `vaultwarden` namespace)  
 **Network:** bridge  
 **Ports:** 8081 -> 80 (web UI), 3012 -> 3012 (WebSocket notifications)  
@@ -1971,11 +1973,11 @@ bash ~/code/infra/scripts/vw-mysql-to-sqlite.sh
 ### Duplicati
 
 **Container:** duplicati  
-**Image:** duplicati/duplicati:2.0.8.1_beta_2024-05-07  
-**Status:** Running (Up 2 weeks)  
+**Image:** duplicati/duplicati:2.4.0.1 (digest-pinned)  
+**Stack:** `duplicati` (id 83, git-backed `pico/duplicati/compose.yaml`, since 2026-10-28 — before that a hand-made `:latest` container stuck on 2.3.0.1)  
 **Network:** bridge  
 **Port:** 8200  
-**Command:** `duplicati-server --webservice-port=8200 --webservice-interface=any`  
+**Secrets:** `DUPLICATI__WEBSERVICE_PASSWORD` in the stack's Portainer env  
 **Mounts:**  
 
 - `/usr/share/duplicati` bind -> `/data` (Duplicati config/database)  

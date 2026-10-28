@@ -21,7 +21,7 @@
 ### pico (192.168.4.120 / 10.20.30.1)
 
 **Hardware:** ASRock B550M-ITX/ac (Mini-ITX desktop), AMD Ryzen 5 5600G (6c/12t, integrated Radeon), 30 GB RAM
-**OS:** Ubuntu 24.04.4 LTS (kernel 6.8.0-136-generic), x86-64
+**OS:** Ubuntu 26.04.1 LTS (kernel 7.0.0-38-generic), x86-64
 **Storage:**
 - `/` — 456 GB LVM (`/dev/mapper/ubuntu--vg-ubuntu--lv`), ~88% full
 - `/media/m2` — 3.6 TB NVMe, ~78% used
@@ -178,7 +178,7 @@ See `scripts/STATS_SERVER.md` for detailed setup and troubleshooting.
 | vault              | HashiCorp Vault                 | OCI KMS auto-unseal; VSO syncs secrets to k8s |
 | vault-secrets-operator | VSO                        | Syncs Vault secrets → k8s Secrets          |
 | metrics-server     | metrics-server                  | `kubectl top` / HPA metrics (`--kubelet-insecure-tls`) |
-| vaultwarden        | Vaultwarden 1.35.7              | Primary at `bw.stevegore.au`; MySQL HeatWave Free backend (`/data` is `emptyDir`) |
+| vaultwarden        | Vaultwarden 1.37.4              | Primary at `bw.stevegore.au`; MySQL HeatWave Free backend (`/data` is `emptyDir`) |
 | homepage           | Homepage dashboard              | Gated by Authentik forward-auth            |
 | tailscale          | Tailscale operator              | Manages Egress Service for pico reachability |
 | garmin-mcp         | Garmin MCP server               | Garmin Connect data for Claude (remote MCP connector); secret-path URL via Caddy at `garmin.stevegore.au`; tokens on `oci-bv` PVC (see `apps/garmin-mcp/README.md`) |

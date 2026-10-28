@@ -16,7 +16,7 @@ Set up 2026-07-31.
 | Portainer control plane | **Renovate** + `portainer-auto-update` timer on pico | nightly scan, 3-day soak, deploy 06:30 | PR → automerge → cold backup → Compose redeploy |
 | Home Assistant HACS integrations/cards/themes | HA automation `Auto-update: HA core, Apps and HACS` | nightly 04:00 | `update.install` |
 | Home Assistant Core, Matter and MariaDB containers | **Renovate**, manual review after a verified backup | nightly scan | PR → review → pico Compose deployment |
-| pico OS packages (incl. Docker CE, Tailscale, cloudflared) | `unattended-upgrades` | daily 05:30–06:00, reboot 05:00 | apt |
+| pico OS packages (incl. Docker CE, Tailscale, cloudflared, Vault CLI) | `unattended-upgrades` | daily 05:30–06:00, reboot 05:00 | apt |
 
 Everything routes through this repo except the HACS automation and apt. Stateful
 and platform-coordinated upgrades deliberately require a human approval.
@@ -130,8 +130,19 @@ pico/
   transmission/compose.yaml
   sonarrradarrjackett/compose.yaml
   immich/compose.yaml
-  ... 15 stacks
+  ... 17 stacks
 ```
+
+**Three containers sat outside this until 2026-10-28** — the Vaultwarden bw2
+standby (`bitwarden`), `duplicati` and the pico-local `homepage` were plain
+`docker run` containers with no stack and no compose file in git, so Renovate
+never saw them and nothing re-pulled them (1.36.0, 2.3.0.1 and v1.13.1 when
+found). They are now the git-backed stacks `vaultwarden-standby`, `duplicati`
+and `homepage` (`pico/<name>/compose.yaml`). The pre-cutover containers were
+left stopped as `<name>-pregit` with `restart=no`, and their data/inspect
+backups are in `/media/m2/backups/pre-git-stacks-20261028/`. When auditing,
+`docker ps` entries with no `com.docker.compose.project` label are the ones no
+pipeline updates.
 
 ### Secrets
 
@@ -150,6 +161,8 @@ and never leaves pico. Stacks with placeholders:
 | `plex` | `PLEX_CLAIM` |
 | `icloudpd`, `icloudpd-kellesi` | `ICLOUD_USERNAME` |
 | `ig-gallery` | `GALLERY_ADMIN_KEY`, `GALLERY_ADMIN_IP` |
+| `duplicati` | `DUPLICATI__WEBSERVICE_PASSWORD` |
+| `homepage` | `HOMEPAGE_VAR_PORTAINER_TOKEN` (empty — the Portainer widget has never had a token) |
 
 To change one: Portainer → Stacks → *stack* → Environment variables → Update.
 Do **not** put the value in the compose file.
@@ -321,8 +334,11 @@ boot cannot hang on a passphrase prompt).
 
 **Third-party apt repos are managed by the same script**, as deb822 `.sources`:
 Tailscale (`pkgs.tailscale.com`, suite = release codename), Docker CE
-(`download.docker.com`, suite = release codename) and cloudflared
-(`pkg.cloudflare.com`, suite `any`). All three origins are allowed unattended.
+(`download.docker.com`, suite = release codename), cloudflared
+(`pkg.cloudflare.com`, suite `any`) and HashiCorp (`apt.releases.hashicorp.com`,
+suite = codename; the `vault` CLI the token-sync and Pushover scripts use). All
+four origins are allowed unattended; HashiCorp's is matched on `site=` because
+its Release file only says "Artifactory".
 cloudflared's package doesn't restart its own service, so a `DPkg::Post-Invoke`
 hook (`/usr/local/sbin/homelab-restart-replaced`) restarts `cloudflared.service`
 whenever its running binary has been replaced on disk.
@@ -371,6 +387,8 @@ rollback does not need a re-pull. It never touches volumes —
 
 - **`raspberrypi.local`** — SSH key auth is not working from this machine
   (`Permission denied (publickey,password)`), so nothing was configured there.
+  Its SSH banner (2026-10-28) is `OpenSSH_7.9p1 Raspbian-10+deb10u2`: Raspbian 10
+  *buster*, which has had no security updates since mid-2024. Reflash or retire it.
 - **OKE Kubernetes version and node replacement** — owned by the `homelab-tf`
   ORM stack and deliberately manual. The control plane is pinned at current
   `v1.36.1`; the node-pool definition is pinned to the 2026-07-20 OKE image.

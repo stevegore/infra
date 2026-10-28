@@ -66,6 +66,13 @@
 #     token, came from `cloudflared service install`), so a DPkg::Post-Invoke
 #     hook restarts it whenever its binary has been replaced underneath it.
 #
+#  8. HashiCorp (the `vault` CLI used by vault-token-sync, pushover-notify and
+#     the provisioning scripts): the same release upgrade disabled
+#     hashicorp.list, so the CLI sat on 2.1.0 while the OKE server moved to
+#     2.2.1. Written as a .sources and allowed unattended. Its Release file
+#     says Origin/Label "Artifactory" (generic), so the origin is matched on
+#     site= instead.
+#
 # Everything here is idempotent — safe to re-run.
 
 set -euo pipefail
@@ -115,6 +122,18 @@ Components: main
 Signed-By: /usr/share/keyrings/cloudflare-main.gpg
 EOF
 
+curl -fsSL https://apt.releases.hashicorp.com/gpg | gpg --dearmor --yes \
+    -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
+cat > /etc/apt/sources.list.d/hashicorp.sources <<EOF
+Types: deb
+URIs: https://apt.releases.hashicorp.com
+Suites: $CODENAME
+Components: main
+Architectures: amd64
+Signed-By: /usr/share/keyrings/hashicorp-archive-keyring.gpg
+EOF
+rm -f /etc/apt/sources.list.d/hashicorp.list /etc/apt/sources.list.d/hashicorp.list.disabled
+
 echo "==> installing restart-if-replaced hook"
 cat > /usr/local/sbin/homelab-restart-replaced <<'EOF'
 #!/bin/sh
@@ -163,6 +182,7 @@ Unattended-Upgrade::Origins-Pattern {
     "origin=Tailscale,codename=${distro_codename},label=Tailscale";
     "origin=cloudflared,codename=any,label=cloudflared";
     "origin=Docker,archive=${distro_codename},label=Docker CE";  // no Codename in its Release file
+    "site=apt.releases.hashicorp.com,codename=${distro_codename}";  // Origin is just "Artifactory"
 };
 
 // cloudflared's package does not restart the service; this does, but only
@@ -222,13 +242,14 @@ echo "==> bringing cloudflared, tailscale and docker current now"
 apt-get update -q
 # Post-Invoke restarts cloudflared once its binary is replaced. tailscaled's own
 # postinst restarts it; run this from the LAN (pico.local), not over Tailscale.
-apt-get install -y -q cloudflared tailscale
+apt-get install -y -q cloudflared tailscale vault
 # --only-upgrade: bring the installed Docker CE packages forward without
 # pulling in ones pico never had. This restarts dockerd and every container.
 apt-get install -y -q --only-upgrade docker-ce docker-ce-cli containerd.io \
     docker-buildx-plugin docker-compose-plugin docker-ce-rootless-extras
 cloudflared --version
 tailscale version | head -1
+vault version
 docker version --format 'docker {{.Server.Version}}'
 systemctl is-active cloudflared docker
 
