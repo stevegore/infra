@@ -144,6 +144,22 @@ night with *"This version requires Home Assistant 2026.8.0 or newer"*, and
 that stays `on` for days after 04:00 means its install is failing; read the trace.
 Core went 2026.7.4 → 2026.10.4 on 2026-10-28 and `tuya_local` installed then.
 
+**LIFX after Core 2026.10 (2026-10-28): every bulb went `unavailable`.** The
+integration was rewritten on `lifx-async`, and the new code registers entities
+under a new unique_id format (`d073d558bddb` instead of `d0:73:d5:58:bd:db`)
+without migrating the old ones. It silently created a second set of working
+entities (`light.kitchen_kitchen_1`, `light.primary_bedroom_master_bedroom_1`,
+…) while every automation, light group, wall-switch binding and HomeKit
+accessory still pointed at the old IDs, now orphaned (`restored: true`). Fixed
+by removing each orphan and renaming the new entity to the old entity_id (86
+entities; history is keyed by entity_id so it is continuous). Registry backup
+from before the fix: `~/backups/ha-registry-20261028/` on pico. Bulbs that were
+offline at the time (Master Bedroom Left/Right Side) will hit the same thing
+when they come back: look for a new `light.<area>_<name>` twin.
+
+**Restarting HA:** there is no `hassio_cli` / `ha core restart` since the move
+to Container mode. Use `cd /opt/ha-container && docker compose restart homeassistant`.
+
 ## State storage
 
 HA's authoritative config-entry data lives in `/opt/ha-container/config/.storage/core.config_entries`.
