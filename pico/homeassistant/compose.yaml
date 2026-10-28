@@ -2,15 +2,14 @@ name: homeassistant
 
 services:
   homeassistant-db:
-    # Pinned to the version actually running in /opt/ha-container. Renovate's
-    # 11.8.8 -> 12.3.3 bump (PR #46, labelled database/manual-review) was merged
-    # on 2026-09-05 without the review this repo's own holdback requires, and
-    # reverted the same day. MariaDB majors must be stepped one at a time with
-    # mariadb-upgrade run against a backed-up datadir; 11.8 -> 12.3 skips
-    # several and would have hit a live recorder database on the next deploy.
-    # Take the 11.8.x patch updates (PR #87) instead until a stepwise upgrade
-    # is planned.
-    image: mariadb:11.8.9@sha256:79d59758afc91b89b120b0a8904d637f5a3b3e1c4900f29b740d6d46c72fef68
+    # 13.0.2 since 2026-10-28, reached stepwise 11.8.9 -> 12.3.3 -> 13.0.2 with
+    # HA stopped, a cold datadir archive first
+    # (/media/m2/backups/ha-mariadb-pre-13-20261028/) and CHECK TABLE after.
+    # (A direct 11.8 -> 12.3 bump, PR #46, was merged unreviewed and reverted on
+    # 2026-09-05.) MARIADB_AUTO_UPGRADE below makes the entrypoint run
+    # mariadb-upgrade on a version change; still take majors one at a time and
+    # deploy them by hand from /opt/ha-container after a backup.
+    image: mariadb:13.0.2@sha256:d4fdec0510ad498e4f3127da30a99df3745bd6d5e611ae6ac5f76403d9284a8d
     container_name: homeassistant-db
     restart: unless-stopped
     command: >-
@@ -21,6 +20,7 @@ services:
       MARIADB_DATABASE: homeassistant
       MARIADB_USER: homeassistant
       MARIADB_PASSWORD: ${HA_DB_PASSWORD}
+      MARIADB_AUTO_UPGRADE: "1"
     volumes:
       - /opt/ha-container/dbdata:/var/lib/mysql
     ports:
