@@ -10,7 +10,9 @@
     "Homelab policy: routine updates self-merge after CI. Data stores, Home Assistant runtimes, critical platform majors, and custom-image rebuilds require manual review because rollback is stateful or coordinated.",
     "No managerFilePatterns overrides here on purpose: Renovate MERGES those with its defaults rather than replacing them, so narrowing to apps/ and pico/ would have added nothing while implying a restriction that does not exist. The defaults already cover apps/*/Chart.yaml, apps/*/values.yaml, pico/*/compose.yaml, cilium/Chart.yaml, terraform/*.tf and .github/workflows/*.",
     "Renovate branches are validated by the infrastructure CI workflow before automerge. Helm archives are never committed: CI and ArgoCD rebuild the exact dependencies in Chart.lock, preventing a stale charts/*.tgz from shadowing a version bump.",
-    "rebaseWhen is 'conflicted', not 'behind-base-branch'. With behind-base-branch, every merge left the remaining branches behind main, so Renovate had to rebase them and could only merge them on a LATER run — the queue drained about 2 PRs per run instead of all at once. These PRs touch disjoint files (one values.yaml or compose.yaml each), so they do not actually conflict, and main has no branch protection requiring an up-to-date branch. 'conflicted' rebases only on a real conflict and lets the rest merge immediately."
+    "rebaseWhen is 'conflicted', not 'behind-base-branch'. With behind-base-branch, every merge left the remaining branches behind main, so Renovate had to rebase them before merging. These PRs touch disjoint files (one values.yaml or compose.yaml each), so they do not actually conflict, and the main ruleset does not require an up-to-date branch. 'conflicted' rebases only on a real conflict.",
+    "Merging is done by GitHub, not by Renovate's run. Renovate's own in-run automerge stops after about 2 merges per run (it restarts once after a merge, then ends), so a burst of PRs queued for days: Vault 2.2.1 (#173/#174) sat green from 2026-10-22 behind daily digest PRs. platformAutomerge hands each PR to GitHub auto-merge, which merges the moment CI passes. GitHub only accepts that when a required check is pending, which is what the 'main: require CI' ruleset (Helm and Compose + Terraform; admins bypass for direct pushes) provides — without it every enable request was refused and the PRs showed no auto-merge at all.",
+    "No automergeSchedule. GitHub's scheduled workflows start hours late (02:00 cron observed at 04:30-09:16), so a 1-6am automerge window made late runs update branches but never merge. The branch-creation schedule below still keeps new work overnight."
   ],
   "schedule": [
     "after 1am and before 6am"
@@ -23,9 +25,6 @@
   "platformAutomerge": true,
   "ignoreTests": false,
   "pinDigests": true,
-  "automergeSchedule": [
-    "after 1am and before 6am"
-  ],
   "major": {
     "automerge": true
   },

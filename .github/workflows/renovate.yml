@@ -26,8 +26,16 @@ name: Renovate
 # renovate.json is read identically either way.
 
 on:
+  # Several runs, off the hour. GitHub starts scheduled runs hours late (the
+  # single 15:00 cron began anywhere from 04:30 to 09:16 Sydney), so one run
+  # often missed the 1-6am window in renovate.json entirely. Extra runs also
+  # pick up branches whose CI finished after the previous one. UTC times:
+  # 01:17-04:17 AEDT, 00:17-03:17 AEST.
   schedule:
-    - cron: '0 15 * * *' # 01:00 Australia/Sydney (AEDT) — renovate.json narrows further
+    - cron: '17 14 * * *'
+    - cron: '17 15 * * *'
+    - cron: '17 16 * * *'
+    - cron: '17 17 * * *'
   push:
     branches: [main]
     paths:

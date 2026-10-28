@@ -83,13 +83,23 @@ vault kv get -field=token kv/homelab/renovate | gh secret set RENOVATE_TOKEN --r
 
 `platformAutomerge` also needs **Allow auto-merge** on the repo, which is now
 enabled (along with delete-branch-on-merge, since Renovate creates a lot of
-branches).
+branches). It *also* needs a required status check on `main`: GitHub refuses to
+enable auto-merge on a PR with nothing pending. The **`main: require CI`**
+ruleset (2026-10-28) requires `Helm and Compose` and `Terraform`; the admin role
+bypasses it, so direct pushes to `main` still work. Before it existed, every
+auto-merge request was refused silently and only Renovate's in-run merge worked,
+which stops after about 2 merges per run. Vault 2.2.1 sat green for a week
+because of that.
+
+Renovate is scheduled four times a night (`renovate.yml`) because GitHub starts
+scheduled runs hours late. There is no `automergeSchedule`: a PR created
+overnight merges whenever its CI passes.
 
 Alternatively install the [Mend Renovate app](https://github.com/apps/renovate)
 and delete the workflow; `renovate.json` is read identically either way.
 
-`rebaseWhen: conflicted` lets independent PRs drain in the same run instead of
-rebasing the whole queue after every merge. Real conflicts still rebase.
+`rebaseWhen: conflicted` stops Renovate rebasing the whole queue after every
+merge. Real conflicts still rebase.
 
 ### Watching it
 
