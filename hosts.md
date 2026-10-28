@@ -6,7 +6,7 @@
 | ---------------------- | -------------------- |
 | pico                    | Mac SSH alias → Tailscale `100.98.212.71` |
 | pico.local             | Pico (192.168.4.120) |
-| `pi@raspberrypi.local` | Raspberry Pi (192.168.4.61) |
+| `raspberrypi` / `pi@raspberrypi.local` | Raspberry Pi 3B+ (192.168.4.61), key auth via `~/.ssh/raspberrypi_ed25519` — see details below |
 
 ## Cloud / Remote Servers
 
@@ -156,6 +156,38 @@ release upgrade; see [`pico/UPGRADE-26.04.md`](pico/UPGRADE-26.04.md):
 See `scripts/STATS_SERVER.md` for detailed setup and troubleshooting.
 
 ---
+
+---
+
+### raspberrypi (192.168.4.61, IPv6 2403:5812:e2fc:0:67ac:d956:9edf:396a)
+
+**Hardware:** Raspberry Pi 3 Model B Plus Rev 1.3 (armv7l, 32-bit), 1 GB RAM
+**OS:** Raspbian GNU/Linux 10 (buster), kernel 5.10.60-v7+. Debian 10 is end-of-life and no longer gets security updates; treat this host as legacy and don't expose it to the internet.
+**Storage:** `/` — 117 GB SD card, ~4% used (4.0 GB)
+**Uptime at last check:** 232 days (2026-10-28)
+**Wi-Fi:** blocked by rfkill; `raspi-config` country not set. Wired LAN is the working connection.
+
+**Access:**
+- SSH alias: `ssh raspberrypi` (or `ssh pi@raspberrypi.local`), from `~/.ssh/config`
+- Auth: ed25519 key `~/.ssh/raspberrypi_ed25519` (no passphrase), `IdentitiesOnly yes`
+- The login password lives in `pi.creds` at the infra repo root. That file is gitignored, but it's plaintext; don't commit it or paste it anywhere. The key has replaced it for day-to-day use.
+- Password SSH login is still enabled on the server (`sshd` accepts it). Disabling it is a separate, not-yet-done step.
+- `pi` has passwordless `sudo`.
+- Only `~/.ssh/authorized_keys` on the Pi holds one key, the Mac key above.
+
+**Services (active, checked 2026-10-28):**
+- **Pi-hole** — `pihole-FTL` (DNS on `:53`) and `lighttpd` admin UI on `:80`. Local config is at `/etc/pihole`. Confirm which clients use it before changing or retiring it.
+- **deCONZ** — Zigbee gateway (Phoscon/REST) on `:8080` and `:443`
+- **dnsmasq** — DNS on `:53` (alongside Pi-hole)
+- **VNC** — `vncserver-x11-serviced` on `:5900`
+
+Listening ports are open on all interfaces (`0.0.0.0`), so they are reachable from the whole LAN.
+
+**Updates:** `unattended-upgrades` is **not installed**. The stock `apt-daily-upgrade.timer` is enabled, but it only downloads and installs nothing automatically. Patches are manual.
+
+**Known gaps (for later):**
+- Raspbian 10 is EOL: no security updates since mid-2024. Reinstall or upgrade (for example, to Raspberry Pi OS Bookworm), or retire the box.
+- Port 80 (Pi-hole) and 5900 (VNC) are reachable from the whole LAN. Check whether VNC requires a password before relying on it.
 
 ---
 

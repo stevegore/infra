@@ -385,10 +385,11 @@ rollback does not need a re-pull. It never touches volumes —
 
 ## Not covered
 
-- **`raspberrypi.local`** — SSH key auth is not working from this machine
-  (`Permission denied (publickey,password)`), so nothing was configured there.
-  Its SSH banner (2026-10-28) is `OpenSSH_7.9p1 Raspbian-10+deb10u2`: Raspbian 10
-  *buster*, which has had no security updates since mid-2024. Reflash or retire it.
+- **`raspberrypi.local`** — SSH key auth now works from the Mac (`ssh raspberrypi`,
+  key `~/.ssh/raspberrypi_ed25519`), but nothing was configured there for updates.
+  `unattended-upgrades` is not installed. Its SSH banner (2026-10-28) is
+  `OpenSSH_7.9p1 Raspbian-10+deb10u2`: Raspbian 10 *buster*, which has had no security
+  updates since mid-2024. Reflash or retire it. Details in [`hosts.md`](hosts.md).
 - **OKE Kubernetes version and node replacement** — owned by the `homelab-tf`
   ORM stack and deliberately manual. The control plane is pinned at current
   `v1.36.1`; the node-pool definition is pinned to the 2026-07-20 OKE image.

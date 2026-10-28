@@ -32,3 +32,6 @@ cilium/charts/
 # Private host inventory captured before pico release upgrades. The public
 # runbook and capture script are tracked; raw package/network/account state is not.
 pico/upgrade-26.04-state/
+
+# Raspberry Pi login credentials (plaintext password). Never commit.
+pi.creds
