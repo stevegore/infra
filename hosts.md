@@ -175,15 +175,22 @@ See `scripts/STATS_SERVER.md` for detailed setup and troubleshooting.
 - `pi` has passwordless `sudo`.
 - Only `~/.ssh/authorized_keys` on the Pi holds one key, the Mac key above.
 
-**Services (active, checked 2026-10-28):**
-- **Pi-hole** — `pihole-FTL` (DNS on `:53`) and `lighttpd` admin UI on `:80`. Local config is at `/etc/pihole`. Confirm which clients use it before changing or retiring it.
-- **deCONZ** — Zigbee gateway (Phoscon/REST) on `:8080` and `:443`
-- **dnsmasq** — DNS on `:53` (alongside Pi-hole)
-- **VNC** — `vncserver-x11-serviced` on `:5900`
+**Running services (checked 2026-10-28):**
 
-Listening ports are open on all interfaces (`0.0.0.0`), so they are reachable from the whole LAN.
+| Service | Version | Port(s) | Notes |
+| --- | --- | --- | --- |
+| Pi-hole (`pihole-FTL`) | Pi-hole v5.5, AdminLTE v5.7, FTL v5.10.2 | DNS `:53` | Upstream DNS: Quad9 (`9.9.9.9`, `149.112.112.112`). Config: `/etc/pihole/setupVars.conf` |
+| `lighttpd` | — | HTTP `:80` | Pi-hole admin UI |
+| `dnsmasq` | — | DNS `:53` | Runs alongside Pi-hole |
+| deCONZ (`deconz.service`) | 2.12.06 (raspbian-buster stable) | `:8080`, `:443` | Zigbee gateway (Phoscon/REST API) on the onboard Bluetooth UART (`hciuart`) |
+| RealVNC (`vncserver-x11-serviced`) | 6.7.2 | `:5900` | Remote desktop |
+| `sshd` | OpenSSH 7.9p1 | `:22` | Key and password auth |
 
-**Updates:** `unattended-upgrades` is **not installed**. The stock `apt-daily-upgrade.timer` is enabled, but it only downloads and installs nothing automatically. Patches are manual.
+Also running: `lightdm` (desktop session), `bluealsa`, `alsa-state`, `rng-tools`, `udisks2`, and `deconz-update.service`.
+
+**Port exposure:** the listeners bind `0.0.0.0` / `[::]`, so every service is reachable from the whole LAN. Pi-hole's config says `DNSMASQ_LISTENING=local`, but `dnsmasq` is listening on all interfaces. Reconcile these before relying on either.
+
+**Updates:** `unattended-upgrades` is **not installed**. The stock `apt-daily-upgrade.timer` is enabled, but it only downloads and installs nothing automatically. At check time, **36 packages** were upgradable.
 
 **Known gaps (for later):**
 - Raspbian 10 is EOL: no security updates since mid-2024. Reinstall or upgrade (for example, to Raspberry Pi OS Bookworm), or retire the box.
