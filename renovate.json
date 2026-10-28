@@ -32,6 +32,18 @@
   "commitMessagePrefix": "chore(deps):",
   "customManagers": [
     {
+      "description": "CloudNativePG `imageName: repo:tag` in apps/*/values.yaml. helm-values only understands repository/tag pairs and `image:` keys, so the pg-shared Postgres image was never tracked and drifted behind on a floating tag. Matches the database rule below, so it opens a manual-review PR.",
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/^apps/[^/]+/values\\.yaml$/"
+      ],
+      "matchStrings": [
+        "imageName:\\s+(?<depName>[^:\\s]+):(?<currentValue>[\\w][\\w.\\-]*)\\s"
+      ],
+      "datasourceTemplate": "docker",
+      "versioningTemplate": "docker"
+    },
+    {
       "description": [
         "Bare `image: repo:tag` lines inside chart TEMPLATES, which no built-in manager reads — currently busybox in apps/gym-booker/templates/deployment.yaml.",
         "Scoped to templates/ only, deliberately. It used to cover apps/*/values.yaml too, but helm-values already models those (kubectl and distroless-iptables in apps/ttyd/values.yaml), so both managers found the same dep and Renovate opened two PRs for it — #23 renovate/apps-ttyd and #24 renovate/kubernetes-images."

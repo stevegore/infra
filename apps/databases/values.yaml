@@ -17,7 +17,14 @@
 postgres:
   instances: 1
   # Pin PG 16 — matches the version Authentik ships/tests against.
-  imageName: ghcr.io/cloudnative-pg/postgresql:16
+  # Exact minor, not the floating `16` tag: CNPG's `imageName` is invisible to
+  # Renovate's helm-values manager, and the node's cached `16` kept the cluster
+  # on 16.14 while upstream moved on. The custom regex manager in renovate.json
+  # now tracks this line (database rule → manual review).
+  # Plain `16.x` tags are the legacy *bullseye* "system" images — the same glibc
+  # the data directory was initialised with. Moving to a `-standard-bookworm`/
+  # `-trixie` tag changes glibc collations and needs a REINDEX of text indexes.
+  imageName: ghcr.io/cloudnative-pg/postgresql:16.15
   storageClass: oci-bv
   # OCI block volume floor is 50 GB; request it honestly rather than a smaller
   # size that still provisions 50 GB.
@@ -25,9 +32,11 @@ postgres:
   resources:
     requests:
       cpu: 100m
-      memory: 256Mi
-    limits:
       memory: 512Mi
+    limits:
+      # Was 512Mi: OOMKilled 17 times between 2026-08-01 and 2026-10-24 while
+      # steady-state usage sat at ~390Mi. Each kill drops Authentik's DB.
+      memory: 1Gi
 
 # Continuous WAL archiving + scheduled base backups to OCI Object Storage via
 # its S3-compatible API.
