@@ -34,7 +34,7 @@ skip() { printf '    \033[2m· %s\033[0m\n' "$*"; }
 
 export KUBECONFIG="$KUBECONFIG_PATH"
 
-for bin in oci kubectl; do
+for bin in oci kubectl yq curl; do
   command -v "$bin" >/dev/null || { echo "missing required tool: $bin"; exit 1; }
 done
 
@@ -49,79 +49,47 @@ oci ce cluster create-kubeconfig \
 echo "✓ kubeconfig written"
 
 # ---------- 2. ArgoCD ----------
-log "ArgoCD"
-kubectl create namespace argocd --dry-run=client -o yaml | kubectl apply -f -
-CURRENT_ARGOCD_VERSION=$(
-  kubectl get deploy -n argocd argocd-server \
-    -o jsonpath='{.spec.template.spec.containers[0].image}' 2>/dev/null \
-    | sed 's/.*://' || true
-)
-if [[ "$CURRENT_ARGOCD_VERSION" != "$ARGOCD_VERSION" ]]; then
-  echo "    reconciling ArgoCD ${CURRENT_ARGOCD_VERSION:-not-installed} -> ${ARGOCD_VERSION}"
-  kubectl apply -n argocd \
-    -f "https://raw.githubusercontent.com/argoproj/argo-cd/${ARGOCD_VERSION}/manifests/install.yaml"
-  echo "    waiting for argocd-server..."
-  kubectl rollout status -n argocd deploy/argocd-server --timeout=5m
-else
-  skip "argocd-server already at ${ARGOCD_VERSION}"
-fi
-
 # Cilium generic-veth sees OKE/Flannel kubelet probes as traffic from cni0's
 # 10.244.x bridge gateway, not as the host. The upstream policies correctly
 # reject that source on restricted health ports. Keep the policies and move the
 # affected probes to the same localhost endpoints from inside each container.
-kubectl patch deployment argocd-repo-server -n argocd --type=strategic --patch '
-spec:
-  template:
-    spec:
-      containers:
-        - name: argocd-repo-server
-          readinessProbe:
-            httpGet: null
-            exec:
-              command:
-                - /usr/bin/bash
-                - -ec
-                - exec 3<>/dev/tcp/127.0.0.1/8084; printf "GET /healthz HTTP/1.0\r\n\r\n" >&3; read -r status <&3; [[ "$status" == *" 200 "* ]]
-          livenessProbe:
-            httpGet: null
-            exec:
-              command:
-                - /usr/bin/bash
-                - -ec
-                - exec 3<>/dev/tcp/127.0.0.1/8084; printf "GET /healthz?full=true HTTP/1.0\r\n\r\n" >&3; read -r status <&3; [[ "$status" == *" 200 "* ]]
-' >/dev/null
-
-kubectl patch statefulset argocd-application-controller -n argocd --type=strategic --patch '
-spec:
-  template:
-    spec:
-      containers:
-        - name: argocd-application-controller
-          readinessProbe:
-            httpGet: null
-            exec:
-              command:
-                - /usr/bin/bash
-                - -ec
-                - exec 3<>/dev/tcp/127.0.0.1/8082; printf "GET /healthz HTTP/1.0\r\n\r\n" >&3; read -r status <&3; [[ "$status" == *" 200 "* ]]
-' >/dev/null
-
-kubectl patch deployment argocd-notifications-controller -n argocd --type=strategic --patch '
-spec:
-  template:
-    spec:
-      containers:
-        - name: argocd-notifications-controller
-          livenessProbe:
-            tcpSocket: null
-            exec:
-              command:
-                - /usr/bin/bash
-                - -ec
-                - exec 3<>/dev/tcp/127.0.0.1/9001
-' >/dev/null
-echo "✓ ArgoCD probes made Flannel/Cilium chaining-safe"
+#
+# The probes are rewritten in the upstream manifest BEFORE it is applied, not
+# patched afterwards. Patching afterwards broke every upgrade (found on
+# v3.4.3 -> v3.5.6, 2026-10-28): the next apply re-added the upstream
+# httpGet/tcpSocket handler next to the patched-in exec and the API server
+# rejected the three workloads ("may not specify more than 1 handler type"),
+# leaving ArgoCD half-upgraded. Server-side apply because applicationsets CRD
+# no longer fits in client-side apply's last-applied annotation (>256 KiB).
+# Always applied: SSA is idempotent, and gating on argocd-server's tag skipped
+# the repair of a half-finished upgrade.
+log "ArgoCD ${ARGOCD_VERSION}"
+kubectl create namespace argocd --dry-run=client -o yaml | kubectl apply -f -
+RS_READY='exec 3<>/dev/tcp/127.0.0.1/8084; printf "GET /healthz HTTP/1.0\r\n\r\n" >&3; read -r status <&3; [[ "$status" == *" 200 "* ]]' \
+RS_LIVE='exec 3<>/dev/tcp/127.0.0.1/8084; printf "GET /healthz?full=true HTTP/1.0\r\n\r\n" >&3; read -r status <&3; [[ "$status" == *" 200 "* ]]' \
+AC_READY='exec 3<>/dev/tcp/127.0.0.1/8082; printf "GET /healthz HTTP/1.0\r\n\r\n" >&3; read -r status <&3; [[ "$status" == *" 200 "* ]]' \
+NC_LIVE='exec 3<>/dev/tcp/127.0.0.1/9001' \
+  yq eval '
+    (select(.kind == "Deployment" and .metadata.name == "argocd-repo-server")
+      | .spec.template.spec.containers[] | select(.name == "argocd-repo-server") | .readinessProbe)
+      |= (del(.httpGet) | .exec.command = ["/usr/bin/bash", "-ec", strenv(RS_READY)]) |
+    (select(.kind == "Deployment" and .metadata.name == "argocd-repo-server")
+      | .spec.template.spec.containers[] | select(.name == "argocd-repo-server") | .livenessProbe)
+      |= (del(.httpGet) | .exec.command = ["/usr/bin/bash", "-ec", strenv(RS_LIVE)]) |
+    (select(.kind == "StatefulSet" and .metadata.name == "argocd-application-controller")
+      | .spec.template.spec.containers[] | select(.name == "argocd-application-controller") | .readinessProbe)
+      |= (del(.httpGet) | .exec.command = ["/usr/bin/bash", "-ec", strenv(AC_READY)]) |
+    (select(.kind == "Deployment" and .metadata.name == "argocd-notifications-controller")
+      | .spec.template.spec.containers[] | select(.name == "argocd-notifications-controller") | .livenessProbe)
+      |= (del(.tcpSocket) | .exec.command = ["/usr/bin/bash", "-ec", strenv(NC_LIVE)])
+  ' <(curl -fsSL "https://raw.githubusercontent.com/argoproj/argo-cd/${ARGOCD_VERSION}/manifests/install.yaml") \
+  | kubectl apply -n argocd --server-side --force-conflicts -f -
+for w in deploy/argocd-server deploy/argocd-repo-server deploy/argocd-notifications-controller \
+    deploy/argocd-applicationset-controller deploy/argocd-dex-server deploy/argocd-redis \
+    statefulset/argocd-application-controller; do
+  kubectl rollout status -n argocd "$w" --timeout=5m
+done
+echo "✓ ArgoCD ${ARGOCD_VERSION} applied with Flannel/Cilium chaining-safe probes"
 
 # ---------- 3. ApplicationSet ----------
 log "ApplicationSet"
