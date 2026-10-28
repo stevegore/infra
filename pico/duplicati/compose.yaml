@@ -1,0 +1,21 @@
+# Duplicati → Backblaze B2 (Docker Volumes, Home Assistant, Bitwarden, Photos jobs).
+# Until 2026-10-28 this was a hand-made `docker run` container on :latest that was
+# never re-pulled (stuck on 2.3.0.1). Now a git-backed stack so Renovate bumps it.
+# Job definitions and the local job databases live in /usr/share/duplicati.
+services:
+  duplicati:
+    image: duplicati/duplicati:2.4.0.1@sha256:e32e280cc30e98ac5cea8d2b339cd19810b1b39e638fb9d39253786630104de0
+    container_name: duplicati
+    restart: always
+    ports:
+      - "8200:8200"
+    environment:
+      DUPLICATI__DISABLE_DB_ENCRYPTION: "true"
+      DUPLICATI__WEBSERVICE_PASSWORD: ${DUPLICATI__WEBSERVICE_PASSWORD}
+    volumes:
+      - /usr/share/duplicati:/data
+      - /var/lib/docker/volumes:/docker_vols:ro
+      - /media:/media
+      - /usr/share:/usr_share:ro
+    logging:
+      driver: journald

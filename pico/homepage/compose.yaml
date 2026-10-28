@@ -1,0 +1,23 @@
+# pico-local Homepage on :8080 (LAN / Uptime Kuma `pico:8080`). The public
+# dashboard is the OKE app (apps/homepage, homepage.stevegore.au).
+# Until 2026-10-28 this was a hand-made `docker run` container on :latest, stuck
+# on v1.13.1. Now a git-backed stack so Renovate bumps it with the OKE copy.
+services:
+  homepage:
+    image: ghcr.io/gethomepage/homepage:v2.7.0@sha256:19c5c09184458a41b7b5915e71463a39f36cd33540f41bdbed008791b8182d5f
+    container_name: homepage
+    restart: unless-stopped
+    user: root
+    ports:
+      - "8080:3000"
+    environment:
+      HOMEPAGE_ALLOWED_HOSTS: "*"
+      HOMEPAGE_VAR_PORTAINER_TOKEN: ${HOMEPAGE_VAR_PORTAINER_TOKEN}
+    extra_hosts:
+      - "pico.local:192.168.4.120"
+    volumes:
+      - /home/steve/dashboards/homepage/config:/app/config
+      - /media/m2:/media/m2:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    logging:
+      driver: journald

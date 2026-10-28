@@ -1,0 +1,21 @@
+# Vaultwarden warm standby (bw2.stevegore.au, via Cloudflare Tunnel → :8081).
+# The primary runs on OKE (apps/vaultwarden). This instance is sqlite-mode and is
+# refreshed hourly from the primary's MySQL by vw-mysql-to-sqlite.timer, which
+# stops and starts the container by name — keep container_name: bitwarden.
+#
+# Until 2026-10-28 this was a hand-made `docker run` container outside git, so
+# Renovate never saw it and it sat on 1.36.0 while the primary was on 1.37.4.
+# Keep the tag in step with apps/vaultwarden/values.yaml: the sqlite schema is
+# converted from the primary's database.
+services:
+  vaultwarden:
+    image: vaultwarden/server:1.37.4-alpine@sha256:19ea2b669945d842dadc3d500f2d6a795866a003330f59a47b9634658bae98bb
+    container_name: bitwarden
+    restart: always
+    ports:
+      - "8081:80"
+      - "3012:3012"
+    volumes:
+      - /usr/share/bitwarden:/data
+    logging:
+      driver: journald
