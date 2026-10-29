@@ -175,6 +175,13 @@ data:
       import defaults
     }
 
+    markets.stevegore.au {
+      reverse_proxy /outpost.goauthentik.io/* authentik-server.authentik.svc.cluster.local:80
+      import authentik
+      reverse_proxy markets-primer.markets-primer.svc.cluster.local:8080
+      import defaults
+    }
+
     plex.stevegore.au {
       reverse_proxy pico:32400
       import defaults

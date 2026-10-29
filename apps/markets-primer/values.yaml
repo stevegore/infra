@@ -1,0 +1,27 @@
+replicaCount: 1
+
+image:
+  repository: syd.ocir.io/sdajdczqv0qo/markets-primer
+  tag: "625f9f66ccaf056dfaae4ff12a4a81561d9ce606"
+  pullPolicy: IfNotPresent
+
+# OCIR pull secret — manual bootstrap once after the namespace first syncs
+# (same pattern as gym-booker / garmin-mcp):
+#   kubectl -n markets-primer create secret docker-registry ocir-creds \
+#     --docker-server=syd.ocir.io \
+#     --docker-username="$(vault kv get -field=username kv/oci/ocir)" \
+#     --docker-password="$(vault kv get -field=auth_token kv/oci/ocir)"
+imagePullSecrets:
+  - name: ocir-creds
+
+resources:
+  requests:
+    memory: 16Mi
+    cpu: 5m
+  limits:
+    memory: 64Mi
+    cpu: 100m
+
+service:
+  type: ClusterIP
+  port: 8080

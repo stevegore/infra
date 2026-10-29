@@ -1,0 +1,6 @@
+apiVersion: v2
+name: markets-primer
+description: Financial Markets fluency primer — static page (github.com/stevegore/markets-primer)
+type: application
+version: 0.1.0
+appVersion: "latest"

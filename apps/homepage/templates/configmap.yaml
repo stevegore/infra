@@ -169,6 +169,10 @@ data:
             href: https://gym.stevegore.au
             description: Elixr Gym Reservations
             icon: mdi-dumbbell
+        - Markets Primer:
+            href: https://markets.stevegore.au
+            description: Financial Markets fluency study guide
+            icon: mdi-chart-line
         - Send:
             href: https://send.stevegore.au/admin
             description: File sharing — expiring links

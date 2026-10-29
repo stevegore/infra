@@ -108,6 +108,7 @@ monitors = [
     {"name": "Adminer",                    "type": "http", "kwargs": {"url": "https://adminer.stevegore.au/",                  "maxredirects": 0,  "accepted_statuscodes_json": ACCEPT_302},      "tags": ["public", "infra"],  "aliases": ["adminer.stevegore.au"]},
     {"name": "Desk Service",               "type": "http", "kwargs": {"url": "https://desk.stevegore.au/",                    "maxredirects": 0,  "accepted_statuscodes_json": ACCEPT_302},      "tags": ["public"],           "aliases": ["desk.stevegore.au"]},
     {"name": "Gym Bookings",               "type": "http", "kwargs": {"url": "https://gym.stevegore.au/",                     "maxredirects": 0,  "accepted_statuscodes_json": ACCEPT_302},      "tags": ["public"],           "aliases": ["gym.stevegore.au"]},
+    {"name": "Markets Primer",             "type": "http", "kwargs": {"url": "https://markets.stevegore.au/",                 "maxredirects": 0,  "accepted_statuscodes_json": ACCEPT_302},      "tags": ["public"],           "aliases": ["markets.stevegore.au"]},
     # /index, not /: Caddy redirects the bare root to /admin without consulting
     # the backend, so a 302 there would stay green with Gokapi completely down.
     # /index is served by Gokapi itself and returns 200.
@@ -123,6 +124,7 @@ monitors = [
     # while "Adminer" stayed green. Keyword monitors also catch a 200 error page.
     {"name": "Adminer (in-cluster)",    "type": "keyword", "kwargs": {"url": "http://adminer.adminer.svc.cluster.local/",          "keyword": "Select a database"},                                                "tags": ["internal", "infra"]},
     {"name": "Gym Bookings (in-cluster)","type": "http",   "kwargs": {"url": "http://gym-booker.gym-booker.svc.cluster.local:5000/"},                                                                                  "tags": ["internal"]},
+    {"name": "Markets Primer (in-cluster)","type": "keyword","kwargs": {"url": "http://markets-primer.markets-primer.svc.cluster.local:8080/", "keyword": "Markets Fluency Primer"},                                       "tags": ["internal"]},
     # Homepage rejects requests whose Host is not in HOMEPAGE_ALLOWED_HOSTS.
     {"name": "Homepage (in-cluster)",   "type": "http",    "kwargs": {"url": "http://homepage.homepage.svc.cluster.local:3000/",    "headers": '{"Host": "homepage.stevegore.au"}'},                               "tags": ["internal"]},
     {"name": "Hubble UI (in-cluster)",  "type": "http",    "kwargs": {"url": "http://hubble-ui.kube-system.svc.cluster.local/"},                                                                                       "tags": ["internal", "infra"]},
