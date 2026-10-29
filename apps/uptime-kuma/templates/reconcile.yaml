@@ -146,6 +146,12 @@ spec:
                 secretKeyRef:
                   name: uptime-kuma-pushover
                   key: user_key
+            # Push token for the raspberrypi deCONZ heartbeat monitor.
+            - name: DECONZ_PUSH_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: uptime-kuma-db
+                  key: push_token_deconz
           resources:
             requests:
               cpu: 25m

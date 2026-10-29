@@ -1,0 +1,11 @@
+[Unit]
+Description=Sync deCONZ compose stack from stevegore/infra
+Wants=network-online.target
+After=network-online.target docker.service
+Requires=docker.service
+OnFailure=deconz-alert@%n.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/infra/raspberrypi/deconz-gitops.sh
+TimeoutStartSec=15min

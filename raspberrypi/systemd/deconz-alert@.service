@@ -1,0 +1,10 @@
+[Unit]
+# OnFailure= target: marks the Kuma push monitor down so the failure reaches
+# Pushover. The next heartbeat flips it back up, so this is one alert per
+# failure, not a stuck-red monitor. Used by deconz-gitops.service and
+# apt-daily-upgrade.service (drop-in written by bootstrap.sh).
+Description=Report failed unit %i to Uptime Kuma
+
+[Service]
+Type=oneshot
+ExecStart=/opt/infra/raspberrypi/deconz-heartbeat.sh --down "raspberrypi: %i failed"
