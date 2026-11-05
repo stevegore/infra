@@ -390,6 +390,11 @@ rollback does not need a re-pull. It never touches volumes —
   `unattended-upgrades` is not installed. Its SSH banner (2026-10-28) is
   `OpenSSH_7.9p1 Raspbian-10+deb10u2`: Raspbian 10 *buster*, which has had no security
   updates since mid-2024. Reflash or retire it. Details in [`hosts.md`](hosts.md).
+  **Rebuild prepared, not yet done:** [`raspberrypi/README.md`](raspberrypi/README.md)
+  moves it to Raspberry Pi OS Lite 64-bit with unattended-upgrades, and runs deCONZ as a
+  digest-pinned container (`raspberrypi/deconz/compose.yaml`) that Renovate bumps after a
+  7-day soak and `deconz-gitops.timer` on the Pi applies. Move this entry up out of
+  "Not covered" once the cutover is done.
 - **OKE Kubernetes version and node replacement** — owned by the `homelab-tf`
   ORM stack and deliberately manual. The control plane is pinned at
   `v1.36.4` (2026-10-28); the node-pool definition is pinned to the 2026-09-18

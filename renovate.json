@@ -157,6 +157,17 @@
       "prPriority": 20
     },
     {
+      "description": "deCONZ runs the Zigbee network every light switch depends on, on a Pi with no second gateway to fall back to. Automerge, but only after a 7-day soak so a broken release is usually pulled or patched first. deconz-gitops.timer on the Pi applies the merge within 5 minutes.",
+      "matchPackageNames": [
+        "deconzcommunity/deconz"
+      ],
+      "minimumReleaseAge": "7 days",
+      "addLabels": [
+        "critical"
+      ],
+      "prPriority": 20
+    },
+    {
       "description": "Portainer majors change the API and the stack model; keep them manual.",
       "matchPackageNames": [
         "/(^|\\/)portainer\\/portainer-ee$/"

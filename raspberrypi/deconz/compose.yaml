@@ -1,0 +1,39 @@
+name: deconz
+
+# Zigbee gateway for Home Assistant's deCONZ integration (light switches).
+# Runs on raspberrypi, not pico: the Pi sits where the Zigbee mesh reaches
+# every device, and pico does not. See raspberrypi/README.md.
+#
+# Deployed by deconz-gitops.timer on the Pi (pulls this repo every 5 minutes
+# and runs `docker compose up -d`), not by Portainer. Renovate bumps the tag
+# and digest like any pico stack.
+
+services:
+  deconz:
+    image: deconzcommunity/deconz:2.33.2@sha256:3defae1287ecc1a73b68279e12579a5a5e997a83f4ff785fe4bc30f21faf8015
+    container_name: deconz
+    restart: unless-stopped
+    # Host networking keeps the REST API on 192.168.4.61:8080, which is what
+    # the Home Assistant config entry points at, and lets Phoscon discovery work.
+    network_mode: host
+    devices:
+      # by-id, not ttyACM0: the stable name survives re-enumeration.
+      - /dev/serial/by-id/usb-dresden_elektronik_ingenieurtechnik_GmbH_ConBee_II_DE2131647-if00:/dev/ttyACM0
+    environment:
+      TZ: Australia/Sydney
+      DECONZ_DEVICE: /dev/ttyACM0
+      # Same ports as the old Buster package install, so nothing that talks
+      # to the gateway has to change.
+      DECONZ_WEB_PORT: "8080"
+      DECONZ_WS_PORT: "443"
+      DECONZ_WEBS_PORT: "0"
+      DECONZ_VNC_MODE: "0"
+      DECONZ_NOVNC_PORT: "0"
+      DECONZ_UPNP: "0"
+      DECONZ_UID: "1000"
+      DECONZ_GID: "1000"
+    volumes:
+      # zll.db (devices, groups, API keys incl. Home Assistant's), session and
+      # config.ini, copied from ~pi/.local/share/dresden-elektronik/deCONZ on
+      # the Buster install.
+      - /opt/deconz/data:/opt/deCONZ

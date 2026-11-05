@@ -74,6 +74,6 @@ export MATTER_STORAGE_KEY="validation-only"
 while IFS= read -r compose_file; do
   echo "  $compose_file"
   docker compose -f "$compose_file" config --quiet
-done < <(find pico -name compose.yaml -type f | sort)
+done < <(find pico raspberrypi -name compose.yaml -type f | sort)
 
 echo "Version-upgrade validation passed"

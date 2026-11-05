@@ -14,6 +14,8 @@ Credentials are read from environment variables:
     UPTIME_KUMA_DB_PASSWORD  required (or pass --password)
     PUSHOVER_APP_TOKEN       required unless --no-notifications
     PUSHOVER_USER_KEY        required unless --no-notifications
+    DECONZ_PUSH_TOKEN        required: push token for "deCONZ (raspberrypi)",
+                             kv/uptime-kuma/config push_token_deconz
 
 The Pushover pair is kv/homelab/pushover. Monitors inserted here get no
 notification links from Kuma itself (its "default enabled" flag is applied by
@@ -74,6 +76,10 @@ ACCEPT_VAULT     = '["200-299"]'
 
 NOTIFICATION_NAME = "Pushover"
 
+# Push token for the raspberrypi heartbeat. Kept out of this public repo: anyone
+# holding it can mark the monitor up and hide a real outage.
+DECONZ_PUSH_TOKEN = os.environ.get("DECONZ_PUSH_TOKEN")
+
 retired_monitor_names = {
     "Gym Bookings (direct)",
     "Ping ampere-ubuntu (WG)",
@@ -86,6 +92,11 @@ monitors = [
     # hosts
     {"name": "Ping pico",    "type": "ping", "kwargs": {"hostname": "pico"},           "tags": ["infra"], "aliases": ["Ping pico"]},
     {"name": "TCP pico SSH", "type": "port", "kwargs": {"hostname": "pico", "port": 22}, "tags": ["infra"]},
+    # Push, not poll: the Pi is LAN-only and Kuma runs on OKE. The Pi's
+    # deconz-heartbeat.timer pushes every minute (down if the ConBee II is
+    # disconnected). maxretries 0 so an explicit down push alerts at once;
+    # the 300 s window rides out an unattended-upgrades reboot.
+    {"name": "deCONZ (raspberrypi)", "type": "push", "kwargs": {"push_token": DECONZ_PUSH_TOKEN, "interval": 300, "maxretries": 0}, "tags": ["internal", "infra"]},
 
     # public services (Caddy on OKE)
     {"name": "stevegore.au",               "type": "http", "kwargs": {"url": "https://stevegore.au/",                         "maxredirects": 10, "accepted_statuscodes_json": ACCEPT_OK},       "tags": ["public"],           "aliases": ["stevegore.au (ttyd)"]},
@@ -151,9 +162,10 @@ monitors = [
     {"name": "phpMyAdmin",          "type": "http", "kwargs": {"url": "http://pico:3011/",                     "maxredirects": 5, "accepted_statuscodes_json": ACCEPT_OK_REDIR}, "tags": ["internal", "infra"]},
 ]
 
-OPTIONAL_FIELDS = ["url", "hostname", "port", "accepted_statuscodes_json", "maxredirects", "keyword", "headers"]
+OPTIONAL_FIELDS = ["url", "hostname", "port", "accepted_statuscodes_json", "maxredirects", "keyword", "headers", "push_token"]
 OPTIONAL_DEFAULTS = {"url": None, "hostname": None, "port": None,
-                     "accepted_statuscodes_json": ACCEPT_OK, "maxredirects": 0, "keyword": None, "headers": None}
+                     "accepted_statuscodes_json": ACCEPT_OK, "maxredirects": 0, "keyword": None, "headers": None,
+                     "push_token": None}
 
 
 def connect(host, port, database, user, password):
@@ -284,6 +296,10 @@ def main():
     if not args.no_notifications and not (pushover_token and pushover_user):
         print("ERROR: set PUSHOVER_APP_TOKEN and PUSHOVER_USER_KEY, or pass --no-notifications",
               file=sys.stderr)
+        sys.exit(1)
+
+    if not DECONZ_PUSH_TOKEN:
+        print("ERROR: set DECONZ_PUSH_TOKEN (kv/uptime-kuma/config push_token_deconz)", file=sys.stderr)
         sys.exit(1)
 
     print(f"Connecting to {args.host}:{args.port}/{args.database} as {args.user}...")

@@ -163,7 +163,8 @@ See `scripts/STATS_SERVER.md` for detailed setup and troubleshooting.
 
 **Hardware:** Raspberry Pi 3 Model B Plus Rev 1.3 (armv7l, 32-bit), 1 GB RAM
 **OS:** Raspbian GNU/Linux 10 (buster), kernel 5.10.60-v7+. Debian 10 is end-of-life and no longer gets security updates; treat this host as legacy and don't expose it to the internet.
-**Storage:** `/` — 117 GB SD card, ~4% used (4.0 GB)
+**Storage:** `/` — 128 GB SanDisk microSDXC (CID name `SH128`, manfid `0x03`, made 10/2020, a consumer card with no endurance rating), ~4% used (4.0 GB)
+**Rebuild prepared:** [`raspberrypi/README.md`](raspberrypi/README.md) moves this host to Raspberry Pi OS Lite 64-bit with deCONZ in a container, on a new high-endurance card. Until that is done, the rest of this section describes the Buster install.
 **Uptime at last check:** 232 days (2026-10-28)
 **Wi-Fi:** blocked by rfkill; `raspi-config` country not set. Wired LAN is the working connection.
 
@@ -182,11 +183,13 @@ See `scripts/STATS_SERVER.md` for detailed setup and troubleshooting.
 | Pi-hole (`pihole-FTL`) | Pi-hole v5.5, AdminLTE v5.7, FTL v5.10.2 | DNS `:53` | Upstream DNS: Quad9 (`9.9.9.9`, `149.112.112.112`). Config: `/etc/pihole/setupVars.conf` |
 | `lighttpd` | — | HTTP `:80` | Pi-hole admin UI |
 | `dnsmasq` | — | DNS `:53` | Runs alongside Pi-hole |
-| deCONZ (`deconz.service`) | 2.12.06 (raspbian-buster stable) | `:8080`, `:443` | Zigbee gateway (Phoscon/REST API) on the onboard Bluetooth UART (`hciuart`) |
+| deCONZ (`deconz.service`) | 2.12.06 (raspbian-buster stable) | `:8080`, `:443` | Zigbee gateway (Phoscon/REST API) on a **ConBee II USB stick** (`/dev/serial/by-id/usb-dresden_elektronik_ingenieurtechnik_GmbH_ConBee_II_DE2131647-if00` → `ttyACM0`), not the GPIO UART. Network is 12 devices / 11 sensors. Home Assistant's `deconz` integration (bridge `00212E05015F`) points at `192.168.4.61:8080` |
 | RealVNC (`vncserver-x11-serviced`) | 6.7.2 | `:5900` | Remote desktop |
 | `sshd` | OpenSSH 7.9p1 | `:22` | Key and password auth |
 
 Also running: `lightdm` (desktop session), `bluealsa`, `alsa-state`, `rng-tools`, `udisks2`, and `deconz-update.service`.
+
+**Pi-hole is unused:** on 2026-10-28 it logged 422 queries all day, none from a LAN client. Nothing on the network uses it for DNS, so the rebuild drops it.
 
 **Port exposure:** the listeners bind `0.0.0.0` / `[::]`, so every service is reachable from the whole LAN. Pi-hole's config says `DNSMASQ_LISTENING=local`, but `dnsmasq` is listening on all interfaces. Reconcile these before relying on either.
 

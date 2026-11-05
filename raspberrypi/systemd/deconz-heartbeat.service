@@ -1,0 +1,8 @@
+[Unit]
+Description=Push deCONZ health to Uptime Kuma
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/infra/raspberrypi/deconz-heartbeat.sh
