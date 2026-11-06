@@ -1072,7 +1072,7 @@ volumes:
 
 | Container              | Image              | Status  |
 | ---------------------- | ------------------ | ------- |
-| nuraspace2-nuraspace-1 | nuraspace (custom) | Running |
+| nuraspace2-nuraspace-1 | ghcr.io/stevegore/nuraspace (private) | Running |
 
 **Docker Compose:**
 
@@ -1080,11 +1080,13 @@ volumes:
 version: '3.5'
 services:
   nuraspace:
-    image: nuraspace  # Built manually and kept local currently due to credentials
+    image: ghcr.io/stevegore/nuraspace:latest@sha256:…   # Renovate-pinned
     ports:
       - 8111:5000
     environment:
       TZ: Australia/Sydney
+      PUSHOVER_API_TOKEN: ${PUSHOVER_API_TOKEN}     # Portainer stack env
+      PUSHOVER_USER_TOKEN: ${PUSHOVER_USER_TOKEN}
     restart: unless-stopped
     volumes:
       - /var/nura:/var/nura
@@ -1097,28 +1099,35 @@ services:
 **Storage:** `/var/nura` (bind mount) — holds `access.token` / `refresh.token`, the only
 copy of the credentials, and not recreatable by the app (see Auth below)
 
-**Source of the image:** built manually on pico from `~/code/nuraspacepy`
-(`docker build -t nuraspace:latest .`). It is **local-only — not in any registry.**
+**Image pipeline (since 2026-11-06):** built by the app repo's own CI and pushed
+to **private** GHCR; nothing is built on pico any more.
 
-> **`ForcePullImage` is deliberately off** (disabled 2026-08-08; it had been `true`).
-> Because the image exists only on pico, a forced pull resolves to
-> `docker.io/library/nuraspace`, which does not exist — so any change to
-> `pico/nuraspace2/compose.yaml` would have had the 5-minute auto-update job
-> redeploy the stack straight into a failed pull. Leave it off.
+1. Push to `main` in the app repo → `docker-publish.yml` runs the tests, then
+   builds `linux/amd64` and pushes `ghcr.io/stevegore/nuraspace:latest` + `:<sha>`
+   (keeps the newest 5 versions).
+2. Dependabot (weekly, Monday 03:00) bumps the app's dependencies, the
+   digest-pinned base image and Actions; non-major PRs self-merge once the
+   tests and build pass (`dependabot-automerge.yml`), which triggers step 1.
+3. This repo's Renovate sees the new `:latest` digest (rule 2a, via the
+   `GHCR_READ_TOKEN` host rule) and its digest PR self-merges.
+4. Portainer's 5-minute git poll redeploys with `ForcePullImage` on, pulling
+   through the `ghcr-stevegore` registry credential (classic PAT,
+   `read:packages`; origin Vault `kv/homelab/ghcr-read`).
 
-Rebuild and redeploy:
+Source: `stevegore/deskbooking` (private; checked out on pico as
+`~/code/nuraspacepy`). The Pushover credentials are no longer baked into the
+image: `config_secrets.py` is in `.dockerignore` and the app reads
+`PUSHOVER_API_TOKEN` / `PUSHOVER_USER_TOKEN` from the stack env.
 
-```bash
-docker build -t nuraspace:latest ~/code/nuraspacepy
-curl -s -X PUT "http://pico.local:9000/api/stacks/73/git/redeploy?endpointId=1" \
-  -H "X-API-Key: $(cat ~/code/infra/portainer.token)" \
-  -H "Content-Type: application/json" \
-  -d '{"env":[],"prune":false,"pullImage":false,"repositoryReferenceName":"refs/heads/main"}'
-```
+**Deploy timing:** Renovate rule 2b only automerges nuraspace digest bumps
+before 05:00, 07:00–18:00 and after 21:00 Sydney, keeping redeploys out of the
+05:50–06:00 booking race and the 19:00–20:00 advance window.
 
-Keep the previous image untagged as a rollback until the new one is verified
-(`docker tag <old-id> nuraspace:latest`). To change the stack's git/auto-update
-settings the route is `POST /api/stacks/{id}/git` — `PUT` there returns 405.
+Force a redeploy and verify health now (on pico): `~/code/nuraspacepy/deploy.sh`
+— it re-pulls the pinned image and preserves the stack env. Roll back by
+reverting the digest bump in `pico/nuraspace2/compose.yaml`. To change the
+stack's git/auto-update settings the route is `POST /api/stacks/{id}/git` —
+`PUT` there returns 405; it also resets the displayed `JobID`.
 
 **Auth:** the NuraSpace API rotates refresh tokens — each is single-use, and
 replaying a consumed one revokes the whole family. The app cannot mint tokens
@@ -1225,7 +1234,7 @@ services:
 
 | Container                   | Image                 | Status     |
 | --------------------------- | --------------------- | ---------- |
-| goldenboards-goldenboards-1 | goldenboards (custom) | Up 2 weeks |
+| goldenboards-goldenboards-1 | ghcr.io/stevegore/goldenboards (private) | Running |
 
 **Docker Compose:**
 
@@ -1233,7 +1242,7 @@ services:
 version: '3.5'
 services:
   goldenboards:
-    image: goldenboards
+    image: ghcr.io/stevegore/goldenboards:latest@sha256:…   # Renovate-pinned
     environment:
       TZ: Australia/Sydney
     restart: unless-stopped
@@ -1242,18 +1251,31 @@ services:
       - /etc/localtime:/etc/localtime:ro
 ```
 
-> **`ForcePullImage` is still ON — turn it off before merging any change to
-> `pico/goldenboards/compose.yaml`.** The image is built locally on pico and
-> exists in no registry, so the 5-minute auto-update job resolves it to
-> `docker.io/library/goldenboards`, and the redeploy dies on a failed pull.
-> This is the same trap that was disarmed for [nuraspace2](#nuraspace2) on
-> 2026-08-08; Portainer's log records the failed pull on every poll.
+**Image pipeline (since 2026-11-06):** built by the app repo's own CI and pushed
+to **private** GHCR; nothing is built on pico any more.
+
+1. Push to `main` in the app repo → `docker-publish.yml` runs the tests, then
+   builds `linux/amd64` and pushes `ghcr.io/stevegore/goldenboards:latest` + `:<sha>`
+   (keeps the newest 5 versions).
+2. Dependabot (weekly, Monday 03:00) bumps the app's dependencies, the
+   digest-pinned base image and Actions; non-major PRs self-merge once the
+   tests and build pass (`dependabot-automerge.yml`), which triggers step 1.
+3. This repo's Renovate sees the new `:latest` digest (rule 2a, via the
+   `GHCR_READ_TOKEN` host rule) and its digest PR self-merges.
+4. Portainer's 5-minute git poll redeploys with `ForcePullImage` on, pulling
+   through the `ghcr-stevegore` registry credential (classic PAT,
+   `read:packages`; origin Vault `kv/homelab/ghcr-read`).
+
+Source: `stevegore/goldenboards` (private). The image that ran until 2026-11-06
+had been built on 2025-02-14 from **uncommitted** changes in pico's
+`~/code/goldenboards`; those were committed as `6303188` so CI builds what was
+deployed. The Pushover token is still hardcoded in `notification.go` (private
+repo, private image).
 
 **Purpose:** Golden Boards application (custom Go binary)  
 **Ports:** None exposed  
 **Command:** `/app/goldenboards`  
-**Storage:** `/var/goldenboards` (bind mount)  
-**Note:** Locally built image, no external port mapping
+**Storage:** `/var/goldenboards` (bind mount; WhatsApp session `syncstore.db`)
 
 ---
 
@@ -1384,14 +1406,14 @@ volumes:
 
 | Container    | Image                        | Status    |
 | ------------ | ---------------------------- | --------- |
-| stravabot-rs | stravabot-rs:latest (custom) | Up 2 days |
+| stravabot-rs | ghcr.io/stevegore/stravabot-rs (private) | Running |
 
 **Docker Compose:**
 
 ```yaml
 services:
   stravabot-rs:
-    image: stravabot-rs:latest
+    image: ghcr.io/stevegore/stravabot-rs:latest@sha256:…   # Renovate-pinned
     container_name: stravabot-rs
     restart: unless-stopped
     ports:
@@ -1413,7 +1435,29 @@ volumes:
 **Ports:** 8082  
 **Command:** `/app/stravabot`  
 **Storage:** Auth token mounted read-only from `/var/stravabot-rs/.strava-auth-token`, progress data in `stravabot-rs_stravabot-rs-data` volume  
-**Note:** Locally built Rust binary, does not run on startup (triggered via API)
+**Note:** Does not run on startup (triggered via API)
+
+**Image pipeline (since 2026-11-06):** built by the app repo's own CI and pushed
+to **private** GHCR; nothing is built on pico any more.
+
+1. Push to `main` in the app repo → `docker-publish.yml` runs the tests, then
+   builds `linux/amd64` and pushes `ghcr.io/stevegore/stravabot-rs:latest` + `:<sha>`
+   (keeps the newest 5 versions).
+2. Dependabot (weekly, Monday 03:00) bumps the app's dependencies, the
+   digest-pinned base image and Actions; non-major PRs self-merge once the
+   tests and build pass (`dependabot-automerge.yml`), which triggers step 1.
+3. This repo's Renovate sees the new `:latest` digest (rule 2a, via the
+   `GHCR_READ_TOKEN` host rule) and its digest PR self-merges.
+4. Portainer's 5-minute git poll redeploys with `ForcePullImage` on, pulling
+   through the `ghcr-stevegore` registry credential (classic PAT,
+   `read:packages`; origin Vault `kv/homelab/ghcr-read`).
+
+**2026-11-06 outage:** the stack could not be restarted. The image had only
+ever existed in pico's Docker daemon; the container disappeared around
+2026-10-23 and the weekly `docker-prune.timer` (Sun 04:30, unused images older
+than 7 days) then deleted the image on 2026-11-01. With `ForcePullImage` on,
+every redeploy tried `docker.io/library/stravabot-rs` and failed. Moving the
+image to GHCR is the fix: a prune can no longer strand it.
 
 ---
 

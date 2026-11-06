@@ -2,11 +2,17 @@ version: '3.5'
 
 services:
   nuraspace:
-    image: nuraspace  # Built manually and kept local currently due to credentials
+    # Built by stevegore/deskbooking CI (private GHCR package; no secrets in
+    # the image). Renovate bumps the digest outside the 05:50-06:00 race and
+    # 19:00-20:00 advance windows; Portainer pulls with the ghcr-stevegore
+    # credential.
+    image: ghcr.io/stevegore/nuraspace:latest@sha256:76c6e9a733f26406885981ca7b14d0f7f3182be2446c5a80cb8fc2f77c4b8c15
     ports:
       - 8111:5000
     environment:
       TZ: Australia/Sydney
+      PUSHOVER_API_TOKEN: ${PUSHOVER_API_TOKEN}
+      PUSHOVER_USER_TOKEN: ${PUSHOVER_USER_TOKEN}
     restart: unless-stopped
     stop_grace_period: 45s
     healthcheck:

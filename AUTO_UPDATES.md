@@ -59,9 +59,13 @@ Terraform configuration are valid. Uptime Kuma is the post-deploy smoke test.
 ### What is ignored entirely
 
 - **Self-built images** — `syd.ocir.io/**`, `docker.io/stevegore/**`, and the
-  bare local images built on pico (`stravakeeper`, `stravabot-rs`, `nuraspace`,
-  `gymbooking2`, `goldenboards`). These are tagged with git SHAs or exist in no
-  registry at all; the GitHub Actions that build them own their versioning.
+  bare local images of the deliberately stopped stacks (`stravakeeper`,
+  `gymbooking2`). These are tagged with git SHAs or exist in no registry at
+  all; the GitHub Actions that build them own their versioning.
+- **Not ignored: `ghcr.io/stevegore/**`** (stravabot-rs, goldenboards,
+  nuraspace). Those are private GHCR images built by each app repo's CI, with
+  Dependabot keeping the app current; Renovate's digest PR is what deploys a
+  new build. See "Self-built pico apps" below.
 - **No floating tags are ignored.** Renovate pins their registry digest, then
   opens digest PRs. That creates the Git change Portainer/ArgoCD need to deploy
   a new immutable image instead of silently drifting behind a mutable tag.
@@ -163,6 +167,28 @@ and never leaves pico. Stacks with placeholders:
 | `ig-gallery` | `GALLERY_ADMIN_KEY`, `GALLERY_ADMIN_IP` |
 | `duplicati` | `DUPLICATI__WEBSERVICE_PASSWORD` |
 | `homepage` | `HOMEPAGE_VAR_PORTAINER_TOKEN` (empty — the Portainer widget has never had a token) |
+| `nuraspace2` | `PUSHOVER_API_TOKEN`, `PUSHOVER_USER_TOKEN` (copied from pico `~/code/nuraspacepy/config_secrets.py`) |
+
+### Self-built pico apps
+
+`stravabot-rs`, `goldenboards` and `nuraspace2` run images built by their own
+private repos (`stevegore/stravabot-rs`, `stevegore/goldenboards`,
+`stevegore/deskbooking`) — never on pico. Each repo has:
+
+| File | Does |
+| --- | --- |
+| `.github/workflows/docker-publish.yml` | tests → build `linux/amd64` → push `ghcr.io/stevegore/<img>:latest` + `:<sha>` on `main` (build-only on PRs); keeps 5 versions |
+| `.github/dependabot.yml` | weekly (Mon 03:00) app deps, digest-pinned base image, Actions |
+| `.github/workflows/dependabot-automerge.yml` | squash-merges non-major Dependabot PRs after the build passes, then dispatches the `main` build |
+
+The packages are **private**. One classic PAT with only `read:packages`
+(Vault `kv/homelab/ghcr-read`) is used twice: as Portainer registry
+`ghcr-stevegore` (pulls) and as this repo's `GHCR_READ_TOKEN` secret (Renovate
+host rule). Rotating it means updating both.
+
+Private packages count against the GitHub account's Packages storage and
+transfer quota — keep images small (goldenboards went 1.1 GB → slim
+multi-stage) and the 5-version cleanup in place.
 
 To change one: Portainer → Stacks → *stack* → Environment variables → Update.
 Do **not** put the value in the compose file.

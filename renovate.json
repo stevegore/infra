@@ -115,14 +115,42 @@
     {
       "description": [
         "2. Self-built images. Tagged with a git SHA or built by hand on pico — Renovate has no upstream to compare against and would only churn. The GitHub Actions that build them own their versioning.",
-        "Regex again — Renovate reports these fully qualified (`docker.io/stevegore/ttyd`, not `stevegore/ttyd`), so a `stevegore/**` glob anchored at the start would miss them. The bare names are images built on pico that exist in no registry at all."
+        "Regex again — Renovate reports these fully qualified (`docker.io/stevegore/ttyd`, not `stevegore/ttyd`), so a `stevegore/**` glob anchored at the start would miss them. The bare names are images built on pico that exist in no registry at all (only the deliberately stopped stravakeeper / gymmaster-rest stacks still use one).",
+        "ghcr.io/stevegore/* is NOT in this list: see rule 2a."
       ],
       "matchPackageNames": [
         "/^syd\\.ocir\\.io\\//",
-        "/(^|/)stevegore\\//",
-        "/^(stravakeeper|stravabot-rs|nuraspace|gymbooking2|goldenboards)$/"
+        "/^(docker\\.io\\/)?stevegore\\//",
+        "/^(stravakeeper|gymbooking2)$/"
       ],
       "enabled": false
+    },
+    {
+      "description": [
+        "2a. Self-built pico apps published by their own repo's CI to private GHCR (stravabot-rs, goldenboards, nuraspace). Each compose pins `:latest@sha256:…`; when CI pushes a new :latest, Renovate opens a digest PR and it self-merges, which is what makes Portainer redeploy it. Dependabot in each app repo keeps the app's own dependencies and base image moving, so this is the deploy half of that loop.",
+        "Renovate reads the private packages through the ghcr.io host rule built in .github/workflows/renovate.yml from the GHCR_READ_TOKEN secret (read:packages; origin Vault kv/homelab/ghcr-read).",
+        "Before 2026-11-06 these images existed only in pico's Docker daemon: the weekly image prune deleted stravabot-rs once its container was gone and the stack could not be restarted."
+      ],
+      "matchPackageNames": [
+        "/^ghcr\\.io\\/stevegore\\//"
+      ],
+      "schedule": [
+        "at any time"
+      ],
+      "addLabels": [
+        "self-built"
+      ]
+    },
+    {
+      "description": "2b. nuraspace books a desk in a 05:50-06:00 race and advances bookings 19:00-20:00 (stevegore/deskbooking RELIABILITY.md: deploy away from both). Portainer redeploys within ~5 minutes of a merge, so only enable automerge well clear of those windows.",
+      "matchPackageNames": [
+        "ghcr.io/stevegore/nuraspace"
+      ],
+      "automergeSchedule": [
+        "before 5am",
+        "after 7am and before 6pm",
+        "after 9pm"
+      ]
     },
     {
       "description": "3. Floating tags are pinned to their current digest so every deployment receives an auditable Git change.",

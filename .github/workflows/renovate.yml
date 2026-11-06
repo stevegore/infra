@@ -112,7 +112,7 @@ jobs:
         # Renovate keeps this in step with the action version below.
         run: npx --yes --package renovate@44.4.5 -- renovate-config-validator --strict
 
-      - name: Docker Hub host rules
+      - name: Registry host rules (Docker Hub, GHCR)
         # Authenticated Docker Hub. Anonymous tag listing stops at 1000 tags
         # (403 "pagination offset too large"); portainer-ee has ~1600, so
         # Renovate lost every releaseTimestamp for it and minimumReleaseAge
@@ -124,9 +124,15 @@ jobs:
         # mint one per run. Best-effort: if the exchange fails, Renovate still
         # runs, just with Portainer stuck as before.
         # Source of truth: Vault kv/docker; mirrored to these repo secrets.
+        #
+        # GHCR: the self-built pico apps (ghcr.io/stevegore/*) are private
+        # packages, so Renovate needs a read:packages token to see new
+        # digests. Source of truth: Vault kv/homelab/ghcr-read, mirrored to
+        # GHCR_READ_TOKEN. Missing token = warning, not failure.
         env:
           DH_USER: ${{ secrets.DOCKERHUB_USERNAME }}
           DH_PAT: ${{ secrets.DOCKERHUB_TOKEN }}
+          GHCR_READ: ${{ secrets.GHCR_READ_TOKEN }}
         run: |
           jwt=$(curl -fsS -X POST https://hub.docker.com/v2/auth/token \
                   -H 'Content-Type: application/json' \
@@ -141,6 +147,12 @@ jobs:
             echo "::warning::Docker Hub JWT exchange failed; hub.docker.com tag listing stays anonymous"
             rules=$(jq -nc --arg u "$DH_USER" --arg p "$DH_PAT" \
               '[{hostType:"docker",matchHost:"docker.io",username:$u,password:$p}]')
+          fi
+          if [ -n "$GHCR_READ" ]; then
+            rules=$(jq -c --arg p "$GHCR_READ" \
+              '. + [{hostType:"docker",matchHost:"ghcr.io",username:"stevegore",password:$p}]' <<<"$rules")
+          else
+            echo "::warning::GHCR_READ_TOKEN not set; private ghcr.io/stevegore images will not update"
           fi
           echo "RENOVATE_HOST_RULES=$rules" >> "$GITHUB_ENV"
 
@@ -160,7 +172,7 @@ jobs:
           # without waiting until 1am. It does NOT override automerge, so the
           # database and caddy-Dockerfile hold-backs still apply.
           RENOVATE_FORCE: ${{ inputs.ignoreSchedule && '{"schedule":null,"automergeSchedule":null}' || '' }}
-          # RENOVATE_HOST_RULES comes from $GITHUB_ENV (Docker Hub step above);
+          # RENOVATE_HOST_RULES comes from $GITHUB_ENV (host rules step above);
           # setting it here would override that.
         with:
           token: ${{ secrets.RENOVATE_TOKEN }}

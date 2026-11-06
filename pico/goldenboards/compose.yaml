@@ -2,7 +2,9 @@ version: '3.5'
 
 services:
   goldenboards:
-    image: goldenboards  
+    # Built by stevegore/goldenboards CI (private GHCR package). Renovate
+    # bumps the digest; Portainer pulls with the ghcr-stevegore credential.
+    image: ghcr.io/stevegore/goldenboards:latest@sha256:92a001b8580b4316a89dd248cb070bac273136f2ce6e3c332296334ad2cb5790
     environment:
       TZ: Australia/Sydney
     restart: unless-stopped
