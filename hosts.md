@@ -177,7 +177,7 @@ See `scripts/STATS_SERVER.md` for detailed setup and troubleshooting.
 
 | Service | Version | Port(s) | Notes |
 | --- | --- | --- | --- |
-| deCONZ (container `deconz`) | 2.33.2, ConBee II firmware `0x26660700` | `:8080` REST/Phoscon, `:443` websocket | `raspberrypi/deconz/compose.yaml`, data in `/opt/deconz/data`. ConBee II at `/dev/serial/by-id/usb-dresden_elektronik_ingenieurtechnik_GmbH_ConBee_II_DE2131647-if00` (USB, not the GPIO UART). 12 devices / 11 sensors. Home Assistant's `deconz` integration (bridge `00212EFFFF05015F`, which HA stores as `00212E05015F`) points at `192.168.4.61:8080` |
+| deCONZ (container `deconz`) | 2.33.2, ConBee II firmware `0x26780700` (flashed 2026-11-06; see README *ConBee II firmware*) | `:8080` REST/Phoscon, `:443` websocket | `raspberrypi/deconz/compose.yaml`, data in `/opt/deconz/data`. ConBee II at `/dev/serial/by-id/usb-dresden_elektronik_ingenieurtechnik_GmbH_ConBee_II_DE2131647-if00` (USB, not the GPIO UART). 12 devices / 11 sensors. Home Assistant's `deconz` integration (bridge `00212EFFFF05015F`, which HA stores as `00212E05015F`) points at `192.168.4.61:8080` |
 | Docker CE | 29.9.3 | — | Docker's Debian repo |
 | `sshd` | OpenSSH 10.0p2 | `:22` | Key only |
 

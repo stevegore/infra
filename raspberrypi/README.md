@@ -115,10 +115,9 @@ a minute, check `docker ps`, and re-run the bootstrap.
 
 - Phoscon at `http://192.168.4.61:8080`: log in with the old Phoscon
   password. All 12 devices and 11 sensors should be present.
-- Gateway → firmware: the ConBee II firmware is shown there. If an update is
-  offered, apply it now. If Phoscon can't flash from inside the container,
-  follow the firmware section of the
-  [deconz-docker README](https://github.com/deconz-community/deconz-docker).
+- ConBee II firmware: Phoscon in the container offers no update button. If
+  it's behind the current stable, flash it from the host (see *ConBee II
+  firmware* under Day 2).
 - Home Assistant → Settings → Devices → deCONZ: the integration reconnects by
   itself (same bridge ID, same API key from `zll.db`).
 - Press every switch once and check it shows up in HA's logbook. Battery
@@ -190,7 +189,7 @@ reusing it.
   `http://raspberrypi.local:8080`. Plain HTTP, LAN only. Log in with the
   existing Phoscon password; the rebuild didn't change it (it lives in
   `zll.db`). Use it to pair or remove devices (Devices → Add), take gateway
-  backups (Gateway → Backup), check or update the ConBee II firmware, and
+  backups (Gateway → Backup), see the ConBee II firmware version, and
   unlock the gateway for a new API key (Gateway → Advanced → Authenticate
   app). The same port serves the REST API that HA uses; the websocket is on
   `:443`.
@@ -202,3 +201,44 @@ reusing it.
 - **Logs:** `journalctl -u deconz-gitops -u deconz-heartbeat`, `docker logs deconz`.
 - **Unattended reboots** happen at 04:30 when a kernel update needs one. The
   switches drop for ~2 minutes; the 5-minute push window keeps that from paging.
+
+### ConBee II firmware
+
+On `0x26780700` since 2026-11-06. That was the current stable release per the
+[firmware changelog](https://github.com/dresden-elektronik/deconz-rest-plugin/wiki/Firmware-Changelog).
+It was upgraded from a 2020 beta, `0x26660700`. Nothing updates the firmware
+automatically. Check the changelog's "Current Stable Versions" table now and
+then, and skip betas.
+
+**Flash from the host, not the container.** The image's `/firmware-update.sh`
+and its bundled `GCFFlasher_internal` (4.12.1) failed three times on
+2026-11-06. Each time it reported success with nothing flashed, or "failed to
+connect serial com". Before 4.12.2, GCFFlasher waited 3 s for the bootloader,
+but the ConBee II takes ~5 s to re-enumerate after its reset. The container's
+fixed device mapping also loses the stick when it re-enumerates. **GCFFlasher
+4.12.2+** fixes the timing and is installed on the host from the
+[GitHub release](https://github.com/dresden-elektronik/gcfflasher/releases)
+`.deb` (`gcfflasher_4.12.2_linux_arm64.deb`, a single `/usr/bin/GCFFlasher`;
+it isn't in any apt repo, so it doesn't auto-update).
+
+```bash
+ssh raspberrypi
+F=deCONZ_ConBeeII_0x26780700.bin.GCF            # the target version
+sudo mkdir -p /opt/deconz/fw && cd /opt/deconz/fw
+sudo curl -sfO http://deconz.dresden-elektronik.de/deconz-firmware/$F
+echo "$(curl -sf http://deconz.dresden-elektronik.de/deconz-firmware/$F.md5 | cut -d' ' -f1)  $F" | md5sum -c
+sudo tar -C /opt/deconz -czf /tmp/deconz-data-prefw.tgz data   # copy it off the Pi
+# Switches go down from here (~2 min)
+sudo systemctl stop deconz-gitops.timer deconz-heartbeat.timer
+sudo docker stop -t 30 deconz
+sudo GCFFlasher -d /dev/ttyACM0 -f /opt/deconz/fw/$F -t 120
+sudo docker start deconz
+sudo systemctl start deconz-gitops.timer deconz-heartbeat.timer
+```
+
+A good run prints `bootloader detected`, an upload bar to 100%, and then
+`firmware successful written`. **The exit code is 0 even when nothing was
+flashed**, so always confirm the version afterwards. Check `fwversion` in
+`/api/<key>/config`; the heartbeat message in Kuma also shows it. The Zigbee
+network (channel 15, PAN ID 46503) and the paired devices live in separate
+NVRAM, so a flash doesn't touch them.
