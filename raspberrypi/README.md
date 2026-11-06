@@ -142,12 +142,58 @@ with the message `OK fw <version>`.
 
 ### Rollback
 
-Power off, put the old card back in, boot. It is exactly as it was: the
-Buster install with deCONZ 2.12.06 and the same `zll.db`. Keep the old card
-for a few weeks before reusing it.
+There are two levels, depending on what broke.
+
+**A deCONZ release is bad, but the new OS is fine.** Stay on the new card.
+`git revert` the Renovate commit that bumped `deconz/compose.yaml` and push.
+`deconz-gitops.timer` goes back to the previous image within 5 minutes. If the
+data itself is damaged, stop the container (`sudo docker stop deconz`), restore
+`~/Backups/deconz-data-2026-11-06.tgz` into `/opt/deconz/data` as in step 4,
+then `sudo systemctl start deconz-gitops.service`.
+
+**The new install is unusable: go back to the old card.** The old card is the
+128 GB SanDisk (`SH128`) with Raspbian 10 and deCONZ 2.12.06.
+
+1. Pause **deCONZ (raspberrypi)** in Uptime Kuma, or it will page every few
+   minutes: nothing on the old card sends heartbeats.
+2. `ssh raspberrypi 'sudo poweroff'`, wait for the green LED to stop,
+   unplug, swap cards (pull the card straight out: the 3B+ slot has no spring),
+   and power on. Leave the ConBee II where it is.
+3. The old card has a different SSH host key:
+   ```bash
+   ssh-keygen -R raspberrypi.local; ssh-keygen -R 192.168.4.61
+   ```
+   The same `~/.ssh/raspberrypi_ed25519` key works. Password login is also
+   enabled on that install (password in `pi.creds`).
+4. **deCONZ is disabled on the old card.** It was disabled on purpose before
+   the 2026-11-06 shutdown, so a stray boot couldn't start a second gateway.
+   Re-enable it:
+   ```bash
+   ssh raspberrypi 'sudo systemctl enable --now deconz deconz-update'
+   ```
+5. Check Phoscon at `http://192.168.4.61:8080`, and that HA's deCONZ
+   integration reconnects. The old database holds the same bridge ID and HA's
+   API key, so no HA changes are needed.
+
+Caveats: the old `zll.db` is the 2026-11-06 10:16 snapshot. Anything paired
+or renamed on the new install after that is missing. The heartbeat API key
+is missing too, which doesn't matter there. Pi-hole and VNC come back with it
+too (harmless, unused). To go forward again, swap the new card back in: it
+needs no changes.
+
+Keep the old card, labelled, until at least late November 2026 before
+reusing it.
 
 ## Day 2
 
+- **Phoscon** (deCONZ web UI): **`http://192.168.4.61:8080`**, also
+  `http://raspberrypi.local:8080`. Plain HTTP, LAN only. Log in with the
+  existing Phoscon password; the rebuild didn't change it (it lives in
+  `zll.db`). Use it to pair or remove devices (Devices → Add), take gateway
+  backups (Gateway → Backup), check or update the ConBee II firmware, and
+  unlock the gateway for a new API key (Gateway → Advanced → Authenticate
+  app). The same port serves the REST API that HA uses; the websocket is on
+  `:443`.
 - **deCONZ upgrades** arrive as Renovate PRs labelled `critical`. They
   automerge once the release is 7 days old, and the Pi applies them within 5
   minutes. To hold one, close the PR.

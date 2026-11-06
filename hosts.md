@@ -164,7 +164,8 @@ See `scripts/STATS_SERVER.md` for detailed setup and troubleshooting.
 **Purpose:** Zigbee gateway only — deCONZ + ConBee II for the light switches. It stays on the Pi because pico is out of range of the Zigbee mesh. Build, update and recovery runbook: [`raspberrypi/README.md`](raspberrypi/README.md).
 **Hardware:** Raspberry Pi 3 Model B Plus Rev 1.3, 1 GB RAM
 **OS:** Raspberry Pi OS Lite 64-bit (Debian 13 trixie), kernel 6.18 `rpt-rpi-v8`, rebuilt 2026-11-06. No desktop.
-**Storage:** `/` — new 64 GB microSD (rebuilt 2026-11-06), ~5% used. The old 128 GB SanDisk consumer card (`SH128`, 10/2020, Buster + deCONZ 2.12.06) is kept as a rollback; `deconz.service` was **disabled** on it before shutdown, so re-enable it (`sudo systemctl enable --now deconz`) if you ever boot it.
+**Storage:** `/` — new 64 GB microSD (rebuilt 2026-11-06), ~5% used. The old 128 GB SanDisk consumer card (`SH128`, 10/2020, Buster + deCONZ 2.12.06) is kept as a rollback; `deconz.service` was **disabled** on it before shutdown, so re-enable it (`sudo systemctl enable --now deconz deconz-update`) if you ever boot it. Full steps: *Rollback* in [`raspberrypi/README.md`](raspberrypi/README.md#rollback).
+**Phoscon (deCONZ web UI):** `http://192.168.4.61:8080` (or `http://raspberrypi.local:8080`), LAN only, existing Phoscon password.
 **Network:** wired only (`eth0`). Imager joined Wi-Fi too (`192.168.4.43`); the radio is now off (`nmcli radio wifi off`, persists), which also keeps 2.4 GHz Wi-Fi off the Zigbee band (channel 15).
 
 **Access:**
