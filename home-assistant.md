@@ -24,15 +24,15 @@ External access (unchanged by the migration):
 - `hass.stevegore.au` — OKE NLB → Caddy → Tailscale Egress Service (`pico` svc) → pico:8123
 - `hass2.stevegore.au` — via Cloudflare Tunnel directly from pico (`cloudflared.service`, systemd, not a container)
 
-**`trusted_proxies` requirement:** HASS rejects proxied requests unless the forwarding host is trusted. `config/configuration.yaml` currently has:
+**`trusted_proxies` requirement:** HASS rejects proxied requests unless the forwarding host is trusted. Since HA migrated HTTP config to the UI (2026-10-28), it lives in **Settings → System → Network** (stored in `.storage/http`, root-owned — read it with `docker exec homeassistant-app cat /config/.storage/http`), **not** `configuration.yaml`. The YAML `http:` block was ignored after migration and removed 2026-11-06 (HA repair: YAML support ends 2027.2.0). Current values:
 ```yaml
-http:
-  use_x_forwarded_for: true
-  trusted_proxies:
-    - 127.0.0.1
-    - 10.0.0.0/8      # covers OKE pod CIDR 10.244.0.0/16 and the old 10.20.30.x
-    - 100.64.0.0/10   # Tailscale CGNAT range
+use_x_forwarded_for: true
+trusted_proxies:
+  - 127.0.0.1/32
+  - 10.0.0.0/8      # covers OKE pod CIDR 10.244.0.0/16 and the old 10.20.30.x
+  - 100.64.0.0/10   # Tailscale CGNAT range
 ```
+If this config is ever restored somewhere fresh, re-enter these in the UI or the reverse-proxied URLs will 400.
 
 Long-lived access token: `~/code/infra/home-assistant.token` (gitignored via `*.token`).
 
@@ -99,7 +99,7 @@ Two MCP servers are wired into Claude Code via `/home/steve/code/infra/.mcp.json
 Notes:
 
 - The official endpoint is `/mcp_server/sse` — **not** `/api/mcp_server/sse` (that 404s).
-- `uvx` comes from [`uv`](https://github.com/astral-sh/uv); installed at `~/.local/bin/uv` and `~/.local/bin/uvx`.
+- `uvx` comes from [`uv`](https://github.com/astral-sh/uv); installed via Homebrew (`brew install uv` → `/opt/homebrew/bin/uvx`) on the Mac. If `ha-mcp` fails with `ENOENT`, `uvx` is missing from `PATH` — reinstall, then `/mcp` → reconnect (restart Claude Code if it still can't find it).
 - `ha-mcp` env vars: `HOMEASSISTANT_URL=http://pico.local:8123`, `HOMEASSISTANT_TOKEN=${HA_TOKEN}`.
 - Restart Claude Code after changing `HA_TOKEN` so child MCP processes inherit it.
 - **Supervisor-dependent `ha-mcp` tools no longer work** — add-on management, Supervisor logs, and Supervisor backups have no backend now. Entity/automation/HACS tools are unaffected.
@@ -119,6 +119,17 @@ Notes:
 | Add-on management, Supervisor backups | ❌ | ⚠️ no longer applicable (no Supervisor) |
 
 Default to the official server for everyday on/off + state, switch to `ha-mcp` for diagnostics and config changes.
+
+## Dashboards, floors and areas
+
+Rebuilt 2026-11-06 (HA 2026.10.4) via `ha-mcp`; pre-change config backed up as `lovelace.lovelace.bak.json` in the session scratchpad only — the live config is the source of truth.
+
+- **Overview** (`lovelace`, storage mode): two sections views. **Home** = Quick (All lights, Turn off everything, weather) · Upstairs · Downstairs · Bottom floor (tile cards on the YAML light groups in `lights.yaml`) · TV (Lounge `media_player.tv` + Cave Screen `media_player.lg_webos_tv_oled42c2psa` — two different TVs, not duplicates) · Music (Sonos tiles only while playing/paused) · Pet feeder camera. **System** = printer, backups, pending updates.
+- `custom_header` was removed — that HACS plugin is gone; only `mini-graph-card` and `custom-sonos-card` resources are loaded.
+- The second, identical **Map** dashboard (`dashboard-map`) is hidden from the sidebar, not deleted; `map` is the one in use.
+- **Floors:** Upstairs (1) = Primary Bedroom, Bella's Room · Downstairs (0) = Lounge Room, Dining Room, Kitchen · Bottom floor (-1) = Cave, Bathroom. Verandah has no floor.
+- **Area-targeted automations turn on every light in the area.** The 6pm–10pm arrival automation does `light.turn_on` on Lounge/Dining/Kitchen and Primary Bedroom/Dining *by area*. Don't put devices with an indicator `light.*` (eero nodes, pet-feeder LEDs) in those areas — that's why the eero "Living Room" node stays in its own **Living Room** area instead of being merged into Lounge Room.
+- **Entity IDs left as-is on purpose:** `light.left_desk_lamp_cave` / `light.right_desk_lamp_cave` (really the lounge lamps) and `media_player.unnamed_room(_2)` (Dining Room Sonos; `unnamed_room` is offline). Their friendly names are right, and the HomeKit bridge exposes `light` and `media_player` keyed by entity ID, so renaming them would recreate them as new accessories in Apple Home.
 
 ## Custom components
 

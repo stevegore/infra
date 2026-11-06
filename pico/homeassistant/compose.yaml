@@ -9,6 +9,11 @@ services:
     # 2026-09-05.) MARIADB_AUTO_UPGRADE below makes the entrypoint run
     # mariadb-upgrade on a version change; still take majors one at a time and
     # deploy them by hand from /opt/ha-container after a backup.
+    # 13.0 is a short-term release: HA's recorder raises a repair saying
+    # non-LTS MariaDB stops working in 2027.3.0 (supported: 10.11, 11.4, 11.8,
+    # 12.3). Decision 2026-11-06: stay on 13.x and move to the first 13.x LTS
+    # once HA lists it. If none is supported before 2027.3, don't upgrade HA —
+    # dump + reload into 12.3.x instead (no in-place downgrade exists).
     image: mariadb:13.0.2@sha256:d4fdec0510ad498e4f3127da30a99df3745bd6d5e611ae6ac5f76403d9284a8d
     container_name: homeassistant-db
     restart: unless-stopped
