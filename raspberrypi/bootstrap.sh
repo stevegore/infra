@@ -121,7 +121,9 @@ if [[ ! -d /opt/infra/.git ]]; then
     git -C /opt/infra sparse-checkout set raspberrypi
     git -C /opt/infra checkout --quiet main
 fi
-git -C /opt/infra pull --quiet --ff-only
+# Explicit remote and branch: a bare `git pull` here failed with "Cannot
+# fast-forward to multiple branches" on the first rebuild (2026-11-06).
+git -C /opt/infra pull --quiet --ff-only origin main
 
 echo "==> deCONZ data directory"
 # Owned by DECONZ_UID/GID 1000 from compose.yaml. Restore the old

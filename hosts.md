@@ -6,7 +6,7 @@
 | ---------------------- | -------------------- |
 | pico                    | Mac SSH alias → Tailscale `100.98.212.71` |
 | pico.local             | Pico (192.168.4.120) |
-| `raspberrypi` / `pi@raspberrypi.local` | Raspberry Pi 3B+ (192.168.4.61), key auth via `~/.ssh/raspberrypi_ed25519` — see details below |
+| `raspberrypi` / `pi@raspberrypi.local` | Raspberry Pi 3B+ (192.168.4.61), deCONZ Zigbee gateway, key auth via `~/.ssh/raspberrypi_ed25519` — see details below |
 
 ## Cloud / Remote Servers
 
@@ -159,45 +159,35 @@ See `scripts/STATS_SERVER.md` for detailed setup and troubleshooting.
 
 ---
 
-### raspberrypi (192.168.4.61, IPv6 2403:5812:e2fc:0:67ac:d956:9edf:396a)
+### raspberrypi (192.168.4.61, IPv6 2403:5812:e2fc:0:ba27:ebff:fe5a:ad5c)
 
-**Hardware:** Raspberry Pi 3 Model B Plus Rev 1.3 (armv7l, 32-bit), 1 GB RAM
-**OS:** Raspbian GNU/Linux 10 (buster), kernel 5.10.60-v7+. Debian 10 is end-of-life and no longer gets security updates; treat this host as legacy and don't expose it to the internet.
-**Storage:** `/` — 128 GB SanDisk microSDXC (CID name `SH128`, manfid `0x03`, made 10/2020, a consumer card with no endurance rating), ~4% used (4.0 GB)
-**Rebuild prepared:** [`raspberrypi/README.md`](raspberrypi/README.md) moves this host to Raspberry Pi OS Lite 64-bit with deCONZ in a container, on a new high-endurance card. Until that is done, the rest of this section describes the Buster install.
-**Uptime at last check:** 232 days (2026-10-28)
-**Wi-Fi:** blocked by rfkill; `raspi-config` country not set. Wired LAN is the working connection.
+**Purpose:** Zigbee gateway only — deCONZ + ConBee II for the light switches. It stays on the Pi because pico is out of range of the Zigbee mesh. Build, update and recovery runbook: [`raspberrypi/README.md`](raspberrypi/README.md).
+**Hardware:** Raspberry Pi 3 Model B Plus Rev 1.3, 1 GB RAM
+**OS:** Raspberry Pi OS Lite 64-bit (Debian 13 trixie), kernel 6.18 `rpt-rpi-v8`, rebuilt 2026-11-06. No desktop.
+**Storage:** `/` — new 64 GB microSD (rebuilt 2026-11-06), ~5% used. The old 128 GB SanDisk consumer card (`SH128`, 10/2020, Buster + deCONZ 2.12.06) is kept as a rollback; `deconz.service` was **disabled** on it before shutdown, so re-enable it (`sudo systemctl enable --now deconz`) if you ever boot it.
+**Network:** wired only (`eth0`). Imager joined Wi-Fi too (`192.168.4.43`); the radio is now off (`nmcli radio wifi off`, persists), which also keeps 2.4 GHz Wi-Fi off the Zigbee band (channel 15).
 
 **Access:**
 - SSH alias: `ssh raspberrypi` (or `ssh pi@raspberrypi.local`), from `~/.ssh/config`
-- Auth: ed25519 key `~/.ssh/raspberrypi_ed25519` (no passphrase), `IdentitiesOnly yes`
-- The login password lives in `pi.creds` at the infra repo root. That file is gitignored, but it's plaintext; don't commit it or paste it anywhere. The key has replaced it for day-to-day use.
-- Password SSH login is still enabled on the server (`sshd` accepts it). Disabling it is a separate, not-yet-done step.
-- `pi` has passwordless `sudo`.
-- Only `~/.ssh/authorized_keys` on the Pi holds one key, the Mac key above.
+- Auth: ed25519 key `~/.ssh/raspberrypi_ed25519` only. Password SSH login is **off** (`PasswordAuthentication no`).
+- `pi` has passwordless `sudo` via `/etc/sudoers.d/010_pi-nopasswd` (current Pi OS images don't ship it). The `pi` password set in Imager belongs in Vaultwarden; `pi.creds` holds the old Buster password and can be deleted.
 
-**Running services (checked 2026-10-28):**
+**Running (checked 2026-11-06):**
 
 | Service | Version | Port(s) | Notes |
 | --- | --- | --- | --- |
-| Pi-hole (`pihole-FTL`) | Pi-hole v5.5, AdminLTE v5.7, FTL v5.10.2 | DNS `:53` | Upstream DNS: Quad9 (`9.9.9.9`, `149.112.112.112`). Config: `/etc/pihole/setupVars.conf` |
-| `lighttpd` | — | HTTP `:80` | Pi-hole admin UI |
-| `dnsmasq` | — | DNS `:53` | Runs alongside Pi-hole |
-| deCONZ (`deconz.service`) | 2.12.06 (raspbian-buster stable) | `:8080`, `:443` | Zigbee gateway (Phoscon/REST API) on a **ConBee II USB stick** (`/dev/serial/by-id/usb-dresden_elektronik_ingenieurtechnik_GmbH_ConBee_II_DE2131647-if00` → `ttyACM0`), not the GPIO UART. Network is 12 devices / 11 sensors. Home Assistant's `deconz` integration (bridge `00212E05015F`) points at `192.168.4.61:8080` |
-| RealVNC (`vncserver-x11-serviced`) | 6.7.2 | `:5900` | Remote desktop |
-| `sshd` | OpenSSH 7.9p1 | `:22` | Key and password auth |
+| deCONZ (container `deconz`) | 2.33.2, ConBee II firmware `0x26660700` | `:8080` REST/Phoscon, `:443` websocket | `raspberrypi/deconz/compose.yaml`, data in `/opt/deconz/data`. ConBee II at `/dev/serial/by-id/usb-dresden_elektronik_ingenieurtechnik_GmbH_ConBee_II_DE2131647-if00` (USB, not the GPIO UART). 12 devices / 11 sensors. Home Assistant's `deconz` integration (bridge `00212EFFFF05015F`, which HA stores as `00212E05015F`) points at `192.168.4.61:8080` |
+| Docker CE | 29.9.3 | — | Docker's Debian repo |
+| `sshd` | OpenSSH 10.0p2 | `:22` | Key only |
 
-Also running: `lightdm` (desktop session), `bluealsa`, `alsa-state`, `rng-tools`, `udisks2`, and `deconz-update.service`.
+**Updates and monitoring:**
+- OS, Raspberry Pi firmware and Docker: unattended-upgrades, upgrade window 04:00–04:20, automatic reboot 04:30 when needed.
+- deCONZ: Renovate bumps the pinned digest after a 7-day soak; `deconz-gitops.timer` applies `main` within 5 minutes.
+- `deconz-heartbeat.timer` pushes to Uptime Kuma's **deCONZ (raspberrypi)** push monitor every minute (down if the API or ConBee drops). Failures of `deconz-gitops` or `apt-daily-upgrade` also mark it down → Pushover.
 
-**Pi-hole is unused:** on 2026-10-28 it logged 422 queries all day, none from a LAN client. Nothing on the network uses it for DNS, so the rebuild drops it.
+**Gone with the rebuild:** Pi-hole (on 2026-10-28 it answered 422 queries all day, none from a LAN client), lighttpd, dnsmasq, RealVNC, the desktop.
 
-**Port exposure:** the listeners bind `0.0.0.0` / `[::]`, so every service is reachable from the whole LAN. Pi-hole's config says `DNSMASQ_LISTENING=local`, but `dnsmasq` is listening on all interfaces. Reconcile these before relying on either.
-
-**Updates:** `unattended-upgrades` is **not installed**. The stock `apt-daily-upgrade.timer` is enabled, but it only downloads and installs nothing automatically. At check time, **36 packages** were upgradable.
-
-**Known gaps (for later):**
-- Raspbian 10 is EOL: no security updates since mid-2024. Reinstall or upgrade (for example, to Raspberry Pi OS Bookworm), or retire the box.
-- Port 80 (Pi-hole) and 5900 (VNC) are reachable from the whole LAN. Check whether VNC requires a password before relying on it.
+**Known quirk:** during the 2026-11-06 bootstrap the Pi rebooted once by itself under load (apt + image pull + restore on 1 GB). The journal from before the reboot was not kept, so the cause is unconfirmed. The likeliest is systemd's 1-minute hardware watchdog (`bcm2835-wdt`); `vcgencmd get_throttled` also shows a past soft temperature-limit event (`0x80000`). If it recurs outside heavy work, look at power and cooling first.
 
 ---
 

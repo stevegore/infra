@@ -383,18 +383,26 @@ rollback does not need a re-pull. It never touches volumes —
 
 ---
 
+## 5. raspberrypi (deCONZ)
+
+Rebuilt 2026-11-06 on Raspberry Pi OS Lite 64-bit; see
+[`raspberrypi/README.md`](raspberrypi/README.md). Everything is set up by
+`raspberrypi/bootstrap.sh`:
+
+- **OS, Raspberry Pi firmware, Docker CE:** unattended-upgrades (Debian release,
+  `-updates`, `-security`, the Raspberry Pi archive, Docker CE), upgrade window
+  04:00–04:20, automatic reboot at 04:30 when one is needed.
+- **deCONZ:** `raspberrypi/deconz/compose.yaml`, digest-pinned. Renovate automerges
+  bumps after a 7-day soak; `deconz-gitops.timer` on the Pi fast-forwards a sparse
+  clone of this repo and runs `docker compose up -d` every 5 minutes. Not Portainer.
+- **Failure alerting:** `deconz-gitops` and `apt-daily-upgrade` failures mark the
+  Uptime Kuma push monitor **deCONZ (raspberrypi)** down → Pushover; the next
+  heartbeat turns it green again.
+
+---
+
 ## Not covered
 
-- **`raspberrypi.local`** — SSH key auth now works from the Mac (`ssh raspberrypi`,
-  key `~/.ssh/raspberrypi_ed25519`), but nothing was configured there for updates.
-  `unattended-upgrades` is not installed. Its SSH banner (2026-10-28) is
-  `OpenSSH_7.9p1 Raspbian-10+deb10u2`: Raspbian 10 *buster*, which has had no security
-  updates since mid-2024. Reflash or retire it. Details in [`hosts.md`](hosts.md).
-  **Rebuild prepared, not yet done:** [`raspberrypi/README.md`](raspberrypi/README.md)
-  moves it to Raspberry Pi OS Lite 64-bit with unattended-upgrades, and runs deCONZ as a
-  digest-pinned container (`raspberrypi/deconz/compose.yaml`) that Renovate bumps after a
-  7-day soak and `deconz-gitops.timer` on the Pi applies. Move this entry up out of
-  "Not covered" once the cutover is done.
 - **OKE Kubernetes version and node replacement** — owned by the `homelab-tf`
   ORM stack and deliberately manual. The control plane is pinned at
   `v1.36.4` (2026-10-28); the node-pool definition is pinned to the 2026-09-18

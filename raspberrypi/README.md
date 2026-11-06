@@ -63,7 +63,17 @@ In OS customisation:
 - hostname `raspberrypi`, username `pi`, with a new password (store it in
   Vaultwarden; `pi.creds` can then be deleted)
 - SSH: **public-key only**, paste `~/.ssh/raspberrypi_ed25519.pub`
-- locale: `Australia/Sydney`; no Wi-Fi (wired only)
+- locale: `Australia/Sydney`; no Wi-Fi (wired only). Imager pre-fills the
+  Mac's Wi-Fi network, so clear that field. On 2026-11-06 it didn't get
+  cleared, and the Pi joined Wi-Fi as well (`sudo nmcli radio wifi off` fixes it).
+
+After the first boot, give `pi` passwordless sudo. Current Pi OS images ask
+for a password, which stops `bootstrap.sh` from running over SSH. Run this in a
+real terminal, because it prompts for the password:
+
+```bash
+ssh -t raspberrypi 'echo "pi ALL=(ALL) NOPASSWD: ALL" | sudo tee /etc/sudoers.d/010_pi-nopasswd >/dev/null && sudo chmod 440 /etc/sudoers.d/010_pi-nopasswd && sudo -n true && echo OK'
+```
 
 Check the eero has a DHCP reservation for the Pi at `192.168.4.61`. The MAC
 doesn't change, so a reservation is what guarantees the same address.
@@ -95,6 +105,11 @@ ssh raspberrypi 'sudo tar -C /opt/deconz/data --strip-components=1 -xzf /tmp/dec
 ```
 
 The second run enables `deconz-gitops.timer` and starts the container.
+
+On 2026-11-06 the Pi rebooted itself once during this step, under load on
+1 GB of RAM (most likely the hardware watchdog). Nothing was lost: the restore
+had finished and deCONZ came up on boot. If the SSH session drops here, wait
+a minute, check `docker ps`, and re-run the bootstrap.
 
 ### 5. Verify (downtime ends)
 

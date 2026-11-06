@@ -75,6 +75,11 @@ jobs:
             fi
           fi
 
+          # Dedupe: a commit touching both apps/uptime-kuma/ and a setup script
+          # listed uptime-kuma twice, and the second sync request hit the first
+          # one still running and failed with a 400 (#198, 2026-11-05).
+          apps=$(printf '%s\n' $apps | sort -u | tr '\n' ' ')
+
           echo "Target apps: ${apps:-<none>}"
           echo "apps=$apps" >> "$GITHUB_OUTPUT"
 
