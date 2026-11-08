@@ -3,7 +3,7 @@ services:
     # Built by stevegore/stravabot-rs CI (private GHCR package). Renovate bumps
     # the digest when CI pushes a new :latest; Portainer pulls with the
     # ghcr-stevegore registry credential (Vault kv/homelab/ghcr-read).
-    image: ghcr.io/stevegore/stravabot-rs:latest@sha256:1e8eaa4a7b6089ef39fce2fcae28e9ff9ea10cc3c5998c647ab81b3d70fc7bb4
+    image: ghcr.io/stevegore/stravabot-rs:latest@sha256:af40b509e077ce5d3ee19e635eb52b7e58a8a6da4f7587f78a7909366ff67bac
     container_name: stravabot-rs
     restart: unless-stopped
     ports:
