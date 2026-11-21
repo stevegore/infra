@@ -14,7 +14,7 @@ services:
     # 12.3). Decision 2026-11-06: stay on 13.x and move to the first 13.x LTS
     # once HA lists it. If none is supported before 2027.3, don't upgrade HA —
     # dump + reload into 12.3.x instead (no in-place downgrade exists).
-    image: mariadb:13.0.2@sha256:d4fdec0510ad498e4f3127da30a99df3745bd6d5e611ae6ac5f76403d9284a8d
+    image: mariadb:13.0.2@sha256:54f493ea0d60b621a5bff84e5b20100f8b86b6efa6b79158e04756c5194a5e4d
     container_name: homeassistant-db
     restart: unless-stopped
     command: >-
