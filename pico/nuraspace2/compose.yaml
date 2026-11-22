@@ -6,7 +6,7 @@ services:
     # the image). Renovate bumps the digest outside the 05:50-06:00 race and
     # 19:00-20:00 advance windows; Portainer pulls with the ghcr-stevegore
     # credential.
-    image: ghcr.io/stevegore/nuraspace:latest@sha256:dba976c893ce5080ea698bc6bbc6d36d26ec3061235eab20a17f7c7570b6ad73
+    image: ghcr.io/stevegore/nuraspace:latest@sha256:80806d76095871d4c6838e00e96e1610755f6949dc72fbec3a3d3d059878d64a
     ports:
       - 8111:5000
     environment:
